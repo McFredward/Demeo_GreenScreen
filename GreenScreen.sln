@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.33530.505
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GreenScreen", "GreenScreen.csproj", "{C3544F13-A1D5-4AFB-969A-155718E094D2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		BepInEx|Any CPU = BepInEx|Any CPU
+		MelonLoader|Any CPU = MelonLoader|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C3544F13-A1D5-4AFB-969A-155718E094D2}.BepInEx|Any CPU.ActiveCfg = BepInEx|Any CPU
+		{C3544F13-A1D5-4AFB-969A-155718E094D2}.BepInEx|Any CPU.Build.0 = BepInEx|Any CPU
+		{C3544F13-A1D5-4AFB-969A-155718E094D2}.MelonLoader|Any CPU.ActiveCfg = MelonLoader|Any CPU
+		{C3544F13-A1D5-4AFB-969A-155718E094D2}.MelonLoader|Any CPU.Build.0 = MelonLoader|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {FEB33D27-2851-42D8-8440-A33360B1ED99}
+	EndGlobalSection
+EndGlobal
