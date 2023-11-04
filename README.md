@@ -1,6 +1,5 @@
 # Demeo_GreenScreen
-Replaces the black background color with green.
-This way, mixed reality is also possible in the PCVR version of the game via VirtualDesktop's passthrough mode.
+Replaces the black background color with green, enabling mixed reality in the PCVR version of the game through VirtualDesktop's passthrough mode.
 
 <p align="center">
   <img src="demeo_green.jpg" width="50%" height="50%">
