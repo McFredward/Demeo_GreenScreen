@@ -9,11 +9,11 @@ This way, mixed reality is also possible in the PCVR version of the game via Vir
 ## How To Install & Use
 
 * Download [MelonLoader](https://github.com/LavaGang/MelonLoader/releases) version 0.5.7, open the downloaded Installer and Select the Game's .exe `Demeo\Demeo.exe`. Press `Install`.
-* Download the zip from TODO and unzip the files into `Demeo\Mods`.
+* Download the zip from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Demeo\Mods`.
 * After starting the game, turn on "VR Passthorugh" under the "Streaming"-Tab in the Virtual Desktop Menu (within VR).
 * **USE THE FOLLOWING CONFIGURATION:**:
 <p align="center">
-  <img src="passthrough_configuration.jpg" width="50%" height="50%">
+  <img src="passthrough_configuration.jpg" width="25%" height="25%">
 </p>
 
 ## Known issues
