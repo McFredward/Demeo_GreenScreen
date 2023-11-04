@@ -12,11 +12,7 @@ Replaces the black background color with green, enabling mixed reality in the PC
 * After starting the game, turn on "VR Passthorugh" under the "Streaming"-Tab in the Virtual Desktop Menu (within VR).
 * **USE THE FOLLOWING CONFIGURATION:**:
 
-Red: 0
-Green: 255
-Blue: 0
-Similarity: 37
-Smoothness: 5
+Red: 0, Green: 255, Blue: 0, Similarity: 37, Smoothness: 5
 <p align="center">
   <img src="passthrough_configuration.jpg" width="25%" height="25%">
 </p>
