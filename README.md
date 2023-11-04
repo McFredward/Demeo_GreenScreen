@@ -28,7 +28,7 @@ Many of the green hues in the game are too similar to the default one.
 
 ## Credits & Libs
 
-* Code inspired by "SkipIntro" from [DemeoMody by orendain](https://github.com/orendain/DemeoMods) using the MIT License
+* Code inspired by "SkipIntro" from [DemeoMods by orendain](https://github.com/orendain/DemeoMods) using the MIT License
 * [HarmonyLib](https://github.com/pardeike/Harmony) using the MIT License
 * [MelonLoader](https://github.com/LavaGang/MelonLoader) using the Apache-2.0 license
 
