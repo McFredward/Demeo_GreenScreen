@@ -24,6 +24,7 @@ Many of the green hues in the game are too similar to the default one.
 ## Known issues
 
 * Green edges around the objects (Depends on your passthrough configuration in Virtual Desktop, the given one is just which I found best)
+* You can look through some parts of some object which also have the same green color like the Swiftness Potion.
 
 ## Credits & Libs
 
