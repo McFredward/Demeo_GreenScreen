@@ -34,8 +34,8 @@ If you discover a color or configuration that, in your opinion, performs better 
 
 ## Known issues
 
-* Green edges around the objects (Depends on your passthrough configuration in Virtual Desktop, the given one is just which I found best)
-* You can look through some parts of some objects which also have the same green color like the Swiftness Potion Card.
+* Edges around the objects (Depends on your passthrough configuration in Virtual Desktop)
+* You can look through some parts of some objects which also have the same color (e.g. the Swiftness Potion Card for the default green background).
 
 ## Credits & Libs
 
