@@ -45,5 +45,8 @@
         <Private>True</Private>
       </Reference>
     </ItemGroup>
+    <ItemGroup>
+      <PackageReference Include="ini-parser" Version="2.5.2" />
+    </ItemGroup>
 
 </Project>
