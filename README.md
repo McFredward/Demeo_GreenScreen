@@ -22,7 +22,6 @@ Red: 0, Green: 255, Blue: 0, Similarity: 37, Smoothness: 5
 * Create the file `custom_color.ini` in `Demeo\Mods` and insert the following:
 
 ```ini
-[Section1]
 [CustomColor]
 R=0
 G=0
