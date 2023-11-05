@@ -18,8 +18,20 @@ Red: 0, Green: 255, Blue: 0, Similarity: 37, Smoothness: 5
   <img src="passthrough_configuration.jpg" width="25%" height="25%">
 </p>
 
-I deliberately opted for a different shade of green than the one provided in VirtualDesktop, as I realized through various tests that the full green tone works better in Demeo. 
-Many of the green hues in the game are too similar to the default one.
+## How To Define Your Own Background Color
+* Create the file `custom_color.ini` in `Demeo\Mods` and insert the following:
+
+```ini
+[Section1]
+[CustomColor]
+R=0
+G=0
+B=255
+```
+
+Feel free to adjust the values as desired, ensuring they stay within the range of 0 to 255 for each component. <br>
+Additionally, please update the color in the VirtualDesktop configuration accordingly. <br>
+If you discover a color or configuration that, in your opinion, performs better than the default green, let me know :)
 
 ## Known issues
 
