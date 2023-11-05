@@ -10,7 +10,7 @@ Replaces the black background color, enabling mixed reality in the PCVR version 
 * Download [MelonLoader](https://github.com/LavaGang/MelonLoader/releases) **version 0.5.7**, open the downloaded Installer and Select the Game's .exe `Demeo\Demeo.exe`. Press `Install`.
 * Download the zip from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Demeo\Mods`.
 * Start the game & turn off the basement environment in the setting ingame.
-* Turn on "VR Passthorugh" under the "Streaming"-Tab in the Virtual Desktop Menu (within VR).
+* Turn on "VR Passthrough" under the "Streaming"-Tab in the Virtual Desktop Menu (within VR).
 * **USE THE FOLLOWING CONFIGURATION:**:
 
 Red: 0, Green: 255, Blue: 0, Similarity: 37, Smoothness: 5
