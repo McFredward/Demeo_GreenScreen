@@ -7,9 +7,8 @@ using GreenScreen;
     GreenScreenBase.ModName,
     GreenScreenBase.ModVersion,
     GreenScreenBase.ModAuthor,
-    "https://github.com/orendain/DemeoMods")]
+    "https://github.com/McFredward/Demeo_GreenScreen")]
 [assembly: MelonGame("Resolution Games", "Demeo")]
-[assembly: MelonGame("Resolution Games", "Demeo PC Edition")]
 [assembly: MelonID("566783")]
 [assembly: VerifyLoaderVersion("0.5.7", true)]
 
