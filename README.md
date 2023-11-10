@@ -1,5 +1,5 @@
 # Demeo_GreenScreen
-Replaces the black background color, enabling mixed reality in the PCVR version of the game through [VirtualDesktop](https://www.meta.com/de-de/experiences/1261331807302580/)'s passthrough mode.
+Replaces the black background color of Demeo and Demeo Battles, enabling mixed reality in the PCVR version of those games through [VirtualDesktop](https://www.meta.com/de-de/experiences/1261331807302580/)'s passthrough mode.
 
 <p align="center">
   <img src="demeo_green.jpg" width="50%" height="50%">
@@ -7,8 +7,17 @@ Replaces the black background color, enabling mixed reality in the PCVR version 
 
 ## How To Install & Use
 
+<ins>**Demeo**</ins> <br>
 * Download [MelonLoader](https://github.com/LavaGang/MelonLoader/releases) **version 0.5.7**, open the downloaded Installer and Select the Game's .exe `Demeo\Demeo.exe`. Press `Install`.
-* Download the zip from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Demeo\Mods`.
+* Download `Demeo.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Demeo\Mods`. 
+
+<ins>**Demeo Battles**</ins> <br>
+
+* Download [MelonLoader](https://github.com/LavaGang/MelonLoader/releases) **version 0.6.1 or later**, open the downloaded Installer and Select the Game's .exe `Demeo Battles\DemeoBattles.exe`. Press `Install`.
+* Download `Demeo_Battles.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Demeo Battles\Mods`.
+  
+<ins>**Demeo & Demeo Battles**</ins> <br>
+
 * Start the game & turn off the basement environment in the setting ingame.
 * Turn on "VR Passthrough" under the "Streaming"-Tab in the Virtual Desktop Menu (within VR).
 * **USE THE FOLLOWING CONFIGURATION:**:
@@ -19,7 +28,7 @@ Red: 0, Green: 255, Blue: 0, Similarity: 37, Smoothness: 5
 </p>
 
 ## How To Define Your Own Background Color
-* Create the file `custom_color.ini` in `Demeo\Mods` and insert the following:
+* Create the file `custom_color.ini` in your `Mods` Folder (where the .dll is located) and insert the following:
 
 ```ini
 [CustomColor]
