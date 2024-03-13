@@ -28,36 +28,45 @@
             <Private>True</Private>
         </Reference>
       <Reference Include="0Harmony">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo\MelonLoader\0Harmony.dll</HintPath>
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo\BepInEx\core\0Harmony.dll</HintPath>
       </Reference>
       <Reference Include="MelonLoader">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo\MelonLoader\MelonLoader.dll</HintPath>
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo\BepInEx\core\BepInEx.dll</HintPath>
       </Reference>
       <Reference Include="UnityEngine.CoreModule">
         <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo\demeo_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
       </Reference>
+      <Reference Include="UnityEngine">
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo\demeo_Data\Managed\UnityEngine.dll</HintPath>
+      </Reference>
     </ItemGroup>
     <ItemGroup Condition="'$(Configuration)'=='DEMEOBATTLES'">
       <Reference Include="0Harmony">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\MelonLoader\net6\0Harmony.dll</HintPath>
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\core\0Harmony.dll</HintPath>
       </Reference>
       <Reference Include="Assembly-CSharp">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\MelonLoader\Il2CppAssemblies\Assembly-CSharp.dll</HintPath>
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\interop\Assembly-CSharp.dll</HintPath>
       </Reference>
-      <Reference Include="Il2CppInterop.Runtime">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\MelonLoader\Dependencies\SupportModules\Il2CppInterop.Runtime.dll</HintPath>
+      <Reference Include="BepInEx.Core">
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\core\BepInEx.Core.dll</HintPath>
+      </Reference>
+      <Reference Include="BepInEx.Unity.Common">
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\core\BepInEx.Unity.Common.dll</HintPath>
+      </Reference>
+      <Reference Include="BepInEx.Unity.IL2CPP">
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\core\BepInEx.Unity.IL2CPP.dll</HintPath>
       </Reference>
       <Reference Include="Il2Cppmscorlib">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\MelonLoader\Il2CppAssemblies\Il2Cppmscorlib.dll</HintPath>
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\interop\Il2Cppmscorlib.dll</HintPath>
       </Reference>
-      <Reference Include="MelonLoader">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\MelonLoader\net6\MelonLoader.dll</HintPath>
+      <Reference Include="Il2CppInterop.Runtime">
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\core\Il2CppInterop.Runtime.dll</HintPath>
       </Reference>
       <Reference Include="UnityEngine">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\MelonLoader\Il2CppAssemblies\UnityEngine.dll</HintPath>
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\interop\UnityEngine.dll</HintPath>
       </Reference>
       <Reference Include="UnityEngine.CoreModule">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\MelonLoader\Il2CppAssemblies\UnityEngine.CoreModule.dll</HintPath>
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\interop\UnityEngine.CoreModule.dll</HintPath>
       </Reference>
     </ItemGroup>
 

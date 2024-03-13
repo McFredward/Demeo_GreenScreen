@@ -1,54 +1,54 @@
-﻿using MelonLoader;
-using GreenScreen;
+﻿using GreenScreen;
 
-[assembly: MelonInfo(
-    typeof(MelonLoaderMod),
-    "GreenScreen",
-    "1.0.2",
-    "McFredward",
-    "https://github.com/McFredward/Demeo_GreenScreen")]
-#if DEMEO
-[assembly: MelonGame("Resolution Games", "Demeo")]
-[assembly: MelonID("566783")]
-[assembly: VerifyLoaderVersion("0.5.7", true)]
-#elif DEMEOBATTLES
-[assembly: MelonGame("Resolution Games", "Demeo Battles")]
-[assembly: MelonID("566784")]
-[assembly: VerifyLoaderVersion("0.6.1", true)]
-#endif
-
+using BepInEx;
 
 namespace GreenScreen
 {
-    using MelonLoader;
     using HarmonyLib;
     using UnityEngine;
     using System.IO;
     using System;
-    #if DEMEO
-        using Boardgame;
-    #elif DEMEOBATTLES
-        using Il2Cpp;
-        using Il2CppBoardgame;
-        using Il2CppBoardgame.Ui.LobbyMenu;
+    using System.Reflection;
 
-#endif
+    using Boardgame;
+    using BepInEx.Logging;
+    using System.Collections.Generic;
 
-    internal class MelonLoaderMod : MelonMod
-    {
-        public override void OnInitializeMelon()
+#if DEMEO
+    [BepInPlugin("566784", "GreenScreen", "1.1")]
+    internal class BepInExPlugin : BaseUnityPlugin { 
+        internal static new ManualLogSource Log;
+        private void Awake()
         {
+            BepInExPlugin.Log = base.Logger;
+            Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly());
+            Debug.Log("Finished patching.");
         }
     }
+#elif DEMEOBATTLES
+    using BepInEx.Unity.IL2CPP;
 
-    [HarmonyPatch(typeof(GameStartup), "InitializeGame", new Type[] { })]
+    [BepInPlugin("566784", "GreenScreen", "1.1")]
+    internal class BepInExPlugin : BasePlugin
+    {
+        internal static new ManualLogSource Log;
+        public override void Load()
+        {
+            BepInExPlugin.Log = base.Log;
+            Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly());
+            BepInExPlugin.Log.LogInfo("Finished patching.");
+        }
+    }
+#endif
+
+[HarmonyPatch(typeof(GameStartup), "InitializeGame", new Type[] { })]
     public static class InitializeGame_Prefix_Patch
     {
         [HarmonyPrefix]
         private static void Prefix()
         {
             Utils.ChangeCamBackground();
-            MelonLogger.Msg("Changed Background");
+            BepInExPlugin.Log.LogInfo("Changed Background");
         }
     }
 
@@ -66,7 +66,7 @@ namespace GreenScreen
 
         private static Color LoadColorFromFile()
         {
-            string filePath = Path.Combine("Mods", "custom_color.ini");
+            string filePath = Path.Combine("BepInEx", "plugins", "custom_color.ini");
 
             if (File.Exists(filePath))
             {
@@ -100,17 +100,17 @@ namespace GreenScreen
                     }
                     else
                     {
-                        MelonLogger.Msg("Invalid RGB values in the file. Using default color (Green).");
+                        BepInExPlugin.Log.LogInfo("Invalid RGB values in the file. Using default color (Green).");
                     }
                 }
                 catch (Exception ex)
                 {
-                    MelonLogger.Msg("Error reading the file: " + ex.Message);
+                    BepInExPlugin.Log.LogInfo("Error reading the file: " + ex.Message);
                 }
             }
             else
             {
-                MelonLogger.Msg("Custom color file not found. Using default color (Green).");
+                BepInExPlugin.Log.LogInfo("Custom color file not found. Using default color (Green).");
             }
 
             return new Color(0f, 1f, 0f); // Default color
