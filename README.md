@@ -8,13 +8,13 @@ Replaces the black background color of Demeo and Demeo Battles, enabling mixed r
 ## How To Install & Use
 
 <ins>**Demeo**</ins> <br>
-* Download [BepInEx for Mono](https://github.com/LavaGang/MelonLoader/releases](https://github.com/BepInEx/BepInEx/releases/download/v5.4.22/BepInEx_x64_5.4.22.0.zip ) **version 5.4.22.0**, and extract the files into the game's Folder.
+* Download [BepInEx for Mono](https://github.com/BepInEx/BepInEx/releases/download/v5.4.22/BepInEx_x64_5.4.22.0.zip) **version 5.4.22.0**, and extract the files into the game's Folder.
 * Create a new file in `Demeo\BepInEx\config\BepInEx.cfg` (create that folder if necessary). Fill it with the content from [here](https://github.com/orendain/DemeoMods/blob/main/docs/BepInEx.cfg).
 * Download `Demeo.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Demeo\BepInEx\plugins`. 
 
 <ins>**Demeo Battles**</ins> <br>
 
-* Download [BepInEx for Il2CPP](https://github.com/LavaGang/MelonLoader/releases](https://builds.bepinex.dev/projects/bepinex_be/688/BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.688%2B4901521.zip ) **version 6.0.0 or later**, and extract the files into the game's Folder.
+* Download [BepInEx for Il2CPP](https://builds.bepinex.dev/projects/bepinex_be/688/BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.688%2B4901521.zip) **version 6.0.0 or later**, and extract the files into the game's Folder.
 * Create a new file in `Demeo Battles\BepInEx\config\BepInEx.cfg` (create that folder if necessary). Fill it with the content from [here](https://github.com/orendain/DemeoMods/blob/main/docs/BepInEx.cfg).
 * Download `Demeo_Battles.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Demeo Battles\BepInEx\plugins`.
   
