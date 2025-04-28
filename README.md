@@ -15,7 +15,6 @@ Replaces the black background color of Demeo and Demeo Battles, enabling mixed r
 <ins>**Demeo Battles**</ins> <br>
 
 * Download [BepInEx for Il2CPP](https://builds.bepinex.dev/projects/bepinex_be) **version 6 Bleeding Edge, IL2CPP Windows (x64)**, and extract the files into the game's Folder.
-* Create a new file in `Demeo Battles\BepInEx\config\BepInEx.cfg` (create that folder if necessary). Fill it with the content from [here](https://github.com/orendain/DemeoMods/blob/main/docs/BepInEx.cfg).
 * Download `Demeo_Battles.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Demeo Battles\BepInEx\plugins`.
   
 <ins>**Demeo & Demeo Battles**</ins> <br>
