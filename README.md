@@ -51,7 +51,7 @@ If you discover a color or configuration that, in your opinion, performs better 
 
 * Code inspired by "SkipIntro" from [DemeoMods by orendain](https://github.com/orendain/DemeoMods) using the MIT License
 * [HarmonyLib](https://github.com/pardeike/Harmony) using the MIT License
-* [MelonLoader](https://github.com/LavaGang/MelonLoader) using the Apache-2.0 license
+* [BepInEx](https://github.com/BepInEx/BepInEx) using the LGPL2.1 license
 
 If you have any suggestions, feel free to open an Issue. Or contact me (McFredward) in via Discord.
 
