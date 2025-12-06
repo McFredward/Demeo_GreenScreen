@@ -16,6 +16,12 @@ Replaces the black background color of Demeo and Demeo Battles, enabling mixed r
 
 * Download [BepInEx for Il2CPP](https://builds.bepinex.dev/projects/bepinex_be) **version 6 Bleeding Edge, IL2CPP Windows (x64)**, and extract the files into the game's Folder.
 * Download `Demeo_Battles.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Demeo Battles\BepInEx\plugins`.
+
+<ins>**Demeo Battlemarked**</ins> <br>
+> **Note:** The new Unity 6000 version has currently issues with BepInEx, so for Battlemarked I switched back to **MelonLoader**.
+
+* Download [MelonLoader Installer](https://lemonloader.com/melonloader/) and install it for Demeo Battlemarked using. **Make sure to enable nightly builds!**
+* Download `Demeo_Battlemarked.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Battlemarked\Mods`.
   
 <ins>**Demeo & Demeo Battles**</ins> <br>
 
