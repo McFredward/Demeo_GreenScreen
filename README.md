@@ -22,7 +22,7 @@ Replaces the black background color of Demeo, Demeo Battles & Demeo Battlemarked
 <ins>**Demeo Battlemarked**</ins> <br>
 > **Note:** The new Unity 6000 version has currently issues with BepInEx, so for Battlemarked I switched back to **MelonLoader**.
 
-* Download [MelonLoader Installer](https://lemonloader.com/melonloader/) and install it for Demeo Battlemarked using. **Make sure to enable nightly builds!**
+* Download [MelonLoader Installer](https://lemonloader.com/melonloader/) and install it for Demeo Battlemarked. **Make sure to enable nightly builds!**
 * Download `DemeoBattlemarked.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Battlemarked\Mods`.
 * Start the game.
   
