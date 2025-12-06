@@ -23,7 +23,7 @@ Replaces the black background color of Demeo, Demeo Battles & Demeo Battlemarked
 * Download [MelonLoader Installer](https://lemonloader.com/melonloader/) and install it for Demeo Battlemarked using. **Make sure to enable nightly builds!**
 * Download `DemeoBattlemarked.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Battlemarked\Mods`.
   
-<ins>**Demeo & Demeo Battles**</ins> <br>
+<ins>**Demeo, Demeo Battles, Demeo Battlemarked**</ins> <br>
 
 * Start the game & turn off the basement environment in the setting ingame.
 * Turn on "VR Passthrough" under the "Streaming"-Tab in the Virtual Desktop Menu (within VR).
