@@ -15,13 +15,13 @@ Replaces the black background color of Demeo and Demeo Battles, enabling mixed r
 <ins>**Demeo Battles**</ins> <br>
 
 * Download [BepInEx for Il2CPP](https://builds.bepinex.dev/projects/bepinex_be) **version 6 Bleeding Edge, IL2CPP Windows (x64)**, and extract the files into the game's Folder.
-* Download `Demeo_Battles.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Demeo Battles\BepInEx\plugins`.
+* Download `DemeoBattles.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Demeo Battles\BepInEx\plugins`.
 
 <ins>**Demeo Battlemarked**</ins> <br>
 > **Note:** The new Unity 6000 version has currently issues with BepInEx, so for Battlemarked I switched back to **MelonLoader**.
 
 * Download [MelonLoader Installer](https://lemonloader.com/melonloader/) and install it for Demeo Battlemarked using. **Make sure to enable nightly builds!**
-* Download `Demeo_Battlemarked.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Battlemarked\Mods`.
+* Download `DemeoBattlemarked.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Battlemarked\Mods`.
   
 <ins>**Demeo & Demeo Battles**</ins> <br>
 
@@ -34,17 +34,21 @@ Red: 0, Green: 255, Blue: 0, Similarity: 37, Smoothness: 5
   <img src="passthrough_configuration.jpg" width="25%" height="25%">
 </p>
 
-## How To Define Your Own Background Color
-* Create the file `custom_color.ini` in your `BepInEx\plugins` Folder (where the .dll is located) and insert the following:
+## Additional Settings
+* Create the file `greenscreen.ini` in the Folder where the .dll is located and insert the following:
 
 ```ini
-[CustomColor]
+[COLOR]
 R=0
-G=0
-B=255
+G=255
+B=0
+
+[TABLE]
+Disable=false
 ```
 
-Feel free to adjust the values as desired, ensuring they stay within the range of 0 to 255 for each component. <br>
+The `[TABLE]` section is only relevant for Battlemarked - this way you can re-enable the table mesh (per default its disabled).
+Feel free to adjust the `[COLOR]` values as desired, ensuring they stay within the range of 0 to 255 for each component. <br>
 Additionally, please update the color in the VirtualDesktop configuration accordingly. <br>
 If you discover a color or configuration that, in your opinion, performs better than the default green, let me know :)
 
@@ -58,6 +62,7 @@ If you discover a color or configuration that, in your opinion, performs better 
 * Code inspired by "SkipIntro" from [DemeoMods by orendain](https://github.com/orendain/DemeoMods) using the MIT License
 * [HarmonyLib](https://github.com/pardeike/Harmony) using the MIT License
 * [BepInEx](https://github.com/BepInEx/BepInEx) using the LGPL2.1 license
+* [MelonLoader](https://github.com/LavaGang/MelonLoader) using the Apache-2.0
 
 If you have any suggestions, feel free to open an Issue. Or contact me (McFredward) in via Discord.
 
