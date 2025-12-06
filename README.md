@@ -10,22 +10,24 @@ Replaces the black background color of Demeo, Demeo Battles & Demeo Battlemarked
 <ins>**Demeo**</ins> <br>
 * Download [BepInEx for Mono](https://github.com/BepInEx/BepInEx/releases/download/v5.4.22/BepInEx_x64_5.4.22.0.zip) **version 5.4.22.0**, and extract the files into the game's Folder.
 * Create a new file in `Demeo\BepInEx\config\BepInEx.cfg` (create that folder if necessary). Fill it with the content from [here](https://github.com/orendain/DemeoMods/blob/main/docs/BepInEx.cfg).
-* Download `Demeo.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Demeo\BepInEx\plugins`. 
+* Download `Demeo.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Demeo\BepInEx\plugins`.
+* Start the game & turn off the basement environment in the setting ingame.
 
 <ins>**Demeo Battles**</ins> <br>
 
 * Download [BepInEx for Il2CPP](https://builds.bepinex.dev/projects/bepinex_be) **version 6 Bleeding Edge, IL2CPP Windows (x64)**, and extract the files into the game's Folder.
 * Download `DemeoBattles.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Demeo Battles\BepInEx\plugins`.
+* Start the game & turn off the basement environment in the setting ingame.
 
 <ins>**Demeo Battlemarked**</ins> <br>
 > **Note:** The new Unity 6000 version has currently issues with BepInEx, so for Battlemarked I switched back to **MelonLoader**.
 
 * Download [MelonLoader Installer](https://lemonloader.com/melonloader/) and install it for Demeo Battlemarked using. **Make sure to enable nightly builds!**
 * Download `DemeoBattlemarked.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Battlemarked\Mods`.
+* Start the game.
   
 <ins>**Demeo, Demeo Battles, Demeo Battlemarked**</ins> <br>
 
-* Start the game & turn off the basement environment in the setting ingame.
 * Turn on "VR Passthrough" under the "Streaming"-Tab in the Virtual Desktop Menu (within VR).
 * **USE THE FOLLOWING CONFIGURATION:**:
 
