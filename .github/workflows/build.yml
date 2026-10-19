@@ -1,0 +1,61 @@
+name: Build mods
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 8.0.x
+      - name: Verify metadata-only references
+        run: python3 scripts/check-refasm.py
+      - name: Check protocol and connection lifetime
+        run: dotnet run --project tests/ProtocolChecks.csproj
+      - name: Check loader and rendering lifecycles
+        run: |
+          dotnet run --project tests/IntegrationChecks.csproj -p:Game=DEMEO
+          dotnet run --project tests/IntegrationChecks.csproj -p:Game=DEMEOBATTLES
+          dotnet run --project tests/IntegrationChecks.csproj -p:Game=DEMEOBATTLEMARKED
+      - name: Check Steam discovery and installation
+        shell: pwsh
+        run: ./tests/InstallerChecks.ps1
+      - name: Download pinned public build dependencies
+        run: python3 scripts/fetch-build-deps.py
+      - name: Build and package all three games
+        run: python3 scripts/package.py
+      - name: Ensure full assemblies are rejected by the reference gate
+        run: |
+          if python3 scripts/check-refasm.py bin/DEMEO/netstandard2.1/Demeo_GreenScreen.dll; then
+            echo 'Reference gate accepted executable IL' >&2
+            exit 1
+          fi
+      - name: Upload mod ZIPs
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Demeo-mods-${{ github.sha }}
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS
+            dist/build-info.json
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,17 @@
+ManifestFileVersion: 0
+CRC: 4008252553
+Hashes:
+  AssetFileHash:
+    serializedVersion: 2
+    Hash: ade449b25c49b73293d22baaaadb7ecb
+  TypeTreeHash:
+    serializedVersion: 2
+    Hash: 1848cfd019ebe6ef89967c6f90f2a3d4
+HashAppended: 0
+ClassTypes:
+- Class: 48
+  Script: {instanceID: 0}
+SerializeReferenceClassIdentifiers: []
+Assets:
+- Assets/NativeCoverage.shader
+Dependencies: []

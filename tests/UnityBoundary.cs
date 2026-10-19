@@ -1,0 +1,278 @@
+// Portable OS/Unity/loader boundaries. These are not GPU or Windows pipe tests.
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+namespace Il2CppInterop.Runtime.InteropTypes
+{
+    public class Il2CppObjectBase
+    {
+        public T TryCast<T>() where T : Il2CppObjectBase => this as T;
+        public T Cast<T>() where T : Il2CppObjectBase => (T)this;
+    }
+}
+namespace Il2CppInterop.Runtime
+{
+    public static class Il2CppType { public static Type Of<T>() => typeof(T); }
+    public static class DelegateSupport
+    {
+        public static T ConvertDelegate<T>(Delegate callback) where T : Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase,new()
+        {
+            var value=new T();
+            ((Il2CppSystem.Delegate)(object)value).Functions.Add(callback);
+            return value;
+        }
+    }
+}
+namespace Il2CppSystem
+{
+    public class Delegate : Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase
+    {
+        public readonly List<System.Delegate> Functions=new List<System.Delegate>();
+        public static Delegate Combine(Delegate a,Delegate b)
+        {
+            var result=(Delegate)Activator.CreateInstance((a??b).GetType());
+            if (a!=null) result.Functions.AddRange(a.Functions);
+            if (b!=null) result.Functions.AddRange(b.Functions);
+            return result;
+        }
+        public static Delegate Remove(Delegate a,Delegate b)
+        {
+            if (a==null) return null;
+            var result=(Delegate)Activator.CreateInstance(a.GetType());
+            result.Functions.AddRange(a.Functions);
+            if (b!=null) foreach (var callback in b.Functions) result.Functions.Remove(callback);
+            return result.Functions.Count==0 ? null : result;
+        }
+    }
+    public class Action<T,U> : Delegate
+    { public void Invoke(T a,U b) { foreach (var callback in Functions) callback.DynamicInvoke(a,b); } }
+}
+namespace UnityEngine
+{
+    public class Object : Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase
+    { public string name; public static void Destroy(Object value) { } }
+    public class Component : Object
+    {
+        public object Extra;
+        public T GetComponent<T>() where T : class => Extra as T;
+    }
+    public class MonoBehaviour : Component { public MonoBehaviour() { } public MonoBehaviour(IntPtr pointer) { } }
+    public class GameObject : Object
+    {
+        public static Camera[] Scene = Array.Empty<Camera>();
+        public static T[] FindObjectsOfType<T>() => (T[])(object)Scene;
+        public static GameObject Find(string path) => null;
+        public void SetActive(bool enabled) { }
+    }
+    public class WaitForSeconds { public WaitForSeconds(float seconds) { } }
+    public enum CameraType { Game, Reflection }
+    public enum CameraClearFlags { Skybox, SolidColor }
+    public enum StereoTargetEyeMask { None, Left, Right, Both }
+    public enum RenderingPath { Forward, DeferredShading }
+    public enum RuntimePlatform { WindowsPlayer, LinuxPlayer }
+    public enum ColorSpace { Gamma, Linear }
+    public enum HideFlags { HideAndDontSave }
+    public enum MeshTopology { Triangles }
+    public struct Color : IEquatable<Color>
+    {
+        public float r, g, b, a;
+        public Color(float r, float g, float b, float a = 1) { this.r=r; this.g=g; this.b=b; this.a=a; }
+        public static Color black => new Color(0,0,0,1);
+        public static Color clear => new Color(0,0,0,0);
+        public bool Equals(Color other) => r==other.r && g==other.g && b==other.b && a==other.a;
+        public override bool Equals(object other) => other is Color color && Equals(color);
+        public override int GetHashCode() => HashCode.Combine(r,g,b,a);
+        public static bool operator ==(Color a, Color b) => a.Equals(b);
+        public static bool operator !=(Color a, Color b) => !a.Equals(b);
+    }
+    public class Camera : Component
+    {
+        public Camera() { Extra=new Rendering.Universal.UniversalAdditionalCameraData(); }
+        public static Camera main;
+#if DEMEO
+        public delegate void CameraCallback(Camera camera);
+        public static event CameraCallback onPreCull;
+#else
+        public class CameraCallback : Il2CppSystem.Delegate
+        { public void Invoke(Camera camera) { foreach (var callback in Functions) callback.DynamicInvoke(camera); } }
+        private static CameraCallback _preCull;
+        public static CameraCallback onPreCull
+        {
+            get => _preCull;
+            set => _preCull=value;
+        }
+#endif
+        public static void Render(Camera camera) => onPreCull?.Invoke(camera);
+        public bool isActiveAndEnabled=true, stereoEnabled=true, allowHDR, forceIntoRenderTexture;
+        public CameraType cameraType=CameraType.Game;
+        public StereoTargetEyeMask stereoTargetEye=StereoTargetEyeMask.Both;
+        public RenderingPath actualRenderingPath=RenderingPath.Forward;
+        public RenderTexture targetTexture;
+        public Color backgroundColor=new Color(.1f,.2f,.3f,1);
+        public CameraClearFlags clearFlags=CameraClearFlags.Skybox;
+        public int Commands;
+        public void AddCommandBuffer(Rendering.CameraEvent at, Rendering.CommandBuffer commands) { Commands++; }
+        public void RemoveCommandBuffer(Rendering.CameraEvent at, Rendering.CommandBuffer commands) { Commands--; }
+    }
+    public class RenderTexture : Object
+    { public RenderTextureDescriptor descriptor=XR.XRSettings.eyeTextureDesc; public bool IsCreated() => true; }
+    public struct RenderTextureDescriptor
+    {
+        public int width,height,volumeDepth,msaaSamples;
+        public bool sRGB,useDynamicScale,bindMS;
+        public Rendering.TextureDimension dimension;
+        public Experimental.Rendering.GraphicsFormat graphicsFormat;
+    }
+    public struct Matrix4x4 { public static Matrix4x4 identity => default; }
+    public class Material : Object
+    {
+        public HideFlags hideFlags;
+        public int passCount=2;
+        public Material(Shader shader) { }
+        public int FindPass(string name) => name=="RESET" ? 0 : 1;
+    }
+    public class Shader : Object { public bool isSupported=true; }
+    public class AssetBundle : Object
+    {
+        public static AssetBundle LoadFromMemory(byte[] data) => new AssetBundle();
+        public T LoadAsset<T>(string name) where T : Object => (T)LoadAsset(name,typeof(T));
+        public Object LoadAsset(string name, Type type) => new Shader { name="Hidden/Demeo/NativeCoverage" };
+        public void Unload(bool all) { }
+    }
+    public static class Time { public static float unscaledTime; public static int frameCount; }
+    public static class Application { public static RuntimePlatform platform=RuntimePlatform.WindowsPlayer; }
+    public static class QualitySettings { public static ColorSpace activeColorSpace=ColorSpace.Gamma; }
+    public static class SystemInfo { public static Rendering.GraphicsDeviceType graphicsDeviceType=Rendering.GraphicsDeviceType.Direct3D11; }
+    public static class Debug { public static void Log(string text) { } }
+}
+namespace UnityEngine.Experimental.Rendering
+{
+    public enum GraphicsFormat { R8G8B8A8_UNorm, B8G8R8A8_UNorm, Other, R8G8B8A8_SRGB, B8G8R8A8_SRGB }
+    public static class XRSystem
+    {
+        public static bool displayActive => UnityEngine.XR.XRSettings.enabled;
+        public static bool isHDRDisplayOutputActive { get; set; }
+        public static bool singlePassAllowed { get; set; }=true;
+        private static readonly UnityEngine.XR.XRDisplaySubsystem Display=new UnityEngine.XR.XRDisplaySubsystem();
+        public static UnityEngine.XR.XRDisplaySubsystem GetActiveDisplay() => Display;
+    }
+}
+namespace UnityEngine.Rendering
+{
+    public enum GraphicsDeviceType { Direct3D11, Vulkan }
+    public enum TextureDimension { Tex2D, Tex2DArray }
+    public enum CameraEvent { AfterForwardOpaque }
+    public class RenderPipelineAsset : UnityEngine.Object { }
+    public static class GraphicsSettings { public static RenderPipelineAsset currentRenderPipeline; }
+    public struct ScriptableRenderContext { }
+    public static class RenderPipelineManager
+    {
+#if DEMEO
+        public static event Action<ScriptableRenderContext,UnityEngine.Camera> beginCameraRendering;
+#else
+        public static Il2CppSystem.Action<ScriptableRenderContext,UnityEngine.Camera> beginCameraRendering;
+        public static void add_beginCameraRendering(Il2CppSystem.Action<ScriptableRenderContext,UnityEngine.Camera> callback)
+            => beginCameraRendering=Il2CppSystem.Delegate.Combine(beginCameraRendering,callback).Cast<Il2CppSystem.Action<ScriptableRenderContext,UnityEngine.Camera>>();
+        public static void remove_beginCameraRendering(Il2CppSystem.Action<ScriptableRenderContext,UnityEngine.Camera> callback)
+            => beginCameraRendering=Il2CppSystem.Delegate.Remove(beginCameraRendering,callback)?.Cast<Il2CppSystem.Action<ScriptableRenderContext,UnityEngine.Camera>>();
+#endif
+        public static void Render(UnityEngine.Camera camera) => beginCameraRendering?.Invoke(default,camera);
+    }
+    public class CommandBuffer
+    {
+        public string name;
+        public void DrawProcedural(UnityEngine.Matrix4x4 matrix, UnityEngine.Material material, int pass, UnityEngine.MeshTopology topology, int count) { }
+        public void Release() { }
+    }
+}
+namespace UnityEngine.Rendering.Universal
+{
+    public class UniversalAdditionalCameraData : UnityEngine.Component
+    {
+        public bool renderPostProcessing { get; set; }=true;
+        public bool allowXRRendering { get; set; }=true;
+        public int renderType { get; set; }
+    }
+    public class UniversalRenderPipelineAsset : UnityEngine.Rendering.RenderPipelineAsset
+    {
+        public bool m_AllowPostProcessAlphaOutput;
+        public enum HdrPrecision { Bits32, Bits64 }
+        public HdrPrecision m_HDRColorBufferPrecision;
+        public bool supportsHDR { get; set; }
+    }
+}
+namespace UnityEngine.XR
+{
+    public class XRDisplaySubsystem
+    {
+        public struct XRRenderPass
+        {
+            public UnityEngine.RenderTextureDescriptor renderTargetDesc;
+            public int GetRenderParameterCount() => renderTargetDesc.volumeDepth==2 ? 2 : 1;
+        }
+        public int GetRenderPassCount() => XRSettings.eyeTextureDesc.volumeDepth==2 ? 1 : 2;
+        public void GetRenderPass(int index,out XRRenderPass pass) => pass=new XRRenderPass { renderTargetDesc=XRSettings.eyeTextureDesc };
+    }
+    public static class XRSettings
+    {
+        public enum StereoRenderingMode { MultiPass, SinglePassInstanced }
+        public static bool enabled=true;
+        public static StereoRenderingMode stereoRenderingMode;
+        public static UnityEngine.RenderTextureDescriptor eyeTextureDesc=new UnityEngine.RenderTextureDescriptor
+        { width=2000,height=2000,volumeDepth=1,msaaSamples=4,dimension=UnityEngine.Rendering.TextureDimension.Tex2D };
+    }
+}
+namespace HarmonyLib
+{
+    public class HarmonyPatch : Attribute { public HarmonyPatch() { } public HarmonyPatch(Type type,string method,Type[] args) { } }
+    public class HarmonyPrepare : Attribute { }
+    public class HarmonyTargetMethod : Attribute { }
+    public class HarmonyPrefix : Attribute { }
+    public static class AccessTools { public static Type TypeByName(string name) => typeof(Boardgame.GameStartup); }
+    public static class Harmony { public static void CreateAndPatchAll(Assembly assembly) { } }
+}
+namespace Boardgame { public class GameStartup { } }
+namespace BepInEx
+{
+    public class BepInPlugin : Attribute { public BepInPlugin(string id,string name,string version) { } }
+    public class BaseUnityPlugin : UnityEngine.MonoBehaviour { public Logging.ManualLogSource Logger=new Logging.ManualLogSource(); }
+}
+namespace BepInEx.Logging { public class ManualLogSource { public void LogInfo(string message) { } } }
+namespace BepInEx.Unity.IL2CPP
+{
+    public class BasePlugin
+    {
+        public BepInEx.Logging.ManualLogSource Log=new BepInEx.Logging.ManualLogSource();
+        public virtual void Load() { }
+        public virtual bool Unload() => false;
+        public T AddComponent<T>() => default;
+    }
+}
+namespace MelonLoader
+{
+    public class MelonInfo : Attribute { public MelonInfo(Type type,string name,string version,string author,string url) { } }
+    public class MelonGame : Attribute { public MelonGame(string developer,string game) { } }
+    public class MelonID : Attribute { public MelonID(string id) { } }
+    public class MelonMod
+    {
+        public virtual void OnInitializeMelon() { }
+        public virtual void OnUpdate() { }
+        public virtual void OnDeinitializeMelon() { }
+        public virtual void OnSceneWasLoaded(int index,string scene) { }
+    }
+    public static class Melon<T> { public static Logger Logger=new Logger(); }
+    public class Logger { public void Msg(string message) { } }
+    public static class MelonLogger { public static void Msg(string message) { } }
+    public static class MelonCoroutines { public static void Start(System.Collections.IEnumerator routine) { } }
+}
+namespace GreenScreen
+{
+    internal static class SteamLinkCoverageBridge
+    {
+        internal sealed class Snapshot { internal bool CanAcceptOrdinaryRgba; }
+        internal static Snapshot Current=new Snapshot();
+        internal static void Tick(bool wanted,double now) { if (!wanted) Reset(); }
+        internal static void Reset() => Current=new Snapshot();
+        internal static void Grant() => Current=new Snapshot { CanAcceptOrdinaryRgba=true };
+    }
+}

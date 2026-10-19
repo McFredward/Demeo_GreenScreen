@@ -1,14 +1,13 @@
-﻿using GreenScreen;
+using GreenScreen;
 #nullable disable
 
 #if DEMEOBATTLEMARKED
 using MelonLoader;
-using System.Threading.Tasks;
 
 [assembly: MelonInfo(
     typeof(BattlemarkedMod),
     "GreenScreen",
-    "1.2",
+    "1.3.0",
     "McFredward",
     "https://github.com/McFredward/Demeo_GreenScreen")]
 [assembly: MelonGame("Resolution Games", "Battlemarked")]
@@ -19,60 +18,73 @@ namespace GreenScreen
 {
     using HarmonyLib;
     using UnityEngine;
-    using System.IO;
     using System;
     using System.Reflection;
-    using System.Collections.Generic;
 
 #if DEMEO
     using BepInEx;
-    using Boardgame;    
     using BepInEx.Logging;
 
-    [BepInPlugin("566784", "GreenScreen", "1.2")]
+    [BepInPlugin("566784", "GreenScreen", "1.3.0")]
     internal class BepInExPlugin : BaseUnityPlugin { 
-        internal static new ManualLogSource Log;
+        internal static ManualLogSource Log;
         private void Awake()
         {
             BepInExPlugin.Log = base.Logger;
+            NativePassthrough.Initialize();
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly());
             Debug.Log("Finished patching.");
         }
+        private void Update() => NativePassthrough.Tick();
+        private void OnDestroy() => NativePassthrough.Shutdown();
     }
 #elif DEMEOBATTLES
     using BepInEx.Unity.IL2CPP;
     using BepInEx;
-    using Boardgame;    
     using BepInEx.Logging;
 
-    [BepInPlugin("566784", "GreenScreen", "1.2")]
+    [BepInPlugin("566784", "GreenScreen", "1.3.0")]
     internal class BepInExPlugin : BasePlugin
     {
         internal static new ManualLogSource Log;
         public override void Load()
         {
             BepInExPlugin.Log = base.Log;
+            AddComponent<PassthroughDriver>();
+            NativePassthrough.Initialize();
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly());
             BepInExPlugin.Log.LogInfo("Finished patching.");
         }
+        public override bool Unload()
+        {
+            NativePassthrough.Shutdown();
+            return true;
+        }
+    }
+    public sealed class PassthroughDriver : MonoBehaviour
+    {
+        public PassthroughDriver(IntPtr pointer) : base(pointer) { }
+        private void Update() => NativePassthrough.Tick();
+        private void OnDestroy() => NativePassthrough.Shutdown();
     }
 #elif DEMEOBATTLEMARKED
     using MelonLoader;
-    using Il2CppJade.GameView.Avatar;
-    using Il2CppJade.GameDefinitions;
-    using Il2CppJade.GameView;
-    using UnityEngine.SceneManagement;
 
     internal class BattlemarkedMod : MelonMod
     {
         public override void OnInitializeMelon()
         {
+            NativePassthrough.Initialize();
             HarmonyLib.Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly());
             Melon<BattlemarkedMod>.Logger.Msg("Finished patching.");
         }
 
+        public override void OnUpdate() => NativePassthrough.Tick();
+        public override void OnDeinitializeMelon() => NativePassthrough.Shutdown();
+
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)
         {
+            NativePassthrough.InvalidateCameras();
             MelonLogger.Msg($"Scene loaded: {sceneName}");
             MelonCoroutines.Start(RemoveEnvironment());
         }
@@ -117,7 +129,7 @@ namespace GreenScreen
                 }
             }
 
-            // Set camera background to green (or custom color)
+            // Refresh the configured Virtual Desktop / Steam Link background
             Utils.ChangeCamBackground();
             MelonLogger.Msg("Changed camera background");
         }
@@ -128,9 +140,23 @@ namespace GreenScreen
 
     // Harmony Patches
 #if DEMEO || DEMEOBATTLES
-    [HarmonyPatch(typeof(GameStartup), "InitializeGame", new Type[] { })]
+    [HarmonyPatch]
     public static class InitializeGame_Prefix_Patch
     {
+        private static MethodBase _initializeGame;
+
+        [HarmonyPrepare]
+        private static bool Prepare()
+        {
+            Type startup = AccessTools.TypeByName("Boardgame.GameStartup");
+            _initializeGame = startup?.GetMethod("InitializeGame", BindingFlags.Instance | BindingFlags.Public
+                | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
+            return _initializeGame != null;
+        }
+
+        [HarmonyTargetMethod]
+        private static MethodBase TargetMethod() => _initializeGame;
+
         [HarmonyPrefix]
         private static void Prefix()
         {
@@ -145,12 +171,6 @@ namespace GreenScreen
 
     public static class Utils
     {
-        public struct ModSettings
-        {
-            public Color BackgroundColor;
-            public bool DisableTable;
-        }
-
         public static void LogInfo(string message)
         {
 #if DEMEOBATTLEMARKED
@@ -162,124 +182,9 @@ namespace GreenScreen
 
         public static void ChangeCamBackground()
         {
-            Camera[] camerasInScene = UnityEngine.GameObject.FindObjectsOfType<Camera>();
-            UnityEngine.Color col = LoadSettings().BackgroundColor;
-            foreach (Camera camera in camerasInScene)
-            {
-                camera.backgroundColor = col;
-            }
+            NativePassthrough.InvalidateCameras();
         }
 
-        public static ModSettings LoadSettings()
-        {
-            // Defaults
-            ModSettings settings = new ModSettings
-            {
-                BackgroundColor = new Color(0f, 1f, 0f),
-                DisableTable = true
-            };
-
-            string configDir = "BepInEx/plugins";
-#if DEMEOBATTLEMARKED
-            configDir = "Mods";
-#endif
-
-            // Try new name first, fall back to old name for backwards compatibility
-            string filePath = Path.Combine(configDir, "greenscreen.ini");
-            if (!File.Exists(filePath))
-            {
-                filePath = Path.Combine(configDir, "custom_color.ini");
-            }
-
-            if (!File.Exists(filePath))
-            {
-                return settings;
-            }
-
-            try
-            {
-                string[] lines = File.ReadAllLines(filePath);
-                int r = -1, g = -1, b = -1;
-                string currentSection = "";
-
-                foreach (var line in lines)
-                {
-                    var trimmedLine = line.Trim();
-
-                    // Skip empty lines and comments
-                    if (string.IsNullOrEmpty(trimmedLine) || trimmedLine.StartsWith("#") || trimmedLine.StartsWith(";"))
-                        continue;
-
-                    // Check for section header
-                    if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                    {
-                        currentSection = trimmedLine.Substring(1, trimmedLine.Length - 2).ToUpper();
-                        continue;
-                    }
-
-                    // Parse key=value
-                    int equalsIndex = trimmedLine.IndexOf('=');
-                    if (equalsIndex <= 0)
-                        continue;
-
-                    string key = trimmedLine.Substring(0, equalsIndex).Trim().ToUpper();
-                    string value = trimmedLine.Substring(equalsIndex + 1).Trim();
-
-                    // Handle based on section (or no section for backwards compatibility)
-                    switch (currentSection)
-                    {
-                        case "COLOR":
-                        case "": // Backwards compatibility - no section
-                            if (key == "R") int.TryParse(value, out r);
-                            else if (key == "G") int.TryParse(value, out g);
-                            else if (key == "B") int.TryParse(value, out b);
-                            break;
-
-                        case "TABLE":
-                            if (key == "DISABLE" || key == "DISABLETABLE")
-                            {
-                                settings.DisableTable = (value.ToLower() == "true" || value == "1");
-                            }
-                            break;
-
-                        case "SETTINGS":
-                            // For backwards compatibility, also check DisableTable here
-                            if (key == "DISABLETABLE")
-                            {
-                                settings.DisableTable = (value.ToLower() == "true" || value == "1");
-                            }
-                            break;
-                    }
-
-                    // Backwards compatibility: DisableTable without section
-                    if (currentSection == "" && key == "DISABLETABLE")
-                    {
-                        settings.DisableTable = (value.ToLower() == "true" || value == "1");
-                    }
-                }
-
-                if (IsValidRGBValue(r) && IsValidRGBValue(g) && IsValidRGBValue(b))
-                {
-                    settings.BackgroundColor = new Color(r / 255f, g / 255f, b / 255f);
-                    LogInfo($"Loaded custom color: RGB({r}, {g}, {b})");
-                }
-
-                if (settings.DisableTable)
-                {
-                    LogInfo("Table mesh will be disabled");
-                }
-            }
-            catch (Exception ex)
-            {
-                LogInfo("Error reading config file: " + ex.Message);
-            }
-
-            return settings;
-        }
-
-        static bool IsValidRGBValue(int value)
-        {
-            return value >= 0 && value <= 255;
-        }
+        internal static ModConfiguration LoadSettings() => ConfigurationStore.Current;
     }
 }

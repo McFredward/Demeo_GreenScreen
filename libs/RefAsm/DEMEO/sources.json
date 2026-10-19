@@ -1,0 +1,42 @@
+{
+  "tool": "JetBrains.Refasmer.CliTool 2.0.3",
+  "kind": "metadata only; all MethodDef RVAs are zero",
+  "assemblies": {
+    "UnityEngine.AssetBundleModule.dll": {
+      "sourceSha256": "b71027d77728d76001342d69ebdbf8a1e16bfa69ab5e5968bdbe8defe681f348",
+      "sourceBytes": 38832,
+      "referenceSha256": "13adda75b8a772debd8f9f98d3ff26104f7feeaf75abd5b52db0a79ff0b5be6b",
+      "referenceBytes": 20992
+    },
+    "UnityEngine.CoreModule.dll": {
+      "sourceSha256": "4fb767e950977c4600e85cb4358f399dc283db4262a8342a966c73e2ef9ae811",
+      "sourceBytes": 1797040,
+      "referenceSha256": "97aef043bb24b070a624cd25e0d8792c6265aed18abb17086ef7667f9803c0ce",
+      "referenceBytes": 1211392
+    },
+    "UnityEngine.SubsystemsModule.dll": {
+      "sourceSha256": "4f05d3aed0f920c1003d70e948f87fbc1357fedc83627fe91f5c955618bd54fe",
+      "sourceBytes": 38320,
+      "referenceSha256": "21fb69f8f8648351905279774bbbbc7abbb799926ef5177a06e386ee33603b04",
+      "referenceBytes": 19968
+    },
+    "UnityEngine.VRModule.dll": {
+      "sourceSha256": "ecc6d0457298e09986489b5d3ecb0756b3df1e4550b7dd87d2c9693fa75dfdc4",
+      "sourceBytes": 28072,
+      "referenceSha256": "aa86568827c0e13a61d14a42fa6d8168f38c80cfce3783a3bc56353c251f22b1",
+      "referenceBytes": 15360
+    },
+    "UnityEngine.XRModule.dll": {
+      "sourceSha256": "1534cf1897538f5014327a29fc1f1450f08c0496e447a2e8800b64001c5c1002",
+      "sourceBytes": 84400,
+      "referenceSha256": "9e8c42439fac2a06fd8bce40d1dfc03ac9829d47e51d395e3ee57c042149fa1f",
+      "referenceBytes": 49152
+    },
+    "UnityEngine.dll": {
+      "sourceSha256": "8e0825f89a43c81e3501a4cda9b4eaedeffc166e449e526884c33411a7a6825a",
+      "sourceBytes": 170416,
+      "referenceSha256": "212603d9ac0787cdebe09681de98fd02c1d5bfc4f9093fc6e5c7f47ade391dcc",
+      "referenceBytes": 158720
+    }
+  }
+}

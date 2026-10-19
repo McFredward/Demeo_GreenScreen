@@ -1,110 +1,77 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
-    <PropertyGroup>
-        <Configurations>DEMEO;DEMEOBATTLES;DEMEOBATTLEMARKED</Configurations>
-        <AssemblySearchPaths>../libs;$(AssemblySearchPaths)</AssemblySearchPaths>
-    </PropertyGroup>
-
-
-    <PropertyGroup Condition="'$(Configuration)'=='DEMEO'">
-        <TargetFramework>netstandard2.1</TargetFramework>
-        <LangVersion>latest</LangVersion>
-        <Nullable>enable</Nullable>
-        <OutputPath>bin</OutputPath>
-        <AssemblyName>Demeo_GreenScreen</AssemblyName>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Configuration)'=='DEMEOBATTLES'">
-        <TargetFramework>net6.0</TargetFramework>
-        <LangVersion>latest</LangVersion>
-        <Nullable>enable</Nullable>
-        <OutputPath>bin</OutputPath>
-        <AssemblyName>DemeoBattles_GreenScreen</AssemblyName>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Configuration)'=='DEMEOBATTLEMARKED'">
-        <TargetFramework>net6.0</TargetFramework>
-        <LangVersion>latest</LangVersion>
-        <Nullable>enable</Nullable>
-        <OutputPath>bin</OutputPath>
-        <AssemblyName>DemeoBattlemarked_GreenScreen</AssemblyName>
-    </PropertyGroup>
-    <ItemGroup Condition="'$(Configuration)'=='DEMEO'">
-        <Reference Include="Assembly-CSharp">
-            <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo\demeo_Data\Managed\Assembly-CSharp.dll</HintPath>
-            <Private>True</Private>
-        </Reference>
-      <Reference Include="0Harmony">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo\BepInEx\core\0Harmony.dll</HintPath>
-      </Reference>
-      <Reference Include="MelonLoader">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo\BepInEx\core\BepInEx.dll</HintPath>
-      </Reference>
-      <Reference Include="UnityEngine.CoreModule">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo\demeo_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
-      </Reference>
-      <Reference Include="UnityEngine">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo\demeo_Data\Managed\UnityEngine.dll</HintPath>
-      </Reference>
-    </ItemGroup>
-    <ItemGroup Condition="'$(Configuration)'=='DEMEOBATTLES'">
-      <Reference Include="0Harmony">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\core\0Harmony.dll</HintPath>
-      </Reference>
-      <Reference Include="Assembly-CSharp">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\interop\Assembly-CSharp.dll</HintPath>
-      </Reference>
-      <Reference Include="BepInEx.Core">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\core\BepInEx.Core.dll</HintPath>
-      </Reference>
-      <Reference Include="BepInEx.Unity.Common">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\core\BepInEx.Unity.Common.dll</HintPath>
-      </Reference>
-      <Reference Include="BepInEx.Unity.IL2CPP">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\core\BepInEx.Unity.IL2CPP.dll</HintPath>
-      </Reference>
-      <Reference Include="Il2Cppmscorlib">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\interop\Il2Cppmscorlib.dll</HintPath>
-      </Reference>
-      <Reference Include="Il2CppInterop.Runtime">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\core\Il2CppInterop.Runtime.dll</HintPath>
-      </Reference>
-      <Reference Include="UnityEngine">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\interop\UnityEngine.dll</HintPath>
-      </Reference>
-      <Reference Include="UnityEngine.CoreModule">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Demeo Battles\BepInEx\interop\UnityEngine.CoreModule.dll</HintPath>
-      </Reference>
-    </ItemGroup>
-    <ItemGroup Condition="'$(Configuration)'=='DEMEOBATTLEMARKED'">
-      <Reference Include="0Harmony">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Battlemarked\MelonLoader\net6\0Harmony.dll</HintPath>
-      </Reference>
-      <Reference Include="Assembly-CSharp">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Battlemarked\MelonLoader\Il2CppAssemblies\Assembly-CSharp.dll</HintPath>
-      </Reference>
-      <Reference Include="Il2CppGameView">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Battlemarked\MelonLoader\Il2CppAssemblies\Il2CppGameView.dll</HintPath>
-      </Reference>
-      <Reference Include="Il2CppGameDefinitions">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Battlemarked\MelonLoader\Il2CppAssemblies\Il2CppGameDefinitions.dll</HintPath>
-      </Reference>
-      <Reference Include="MelonLoader">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Battlemarked\MelonLoader\net6\MelonLoader.dll</HintPath>
-      </Reference>
-      <Reference Include="Il2Cppmscorlib">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Battlemarked\MelonLoader\Il2CppAssemblies\Il2Cppmscorlib.dll</HintPath>
-      </Reference>
-      <Reference Include="Il2CppInterop.Runtime">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Battlemarked\MelonLoader\net6\Il2CppInterop.Runtime.dll</HintPath>
-      </Reference>
-      <Reference Include="UnityEngine">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Battlemarked\MelonLoader\Il2CppAssemblies\UnityEngine.dll</HintPath>
-      </Reference>
-      <Reference Include="UnityEngine.CoreModule">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Battlemarked\MelonLoader\Il2CppAssemblies\UnityEngine.CoreModule.dll</HintPath>
-      </Reference>
-      <Reference Include="Unity.ResourceManager">
-        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Battlemarked\MelonLoader\Il2CppAssemblies\Unity.ResourceManager.dll</HintPath>
-      </Reference>
-    </ItemGroup>
-
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Configurations>DEMEO;DEMEOBATTLES;DEMEOBATTLEMARKED</Configurations>
+    <Version>1.3.0</Version>
+    <TargetFramework Condition="'$(Configuration)' == 'DEMEO'">netstandard2.1</TargetFramework>
+    <TargetFramework Condition="'$(Configuration)' != 'DEMEO'">net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <!-- All games expose the same assembly names. Never resolve another game's
+         metadata DLL from SDK candidate-file globs before this HintPath. -->
+    <AssemblySearchPaths>{HintPathFromItem};{TargetFrameworkDirectory};{RawFileName}</AssemblySearchPaths>
+    <DefineConstants>$(DefineConstants);$(Configuration)</DefineConstants>
+    <OutputPath>bin/$(Configuration)</OutputPath>
+    <AssemblyName Condition="'$(Configuration)' == 'DEMEO'">Demeo_GreenScreen</AssemblyName>
+    <AssemblyName Condition="'$(Configuration)' == 'DEMEOBATTLES'">DemeoBattles_GreenScreen</AssemblyName>
+    <AssemblyName Condition="'$(Configuration)' == 'DEMEOBATTLEMARKED'">DemeoBattlemarked_GreenScreen</AssemblyName>
+    <SteamLibraryPath Condition="'$(SteamLibraryPath)' == ''">C:/Program Files (x86)/Steam/steamapps/common</SteamLibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'DEMEO'">
+    <GameDirectory Condition="'$(GameDirectory)' == ''">$(SteamLibraryPath)/Demeo</GameDirectory>
+    <LoaderDirectory Condition="'$(LoaderDirectory)' == ''">$(GameDirectory)/BepInEx/core</LoaderDirectory>
+    <UnityAssemblyDirectory Condition="'$(UnityAssemblyDirectory)' == ''">$(GameDirectory)/demeo_Data/Managed</UnityAssemblyDirectory>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'DEMEOBATTLES'">
+    <GameDirectory Condition="'$(GameDirectory)' == ''">$(SteamLibraryPath)/Demeo Battles</GameDirectory>
+    <LoaderDirectory Condition="'$(LoaderDirectory)' == ''">$(GameDirectory)/BepInEx/core</LoaderDirectory>
+    <UnityAssemblyDirectory Condition="'$(UnityAssemblyDirectory)' == ''">$(GameDirectory)/BepInEx/interop</UnityAssemblyDirectory>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'DEMEOBATTLEMARKED'">
+    <GameDirectory Condition="'$(GameDirectory)' == ''">$(SteamLibraryPath)/Battlemarked</GameDirectory>
+    <LoaderDirectory Condition="'$(LoaderDirectory)' == ''">$(GameDirectory)/MelonLoader/net6</LoaderDirectory>
+    <UnityAssemblyDirectory Condition="'$(UnityAssemblyDirectory)' == ''">$(GameDirectory)/MelonLoader/Il2CppAssemblies</UnityAssemblyDirectory>
+  </PropertyGroup>
+  <PropertyGroup>
+    <UseReferenceAssemblies Condition="'$(UseReferenceAssemblies)' == '' And !Exists('$(UnityAssemblyDirectory)/UnityEngine.CoreModule.dll')">true</UseReferenceAssemblies>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(UseReferenceAssemblies)' == 'true'">
+    <UnityAssemblyDirectory>$(MSBuildThisFileDirectory)libs/RefAsm/$(Configuration)</UnityAssemblyDirectory>
+    <LoaderDirectory>$(MSBuildThisFileDirectory).build/loaders/$(Configuration)</LoaderDirectory>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="tests/**/*.cs;unity/**/*.cs;.planning/**/*.cs" />
+    <EmbeddedResource Include="assets/nativecoverage.bundle" LogicalName="GreenScreen.NativeCoverage" />
+    <None Update="greenscreen.ini.example" CopyToOutputDirectory="PreserveNewest" />
+    <Reference Include="0Harmony" HintPath="$(LoaderDirectory)/0Harmony.dll" Private="false" />
+    <Reference Include="UnityEngine" HintPath="$(UnityAssemblyDirectory)/UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(UnityAssemblyDirectory)/UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.XRModule" HintPath="$(UnityAssemblyDirectory)/UnityEngine.XRModule.dll" Private="false" />
+    <Reference Include="UnityEngine.SubsystemsModule" HintPath="$(UnityAssemblyDirectory)/UnityEngine.SubsystemsModule.dll" Private="false" />
+    <Reference Include="UnityEngine.VRModule" HintPath="$(UnityAssemblyDirectory)/UnityEngine.VRModule.dll" Private="false"
+               Condition="Exists('$(UnityAssemblyDirectory)/UnityEngine.VRModule.dll')" />
+    <Reference Include="UnityEngine.AssetBundleModule" HintPath="$(UnityAssemblyDirectory)/UnityEngine.AssetBundleModule.dll" Private="false" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'DEMEO'">
+    <Reference Include="BepInEx" HintPath="$(LoaderDirectory)/BepInEx.dll" Private="false" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'DEMEOBATTLES'">
+    <Reference Include="BepInEx.Core" HintPath="$(LoaderDirectory)/BepInEx.Core.dll" Private="false" />
+    <Reference Include="BepInEx.Unity.Common" HintPath="$(LoaderDirectory)/BepInEx.Unity.Common.dll" Private="false" />
+    <Reference Include="BepInEx.Unity.IL2CPP" HintPath="$(LoaderDirectory)/BepInEx.Unity.IL2CPP.dll" Private="false" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' != 'DEMEO'">
+    <Reference Include="Il2Cppmscorlib" HintPath="$(UnityAssemblyDirectory)/Il2Cppmscorlib.dll" Private="false" />
+    <Reference Include="Il2CppInterop.Runtime" HintPath="$(LoaderDirectory)/Il2CppInterop.Runtime.dll" Private="false" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'DEMEOBATTLEMARKED'">
+    <Reference Include="MelonLoader" HintPath="$(LoaderDirectory)/MelonLoader.dll" Private="false" />
+  </ItemGroup>
+  <Target Name="ValidateGameConfiguration" BeforeTargets="ResolveReferences">
+    <Message Condition="'$(UseReferenceAssemblies)' == 'true'" Importance="high"
+             Text="Building $(Configuration) against metadata-only references (no local game code)." />
+    <Error Condition="'$(Configuration)' != 'DEMEO' And '$(Configuration)' != 'DEMEOBATTLES' And '$(Configuration)' != 'DEMEOBATTLEMARKED'"
+           Text="Select -c DEMEO, -c DEMEOBATTLES or -c DEMEOBATTLEMARKED." />
+    <Error Condition="!Exists('$(UnityAssemblyDirectory)/UnityEngine.CoreModule.dll')"
+           Text="Game assemblies are missing. Set GameDirectory (and optionally UnityAssemblyDirectory/LoaderDirectory) to the installed game and mod loader." />
+  </Target>
 </Project>

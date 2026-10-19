@@ -1,0 +1,149 @@
+using System;
+using System.IO;
+using GreenScreen;
+using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
+using UnityEngine.XR;
+
+internal static class IntegrationChecks
+{
+    private static int _checks;
+    private static readonly string ConfigPath=Path.Combine(Path.GetDirectoryName(typeof(ConfigurationStore).Assembly.Location), "greenscreen.ini");
+    private static void Check(bool value,string name) { if (!value) throw new Exception(name); _checks++; }
+    private static void Tick() { Time.frameCount++; Time.unscaledTime+=.1f; NativePassthrough.Tick(); }
+    private static void WriteConfig(bool native)
+    {
+        File.WriteAllText(ConfigPath,"[STEAMLINK]\nNativePassthrough="+native+"\n");
+        File.SetLastWriteTimeUtc(ConfigPath,DateTime.UtcNow.AddSeconds(Time.frameCount));
+        NativePassthrough.InvalidateCameras();
+    }
+    private static void EnableNative()
+    {
+        WriteConfig(true); Tick(); // Reload invalidates a previous declaration.
+        SteamLinkCoverageBridge.Grant(); Tick();
+    }
+    public static void Main()
+    {
+#if !DEMEOBATTLEMARKED
+        BepInExPlugin.Log=new BepInEx.Logging.ManualLogSource();
+#endif
+        string working=Environment.CurrentDirectory;
+        string temp=Path.Combine(Path.GetTempPath(),"demeo-check-"+Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        Environment.CurrentDirectory=temp;
+        try
+        {
+            Check(!ModConfiguration.Parse(Array.Empty<string>()).SteamLinkNativePassthrough,"native mode is opt-in");
+            Check(ModConfiguration.Parse(new[] { "[steamlink]", "nativepassthrough=TrUe" }).SteamLinkNativePassthrough,"case insensitive option");
+            Check(ModConfiguration.Parse(new[] { "[STEAMLINK]", "NativePassthrough=1" }).SteamLinkNativePassthrough,"numeric true");
+            Check(!ModConfiguration.Parse(new[] { "[STEAMLINK]", "NativePassthrough=invalid" }).SteamLinkNativePassthrough,"invalid option fails disabled");
+            var legacy=ModConfiguration.Parse(new[] { "R=10", "G=20", "B=30", "DisableTable=0" });
+            Check(legacy.BackgroundColor==new Color(10/255f,20/255f,30/255f,1) && !legacy.DisableTable,"legacy unsectioned colour and table");
+            Check(ModConfiguration.Parse(new[] { "[TABLE]", "DisableTable=1" }).DisableTable,"table alias");
+            Check(!ModConfiguration.Parse(new[] { "[SETTINGS]", "DisableTable=false" }).DisableTable,"legacy settings table");
+            Check(ModConfiguration.Parse(new[] { "R=invalid", "G=20", "B=30" }).BackgroundColor==new Color(0,1,0,1),"invalid RGB preserves default");
+            Directory.CreateDirectory("nested"); Directory.CreateDirectory("legacy");
+            File.WriteAllText("legacy/greenscreen.ini",""); File.WriteAllText("nested/custom_color.ini","");
+            Check(ConfigurationStore.Resolve("nested","legacy")==Path.Combine("legacy","greenscreen.ini"),"new filename precedes legacy filename");
+            File.WriteAllText("nested/greenscreen.ini","");
+            Check(ConfigurationStore.Resolve("nested","legacy")==Path.Combine("nested","greenscreen.ini"),"config beside DLL precedes loader root");
+
+            File.Delete(ConfigPath);
+            var camera=new Camera(); Color original=camera.backgroundColor;
+            GameObject.Scene=new[] { camera };
+            NativePassthrough.Initialize(); Tick();
+            Check(camera.backgroundColor==new Color(0,1,0,1),"Virtual Desktop remains default");
+            Check(camera.clearFlags==CameraClearFlags.Skybox && camera.Commands==0,"default leaves clear policy and render commands alone");
+            WriteConfig(true); Tick();
+            Check(camera.backgroundColor==Color.black && camera.Commands==0,"missing companion keeps opaque background");
+            SteamLinkCoverageBridge.Grant(); Tick();
+            Check(camera.backgroundColor==Color.clear && camera.Commands==1,"granted built-in source gets transparent clear and depth prefix");
+            Check(camera.forceIntoRenderTexture,"built-in intermediate preserves alpha");
+            Camera.Render(camera);
+            Check(SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,"valid render seam keeps authority");
+            SteamLinkCoverageBridge.Reset(); Camera.Render(camera);
+            Check(camera.backgroundColor==Color.black && camera.Commands==0,"mid-frame connection loss detaches coverage and fails opaque");
+            Check(!camera.forceIntoRenderTexture,"connection loss restores intermediate permission");
+            SteamLinkCoverageBridge.Grant(); Camera.Render(camera);
+            Check(camera.backgroundColor==Color.black,"render callback cannot activate the remaining eye");
+            Tick();
+            Check(camera.backgroundColor==Color.clear,"next Update can admit a fresh complete frame");
+            camera.targetTexture=new RenderTexture(); Camera.Render(camera);
+            Check(!SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba && camera.Commands==0,"target replacement revokes old source epoch");
+            SteamLinkCoverageBridge.Grant(); Tick();
+            Check(camera.backgroundColor==Color.clear,"replacement target can acquire a new epoch");
+            var descriptor=camera.targetTexture.descriptor; descriptor.graphicsFormat=UnityEngine.Experimental.Rendering.GraphicsFormat.Other;
+            camera.targetTexture.descriptor=descriptor; Camera.Render(camera);
+            Check(camera.backgroundColor==Color.black && !SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,"unsupported changed target fails opaque");
+            camera.targetTexture=null;
+            QualitySettings.activeColorSpace=ColorSpace.Linear; SteamLinkCoverageBridge.Grant(); Tick();
+            Check(!SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba && camera.backgroundColor==Color.black,"linear source never declares supported profile");
+            QualitySettings.activeColorSpace=ColorSpace.Gamma;
+            XRSettings.stereoRenderingMode=XRSettings.StereoRenderingMode.SinglePassInstanced;
+            SteamLinkCoverageBridge.Grant(); Tick();
+            Check(!SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,"single-pass source refused");
+            XRSettings.stereoRenderingMode=XRSettings.StereoRenderingMode.MultiPass;
+            var second=new Camera(); GameObject.Scene=new[] { camera,second }; NativePassthrough.InvalidateCameras();
+            SteamLinkCoverageBridge.Grant(); Tick();
+            Check(!SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,"ambiguous stereo camera ownership refused");
+            second.isActiveAndEnabled=false;
+            EnableNative();
+            WriteConfig(false); Tick();
+            Check(camera.backgroundColor==new Color(0,1,0,1) && camera.clearFlags==CameraClearFlags.Skybox,"live opt-out restores legacy colour and original clear policy");
+            Check(camera.Commands==0 && !camera.forceIntoRenderTexture,"live opt-out releases render changes");
+            NativePassthrough.Shutdown();
+            Check(camera.backgroundColor==original,"unload restores original game camera");
+
+            var pipeline=new UniversalRenderPipelineAsset(); GraphicsSettings.currentRenderPipeline=pipeline;
+            GameObject.Scene=new[] { camera };
+            NativePassthrough.Initialize(); EnableNative();
+            Check(pipeline.m_AllowPostProcessAlphaOutput && camera.backgroundColor==Color.clear,"URP preserves post-processing alpha");
+            camera.stereoEnabled=false; Tick(); RenderPipelineManager.Render(camera);
+            Check(camera.backgroundColor==Color.clear,"modern URP XR does not depend on the legacy camera stereo flag");
+            Check(!UnityEngine.Experimental.Rendering.XRSystem.singlePassAllowed,"URP prepares separate eye render passes");
+            Check(!((UniversalAdditionalCameraData)camera.Extra).renderPostProcessing,"URP bypasses potentially stripped alpha post-processing variants");
+            Check(camera.Commands==0 && !camera.forceIntoRenderTexture,"URP uses native alpha pipeline");
+            RenderPipelineManager.Render(camera);
+            Check(SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,"SRP render seam validates current source");
+            pipeline.m_AllowPostProcessAlphaOutput=false; RenderPipelineManager.Render(camera);
+            Check(!SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba && camera.backgroundColor==Color.black,"foreign alpha processing change revokes output");
+            SteamLinkCoverageBridge.Grant(); Tick();
+            Check(pipeline.m_AllowPostProcessAlphaOutput,"URP can prepare again at next boundary");
+            NativePassthrough.Shutdown();
+            Check(!pipeline.m_AllowPostProcessAlphaOutput,"unload restores original pipeline setting");
+            Check(UnityEngine.Experimental.Rendering.XRSystem.singlePassAllowed,"unload restores original stereo policy");
+            Check(((UniversalAdditionalCameraData)camera.Extra).renderPostProcessing,"unload restores original camera post-processing");
+            Check(camera.backgroundColor==original,"URP unload restores original camera background");
+            pipeline.m_AllowPostProcessAlphaOutput=true;
+            NativePassthrough.Initialize(); EnableNative(); NativePassthrough.Shutdown();
+            Check(pipeline.m_AllowPostProcessAlphaOutput,"pre-existing alpha processing survives teardown");
+
+            // Match the supplied Unity 6 games: Linear lighting, sRGB XR array,
+            // URP MultiPass render passes, and HDR intermediates with SDR output.
+            QualitySettings.activeColorSpace=ColorSpace.Linear;
+            var eye=XRSettings.eyeTextureDesc;
+            eye.sRGB=true;
+            eye.graphicsFormat=UnityEngine.Experimental.Rendering.GraphicsFormat.R8G8B8A8_SRGB;
+            eye.dimension=TextureDimension.Tex2DArray; eye.volumeDepth=2;
+            XRSettings.eyeTextureDesc=eye;
+            XRSettings.stereoRenderingMode=XRSettings.StereoRenderingMode.SinglePassInstanced;
+            camera.allowHDR=true; pipeline.supportsHDR=true;
+            pipeline.m_AllowPostProcessAlphaOutput=false;
+            NativePassthrough.Initialize(); EnableNative();
+            Check(camera.backgroundColor==Color.clear,"Linear URP keeps normal sRGB output instead of requiring a Gamma project");
+            Check(!UnityEngine.Experimental.Rendering.XRSystem.singlePassAllowed,"legacy single-pass setting does not override owned URP MultiPass policy");
+            Check(pipeline.m_HDRColorBufferPrecision==UniversalRenderPipelineAsset.HdrPrecision.Bits64,"HDR intermediate retains alpha");
+            NativePassthrough.Shutdown();
+            Check(pipeline.m_HDRColorBufferPrecision==UniversalRenderPipelineAsset.HdrPrecision.Bits32,"HDR intermediate precision restored");
+            Console.WriteLine($"Configuration and render lifecycle checks passed: {_checks}");
+        }
+        finally
+        {
+            NativePassthrough.Shutdown();
+            File.Delete(ConfigPath);
+            Environment.CurrentDirectory=working;
+            Directory.Delete(temp,true);
+        }
+    }
+}

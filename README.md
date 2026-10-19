@@ -1,5 +1,5 @@
 # Demeo_GreenScreen
-Replaces the black background color of Demeo, Demeo Battles & Demeo Battlemarked, enabling mixed reality in the PCVR version of these games through [VirtualDesktop](https://www.meta.com/de-de/experiences/1261331807302580/)'s passthrough mode.
+Mixed reality for the PCVR versions of Demeo, Demeo Battles & Demeo Battlemarked. The default mode replaces the background colour for [Virtual Desktop](https://www.meta.com/de-de/experiences/1261331807302580/). An optional native-alpha mode integrates [Steam Link Native Passthrough](https://github.com/McFredward/steam-link-native-passthrough) for Steam Frame.
 
 <p align="center">
   <img src="demeo_green.jpg" width="50%" height="50%">
@@ -28,6 +28,8 @@ Replaces the black background color of Demeo, Demeo Battles & Demeo Battlemarked
   
 <ins>**Demeo, Demeo Battles, Demeo Battlemarked**</ins> <br>
 
+The following colour-key settings apply to **Virtual Desktop**. For Steam Link, use the optional mode below.
+
 * Turn on "VR Passthrough" under the "Streaming"-Tab in the Virtual Desktop Menu (within VR).
 * **USE THE FOLLOWING CONFIGURATION:**:
 
@@ -47,12 +49,83 @@ B=0
 
 [TABLE]
 Disable=false
+
+[STEAMLINK]
+NativePassthrough=false
 ```
 
 The `[TABLE]` section is only relevant for Battlemarked - this way you can re-enable the table mesh (per default its disabled).
 Feel free to adjust the `[COLOR]` values as desired, ensuring they stay within the range of 0 to 255 for each component. <br>
 Additionally, please update the color in the VirtualDesktop configuration accordingly. <br>
 If you discover a color or configuration that, in your opinion, performs better than the default green, let me know :)
+
+### Optional: native Steam Link passthrough
+
+This integration is experimental and needs an in-headset test for each game. It sends the game's ordinary RGB image with independent alpha; green game objects are not removed by a colour key.
+
+1. Install the mod for your game as above. Demeo and Battles still need the basement environment disabled in the game settings.
+2. Install matching PC and Steam Frame companions using the [Steam Link Native Passthrough installer](https://github.com/McFredward/steam-link-native-passthrough#installation). Its supported hardware/runtime requirements apply.
+3. Put `greenscreen.ini` beside the mod DLL (a sample is included as `greenscreen.ini.example`) and enable:
+
+   ```ini
+   [STEAMLINK]
+   NativePassthrough=true
+   ```
+
+4. Start the game in VR over Steam Link with Direct3D 11. Check both eyes, menus, loading transitions, translucent effects and reconnects on the headset.
+
+Changing `NativePassthrough` or `[COLOR]` in the INI takes effect within about one second. Set `NativePassthrough=false` to return to Virtual Desktop's colour-key mode. `custom_color.ini`, unsectioned RGB values, and a config in the loader's plugins/Mods root remain supported; `greenscreen.ini` beside the DLL takes priority.
+
+The native mode waits for a verified, live sender connection before enabling transparency. Missing companions, unsupported eye buffers or lost permission leave an opaque black background, with the reason in the mod log. Installation and a successful source handshake do not prove a correct headset picture.
+
+For Unity 6 URP, the mod temporarily enables alpha processing, uses separate eye render passes, and preserves alpha in HDR intermediates when needed. Game post-processing is temporarily bypassed because released games can have its alpha shader variants stripped. It keeps Linear project lighting and Unity's normal sRGB output. These settings are restored on opt-out or unload. Eye resolution, MSAA and field of view are retained. Custom shaders can still discard or distort alpha; see [integration details and validation limits](docs/STEAM-LINK-INTEGRATION.md).
+
+## Build and install automatically (Windows)
+
+Install the appropriate mod loader first and start each IL2CPP game once so its interop assemblies are generated. Install the **.NET SDK 8 or newer**, clone this repository, close the games, and run from PowerShell:
+
+```powershell
+.\scripts\install.ps1
+```
+
+The script finds all three games through Steam's registry entry, `libraryfolders.vdf` and app manifests, builds against each game's actual local assemblies, and copies its mod DLL into `BepInEx/plugins` or `Mods`. Existing nested plugin locations and config files are retained; the previous DLL is saved as `.dll.bak`.
+
+```powershell
+.\scripts\install.ps1 -ListOnly
+.\scripts\install.ps1 -WhatIf
+.\scripts\install.ps1 -Game Demeo
+.\scripts\install.ps1 -Game DemeoBattles -GamePath "D:\SteamLibrary\steamapps\common\Demeo Battles"
+.\scripts\install.ps1 -SteamLibrary "D:\SteamLibrary"
+```
+
+The installer preflights every selected game before installing anything. A missing loader/interop directory or a running game stops installation; a failed build leaves that game's installed DLL intact. It does not install the separate Steam Frame companion.
+
+## Building
+
+Build each configuration against that game's installed loader and managed/interop assemblies:
+
+```sh
+dotnet build GreenScreen.csproj -c DEMEO -p:GameDirectory="C:/Games/Demeo"
+dotnet build GreenScreen.csproj -c DEMEOBATTLES -p:GameDirectory="C:/Games/Demeo Battles"
+dotnet build GreenScreen.csproj -c DEMEOBATTLEMARKED -p:GameDirectory="C:/Games/Battlemarked"
+```
+
+`UnityAssemblyDirectory` and `LoaderDirectory` can override the reference locations independently. Loader and game assemblies are not copied into the output. The coverage shader is embedded in the mod DLL; rebuilding it requires Unity 2021.3 with Windows build support (see `unity/Assets/Editor/BuildCoverage.cs`).
+
+### CI builds without an installed game
+
+Development happens on `dev`. CI checks `dev`/`main` pushes and pull requests. Every push to `main` builds `Demeo.zip`, `DemeoBattles.zip` and `DemeoBattlemarked.zip`, available together with checksums in the workflow's **Demeo-mods** artifact. The workflow does not push commits or create releases.
+
+CI uses committed [metadata-only references](libs/RefAsm/README.md). Every method body is removed, and CI verifies that all MethodDef RVAs are zero. Public loader dependencies are downloaded from SHA-256-pinned archives. ZIP packaging allows only the mod DLL, example config, README and licence.
+
+Run the same package build locally without a game installation:
+
+```sh
+python3 scripts/fetch-build-deps.py
+python3 scripts/package.py
+```
+
+See [CI and installation details](docs/BUILD-AND-INSTALL.md) for reference regeneration and checks.
 
 ## Known issues
 
@@ -65,6 +138,8 @@ If you discover a color or configuration that, in your opinion, performs better 
 * [HarmonyLib](https://github.com/pardeike/Harmony) using the MIT License
 * [BepInEx](https://github.com/BepInEx/BepInEx) using the LGPL2.1 license
 * [MelonLoader](https://github.com/LavaGang/MelonLoader) using the Apache-2.0
+* [Steam Link Native Passthrough](https://github.com/McFredward/steam-link-native-passthrough) for the paired PC/Frame companion and application source protocol
+* [GloomhavenVR](https://github.com/McFredward/GloomhavenVR) for the source-negotiation client and opaque-depth coverage approach (GPL-3.0)
 
 If you have any suggestions, feel free to open an Issue. Or contact me (McFredward) in via Discord.
 

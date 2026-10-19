@@ -1,0 +1,48 @@
+{
+  "tool": "JetBrains.Refasmer.CliTool 2.0.3",
+  "kind": "metadata only; all MethodDef RVAs are zero",
+  "assemblies": {
+    "Il2Cppmscorlib.dll": {
+      "sourceSha256": "795c6f745e7a56b24b4a797f8bac46b60b40ce31ba40ca327fda2f5e32304769",
+      "sourceBytes": 6040576,
+      "referenceSha256": "194b4bef15d54bf46c6c959ecf1a391289f718d9699d9770bc5a3bdafc1e57ed",
+      "referenceBytes": 3805184
+    },
+    "UnityEngine.AssetBundleModule.dll": {
+      "sourceSha256": "0d041a40ef866ada86fba5864bb2a4ff1cf27eb13e4475c4625b64f9de6224bd",
+      "sourceBytes": 38912,
+      "referenceSha256": "478b3909c4dc855901d728aae867f0713511d414fad6183d9d59034f7f7990bc",
+      "referenceBytes": 23552
+    },
+    "UnityEngine.CoreModule.dll": {
+      "sourceSha256": "c6755d379c336e0073ddf102e500dac10b7652dc1f9136f74693005c6ca02790",
+      "sourceBytes": 5049856,
+      "referenceSha256": "8c7df9408572264093eb920985dd7d4a3d0cf530c23c959e42bca634ad4d58f0",
+      "referenceBytes": 3356672
+    },
+    "UnityEngine.SubsystemsModule.dll": {
+      "sourceSha256": "61c030d9ce04be837c9ebf70233cbd895b80d832ff3826eceb039d3573530e44",
+      "sourceBytes": 55808,
+      "referenceSha256": "b54c71efcd30b7a578bbbc5546cde3aca88b9df8b6a02baaed1c933496cf9adc",
+      "referenceBytes": 34304
+    },
+    "UnityEngine.VRModule.dll": {
+      "sourceSha256": "286c0daec6c9df50d8f686ed7897073fdb09d85d37aa51f15bfc4a5b2003fcbd",
+      "sourceBytes": 18432,
+      "referenceSha256": "64f955073608be0191510cc917c6a19d7160c2fe17091af1aadd780fc7ae9f86",
+      "referenceBytes": 12288
+    },
+    "UnityEngine.XRModule.dll": {
+      "sourceSha256": "e211abbefc1ef417b4e976d4de62497f2a0a4735c4d9c06ed8b519a26d3762e1",
+      "sourceBytes": 173568,
+      "referenceSha256": "807a6c1d0a25671b019f3ed4886a25153fe7c90d53a8e48bb5cfcc83cb619ba1",
+      "referenceBytes": 107520
+    },
+    "UnityEngine.dll": {
+      "sourceSha256": "f4809beb7162fd076df3a8a061f928dd8f2548e791ccbe90e2bcc9f118fbe52a",
+      "sourceBytes": 3072,
+      "referenceSha256": "e377ddadaf8fb0dde5ddbe99f4963e11137efe6394b6d2137b00f36df0433783",
+      "referenceBytes": 3072
+    }
+  }
+}
