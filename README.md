@@ -82,7 +82,7 @@ After installation, the script prints the active INI path. New configs default t
 
 The native mode waits for a verified, live sender connection before enabling transparency. Missing companions, unsupported eye buffers or lost permission leave an opaque black background, with the reason in the mod log. Installation and a successful source handshake do not prove a correct headset picture.
 
-For Unity 6 URP, the mod temporarily enables alpha processing, retains the game's original stereo layout, and preserves alpha in HDR intermediates when needed. Game post-processing is temporarily bypassed because released games can have its alpha shader variants stripped. It keeps Linear project lighting and Unity's normal sRGB output. These settings are restored on opt-out or unload. Eye resolution, MSAA and field of view are retained. Custom shaders can still discard or distort alpha; see [integration details and validation limits](docs/STEAM-LINK-INTEGRATION.md).
+For Unity 6 URP Forward/Forward+, the mod temporarily enables alpha processing, retains the game's original stereo layout, and preserves alpha in HDR intermediates when needed. An embedded stereo shader repairs opaque-object alpha using each eye's current depth before transparent effects are drawn. Game post-processing is temporarily bypassed because released games can have its alpha shader variants stripped. It keeps Linear project lighting and Unity's normal sRGB output. These settings are restored on opt-out or unload. Eye resolution, MSAA and field of view are retained. Custom transparent shaders can still discard or distort alpha; see [integration details and validation limits](docs/STEAM-LINK-INTEGRATION.md).
 
 ## Build and install automatically (Windows)
 

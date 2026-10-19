@@ -154,6 +154,8 @@ namespace GreenScreen
             bool srp = GraphicsSettings.currentRenderPipeline != null;
             if (srp ? !SrpOutput.Running : !XRSettings.enabled)
                 return "A running XR display is required.";
+            if (srp && !SrpOutput.IsForward(camera))
+                return "URP opaque depth coverage requires a Forward renderer.";
             if (!srp && XRSettings.stereoRenderingMode != XRSettings.StereoRenderingMode.MultiPass)
                 return "The built-in renderer requires MultiPass VR.";
             if (SystemInfo.graphicsDeviceType != GraphicsDeviceType.Direct3D11)
@@ -216,6 +218,10 @@ namespace GreenScreen
                     { reason = "The camera's post-processing cannot preserve alpha."; LeaveNative(); return false; }
                     PostProcessing.Add(lease);
                 }
+                if (!SrpOpaqueCoverage.Prepare(out reason)) { LeaveNative(); return false; }
+                _coverage = OpaqueCoverage.TryCreate(head.Camera, true);
+                if (_coverage == null)
+                { reason = "The bundled stereo opaque-coverage shader could not be prepared."; LeaveNative(); return false; }
             }
             else
             {
@@ -233,6 +239,20 @@ namespace GreenScreen
         }
 
         private static void BeforeSrpCamera(ScriptableRenderContext context, Camera camera) => BeforeCamera(camera);
+
+        internal static void RecordSrpCoverage(Camera camera, object commands)
+        {
+            if (_head == null || _pipeline == null || camera != _head.Camera) return;
+            BeforeCamera(camera);
+            if (_head != null && _coverage != null) SrpOpaqueCoverage.Record(commands, _coverage.Material);
+        }
+
+        internal static void CoverageFailed(Exception error)
+        {
+            SteamLinkCoverageBridge.Reset();
+            LeaveNative();
+            Report("Steam Link native passthrough unavailable: opaque depth coverage failed: " + error.Message);
+        }
 
         private static void BeforeCamera(Camera camera)
         {
@@ -288,6 +308,7 @@ namespace GreenScreen
 #endif
             LeaveNative();
             RestoreCameras();
+            SrpOpaqueCoverage.Shutdown();
             OpaqueCoverage.Unload();
         }
 

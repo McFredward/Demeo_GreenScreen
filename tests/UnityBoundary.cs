@@ -131,6 +131,7 @@ namespace UnityEngine
     public class Material : Object
     {
         public HideFlags hideFlags;
+        public bool enableInstancing;
         public int passCount=2;
         public Material(Shader shader) { }
         public int FindPass(string name) => name=="RESET" ? 0 : 1;
@@ -188,6 +189,12 @@ namespace UnityEngine.Rendering
         public void DrawProcedural(UnityEngine.Matrix4x4 matrix, UnityEngine.Material material, int pass, UnityEngine.MeshTopology topology, int count) { }
         public void Release() { }
     }
+    public class RasterCommandBuffer
+    {
+        public readonly List<int> Passes=new List<int>();
+        public void DrawProcedural(UnityEngine.Matrix4x4 matrix, UnityEngine.Material material, int pass, UnityEngine.MeshTopology topology, int count)
+        { Passes.Add(pass); }
+    }
 }
 namespace UnityEngine.Rendering.Universal
 {
@@ -196,6 +203,17 @@ namespace UnityEngine.Rendering.Universal
         public bool renderPostProcessing { get; set; }=true;
         public bool allowXRRendering { get; set; }=true;
         public int renderType { get; set; }
+        public ScriptableRenderer scriptableRenderer { get; }=new UniversalRenderer();
+    }
+    public class ScriptableRenderer : Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase { }
+    public class UniversalRenderer : ScriptableRenderer
+    {
+        public enum RenderingMode { Forward, Deferred, ForwardPlus }
+        internal RenderingMode renderingModeActual { get; set; }=RenderingMode.Forward;
+    }
+    public class UniversalCameraData
+    {
+        public UnityEngine.Camera camera { get; set; }
     }
     public class UniversalRenderPipelineAsset : UnityEngine.Rendering.RenderPipelineAsset
     {
@@ -275,7 +293,33 @@ namespace HarmonyLib
     public class HarmonyTargetMethod : Attribute { }
     public class HarmonyPrefix : Attribute { }
     public static class AccessTools { public static Type TypeByName(string name) => typeof(Boardgame.GameStartup); }
-    public static class Harmony { public static void CreateAndPatchAll(Assembly assembly) { } }
+    public class HarmonyMethod { public MethodInfo Method; public HarmonyMethod(MethodInfo method) { Method=method; } }
+    public class Harmony
+    {
+        public static MethodInfo OpaquePostfix;
+        public Harmony(string id) { }
+        public static void CreateAndPatchAll(Assembly assembly) { }
+        public void Patch(MethodInfo target,HarmonyMethod postfix) { OpaquePostfix=postfix.Method; }
+        public void Unpatch(MethodInfo target,MethodInfo postfix) { if(OpaquePostfix==postfix) OpaquePostfix=null; }
+    }
+}
+namespace UnityEngine.Rendering.Universal.Internal
+{
+    public class DrawObjectsPass
+    {
+        public class PassData
+        {
+#if DEMEO
+            internal bool isOpaque;
+            internal UniversalCameraData cameraData;
+#else
+            public bool isOpaque { get; set; }
+            public UniversalCameraData cameraData { get; set; }
+#endif
+        }
+        public static void ExecutePass(RasterCommandBuffer cmd,PassData data,int list,int errors,bool yFlip)
+            => HarmonyLib.Harmony.OpaquePostfix?.Invoke(null,new object[] { cmd,data });
+    }
 }
 namespace Boardgame { public class GameStartup { } }
 namespace BepInEx

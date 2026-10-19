@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.XR;
+using UnityEngine.Rendering.Universal.Internal;
 
 internal static class IntegrationChecks
 {
@@ -166,14 +167,33 @@ internal static class IntegrationChecks
             Check(camera.backgroundColor==Color.clear,"modern URP XR does not depend on the legacy camera stereo flag");
             Check(UnityEngine.Experimental.Rendering.XRSystem.singlePassAllowed,"URP retains its one-pass/two-eye layout so native pass indices remain valid");
             Check(!((UniversalAdditionalCameraData)camera.Extra).renderPostProcessing,"URP bypasses potentially stripped alpha post-processing variants");
-            Check(camera.Commands==0 && !camera.forceIntoRenderTexture,"URP uses native alpha pipeline");
+            Check(camera.Commands==0 && !camera.forceIntoRenderTexture,"URP records inside its raster pass without legacy camera command buffers");
             RenderPipelineManager.Render(camera);
             Check(SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,"SRP render seam validates current source");
+            var raster=new RasterCommandBuffer();
+            var opaqueData=new DrawObjectsPass.PassData { isOpaque=true, cameraData=new UniversalCameraData { camera=camera } };
+            DrawObjectsPass.ExecutePass(raster,opaqueData,0,0,false);
+            Check(raster.Passes.Count==2 && raster.Passes[0]==0 && raster.Passes[1]==1,
+                "URP opaque postfix records alpha reset and same-depth stamp inside the raster pass");
+            Check(TestLog.Messages.Exists(message=>message.Contains("URP opaque depth coverage is active")),
+                "the first executed opaque repair is observable in game logs");
+            opaqueData.isOpaque=false; DrawObjectsPass.ExecutePass(raster,opaqueData,0,0,false);
+            Check(raster.Passes.Count==2,"transparent pass alpha is retained after the opaque repair");
+            opaqueData.isOpaque=true; opaqueData.cameraData.camera=second;
+            DrawObjectsPass.ExecutePass(raster,opaqueData,0,0,false);
+            Check(raster.Passes.Count==2,"foreign and spectator camera attachments are never stamped");
+            opaqueData.cameraData.camera=camera;
+            Time.frameCount++; DrawObjectsPass.ExecutePass(raster,opaqueData,0,0,false);
+            Check(raster.Passes.Count==2 && !SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
+                "a stale frame cannot record coverage or reuse the preceding eye's authority");
+            SteamLinkCoverageBridge.Grant(); Tick();
             pipeline.m_AllowPostProcessAlphaOutput=false; RenderPipelineManager.Render(camera);
             Check(!SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba && camera.backgroundColor==Color.black,"foreign alpha processing change revokes output");
             SteamLinkCoverageBridge.Grant(); Tick();
             Check(pipeline.m_AllowPostProcessAlphaOutput,"URP can prepare again at next boundary");
             NativePassthrough.Shutdown();
+            DrawObjectsPass.ExecutePass(raster,opaqueData,0,0,false);
+            Check(raster.Passes.Count==2 && HarmonyLib.Harmony.OpaquePostfix==null,"unload removes the owned URP patch");
             Check(!pipeline.m_AllowPostProcessAlphaOutput,"unload restores original pipeline setting");
             Check(UnityEngine.Experimental.Rendering.XRSystem.singlePassAllowed,"unload retains the original stereo policy");
             Check(((UniversalAdditionalCameraData)camera.Extra).renderPostProcessing,"unload restores original camera post-processing");
@@ -181,6 +201,12 @@ internal static class IntegrationChecks
             pipeline.m_AllowPostProcessAlphaOutput=true;
             NativePassthrough.Initialize(); EnableNative(); NativePassthrough.Shutdown();
             Check(pipeline.m_AllowPostProcessAlphaOutput,"pre-existing alpha processing survives teardown");
+            var renderer=(UniversalRenderer)((UniversalAdditionalCameraData)camera.Extra).scriptableRenderer;
+            renderer.renderingModeActual=UniversalRenderer.RenderingMode.Deferred;
+            NativePassthrough.Initialize(); EnableNative();
+            Check(camera.backgroundColor==Color.black && !SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
+                "a renderer without the opaque Forward seam is refused");
+            NativePassthrough.Shutdown(); renderer.renderingModeActual=UniversalRenderer.RenderingMode.Forward;
 
             // Match the supplied Unity 6 games: Linear lighting, sRGB XR array,
             // URP MultiPass render passes, and HDR intermediates with SDR output.
@@ -197,6 +223,12 @@ internal static class IntegrationChecks
             Check(camera.backgroundColor==Color.clear,"Linear URP keeps normal sRGB output instead of requiring a Gamma project");
             Check(UnityEngine.Experimental.Rendering.XRSystem.singlePassAllowed,"native single-pass array layout is retained for both eyes");
             Check(pipeline.m_HDRColorBufferPrecision==UniversalRenderPipelineAsset.HdrPrecision.Bits64,"HDR intermediate retains alpha");
+            renderer.renderingModeActual=UniversalRenderer.RenderingMode.Deferred;
+            RenderPipelineManager.Render(camera);
+            Check(camera.backgroundColor==Color.black && !SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
+                "a renderer change after preparation revokes coverage before drawing");
+            renderer.renderingModeActual=UniversalRenderer.RenderingMode.Forward;
+            SteamLinkCoverageBridge.Grant(); Tick();
             InputDevices.Change(new InputDevice { isValid=true, characteristics=InputDeviceCharacteristics.Controller, Id=2 });
             Check(SteamLinkConnection.Available,"controller changes do not revoke the HMD identity");
             InputDevices.Disconnect(InputDevices.Head);

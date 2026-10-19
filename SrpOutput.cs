@@ -12,16 +12,33 @@ namespace GreenScreen
         private static Func<bool> _running, _hdr;
         private static Func<XRDisplaySubsystem> _display;
         private static MethodInfo _cameraData;
+        private static MethodInfo _rendererGetter, _rendererMode;
+#if !DEMEO
+        private static MethodInfo _rendererCast;
+#endif
 
         // Resolve only on the cold Update path. The IL2CPP wrappers and Mono
         // assemblies expose the same public XRSystem API in these Unity 6 games.
         internal static void Discover()
         {
-            if (_system != null && _cameraData != null) return;
+            if (_system != null && _cameraData != null && _rendererGetter != null && _rendererMode != null) return;
             foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 Type data = assembly.GetType("UnityEngine.Rendering.Universal.UniversalAdditionalCameraData")
                     ?? assembly.GetType("Il2CppUnityEngine.Rendering.Universal.UniversalAdditionalCameraData");
+                if (data != null && _rendererGetter == null)
+                    _rendererGetter = data.GetProperty("scriptableRenderer")?.GetGetMethod();
+                Type renderer = assembly.GetType("UnityEngine.Rendering.Universal.UniversalRenderer")
+                    ?? assembly.GetType("Il2CppUnityEngine.Rendering.Universal.UniversalRenderer");
+                if (renderer != null && _rendererMode == null)
+                {
+                    _rendererMode = renderer.GetProperty("renderingModeActual",
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetGetMethod(true);
+#if !DEMEO
+                    _rendererCast = typeof(Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase).GetMethod("TryCast")
+                        .MakeGenericMethod(renderer);
+#endif
+                }
                 if (data != null && _cameraData == null)
                     foreach (MethodInfo method in typeof(Component).GetMethods())
                         if (method.Name == "GetComponent" && method.IsGenericMethodDefinition
@@ -57,6 +74,20 @@ namespace GreenScreen
             object role = type.GetProperty("renderType")?.GetValue(data);
             return type.GetProperty("allowXRRendering")?.GetValue(data) is bool allowed && allowed
                 && role != null && Convert.ToInt32(role) == 0;
+        }
+
+        internal static bool IsForward(Camera camera)
+        {
+            object data = CameraData(camera);
+            object renderer = data == null ? null : _rendererGetter?.Invoke(data, null);
+            // UniversalRenderer is not a UnityEngine.Object in Unity 6. Cast
+            // IL2CPP base wrappers through their actual generated native type.
+#if !DEMEO
+            if (renderer is Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase nativeRenderer)
+                renderer = _rendererCast?.Invoke(nativeRenderer, null);
+#endif
+            object mode = renderer == null ? null : _rendererMode?.Invoke(renderer, null);
+            return mode != null && (mode.ToString() == "Forward" || mode.ToString() == "ForwardPlus");
         }
 
         internal static string ValidateTargets()

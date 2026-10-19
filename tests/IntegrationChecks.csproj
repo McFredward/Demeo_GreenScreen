@@ -11,7 +11,7 @@
     <OutputPath>bin/Integration/$(LoaderBackend)/$(Game)/</OutputPath>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../ModEntryPoints.cs;../ModConfiguration.cs;../NativePassthrough.cs;../OpaqueCoverage.cs;../SrpOutput.cs;../SteamLinkConnectionLifecycle.cs" />
+    <Compile Include="../ModEntryPoints.cs;../ModConfiguration.cs;../NativePassthrough.cs;../OpaqueCoverage.cs;../SrpOutput.cs;../SrpOpaqueCoverage.cs;../SteamLinkConnectionLifecycle.cs" />
     <Compile Include="UnityBoundary.cs;IntegrationChecks.cs" />
     <EmbeddedResource Include="../assets/nativecoverage.bundle" LogicalName="GreenScreen.NativeCoverage" />
   </ItemGroup>

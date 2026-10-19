@@ -6,7 +6,7 @@ using UnityEngine.Rendering;
 
 namespace GreenScreen
 {
-    // The built-in renderer's current colour/depth/MSAA attachments stay bound.
+    // The renderer's current colour/depth/MSAA attachments stay bound.
     // Only alpha is written. Transparent game shaders then contribute their
     // native alpha in draw order; they must use correct separate alpha blending.
     internal sealed class OpaqueCoverage : IDisposable
@@ -18,15 +18,16 @@ namespace GreenScreen
         private readonly Material _material;
         private readonly CommandBuffer _commands;
 
-        private OpaqueCoverage(Camera camera, Shader shader)
+        private OpaqueCoverage(Camera camera, Shader shader, bool srp)
         {
             _camera = camera;
-            _material = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+            _material = new Material(shader) { hideFlags = HideFlags.HideAndDontSave, enableInstancing = true };
             if (_material.passCount != 2 || _material.FindPass("RESET") != 0 || _material.FindPass("STAMP") != 1)
             {
                 UnityEngine.Object.Destroy(_material);
                 throw new InvalidDataException("Unexpected coverage shader passes.");
             }
+            if (srp) return; // URP records inside its opaque raster pass, including Render Graph.
             _commands = new CommandBuffer { name = "Demeo.NativePassthrough.OpaqueCoverage" };
             try
             {
@@ -43,7 +44,7 @@ namespace GreenScreen
             }
         }
 
-        internal static OpaqueCoverage TryCreate(Camera camera)
+        internal static OpaqueCoverage TryCreate(Camera camera, bool srp = false)
         {
             try
             {
@@ -68,7 +69,7 @@ namespace GreenScreen
 #endif
                 }
                 if (_shader == null || !_shader.isSupported || _shader.name != "Hidden/Demeo/NativeCoverage") return null;
-                return new OpaqueCoverage(camera, _shader);
+                return new OpaqueCoverage(camera, _shader, srp);
             }
             catch (Exception error)
             {
@@ -79,10 +80,15 @@ namespace GreenScreen
 
         public void Dispose()
         {
-            if (_camera != null) _camera.RemoveCommandBuffer(CameraEvent.AfterForwardOpaque, _commands);
-            _commands.Release();
+            if (_commands != null)
+            {
+                if (_camera != null) _camera.RemoveCommandBuffer(CameraEvent.AfterForwardOpaque, _commands);
+                _commands.Release();
+            }
             UnityEngine.Object.Destroy(_material);
         }
+
+        internal Material Material => _material;
 
         internal static void Unload()
         {

@@ -88,15 +88,26 @@ strip alpha-output shader variants when building a player, and changing an
 asset field cannot restore stripped programs. This first integration bypasses
 those effects rather than claiming that an unverified post-processing path
 preserves coverage. Original camera settings are restored on exit.
-Opaque and transparent game shaders supply their native coverage, including
-their real draw order and depth. ShaderGraph's ordinary separate alpha blending
-is retained. No mask is inferred from the final image's colour.
 
-The legacy built-in Forward path additionally stamps opaque coverage from the
-same current-eye colour/depth/MSAA attachments after opaque geometry. The
-embedded two-pass shader changes alpha only. Transparent shaders then retain
-their native blend semantics. The bundle was built with Unity 2021.3.5f1 for
-D3D11, and is optional for the Unity 6 URP path.
+Version 1.4.1 also repairs opaque coverage in URP Forward/Forward+. Version 1.4.0
+relied on native opaque-shader alpha in URP; the maintainer reported continuous
+slight transparency through solid objects in the left eye. Such alpha is not
+a reliable opaque-coverage contract. The new postfix on
+`DrawObjectsPass.ExecutePass` records an alpha-only reset and opaque-depth stamp
+inside the existing raster pass, after opaque geometry and before transparents.
+Both URP Render Graph and compatibility rendering call this same method in the
+supplied assemblies. Other renderers are refused. No extra scene rendering,
+depth-texture sampling, colour key, render-target replacement or eye copying is
+involved. Transparent shaders retain their native blend semantics and draw order.
+
+The embedded shader uses Unity stereo instance/array-output macros. The current
+XR instance multiplier supplies both eyes; the mod does not multiply the draw's
+instance count again. Each slice retains its own depth and MSAA samples. The
+legacy built-in Forward path uses the same shader after opaque geometry.
+The bundle was built with Unity 2021.3.5f1 for D3D11. Its build enables VR/stereo
+compilation and checks that both ordinary and stereo-instanced variants reach
+the shader compiler. Unity otherwise strips VR variants when VR support is
+disabled ([Unity shader stripping documentation](https://unity.com/blog/engine-platform/stripping-scriptable-shader-variants)).
 
 All modified camera and pipeline settings retain an original value and restore
 only a value still owned by this mod. Native permission loss releases them.
@@ -119,8 +130,25 @@ workers, and connection lifetime. Integration checks execute the production
 configuration and rendering lifecycle against explicit Unity/loader boundaries,
 including Linear/sRGB XR arrays, URP stereo policy, HDR alpha precision,
 mid-frame permission loss, target replacement, live opt-out and restoration.
+They also exercise the opaque raster hook with Mono fields and IL2CPP-style
+properties, skip transparent and foreign-camera passes, refuse stale frames,
+and remove the owned hook on unload.
 They do not execute Windows pipes, a real XR runtime, Unity GPU rendering or the
 native encoder/receiver chain.
+
+`CoverageGpuChecks.Run` in the Unity editor separately executes the actual
+coverage shader on an Intel RPL-P Vulkan GPU. Different opaque triangles in
+the two eye slices start with incorrect alpha. The single-pass repair matches
+independent per-eye depth repairs at every pixel, preserves RGB and retains
+fractional 4x MSAA edges. The 1x and 4x runs passed 8,208 checks. Run without
+`-nographics` using `-executeMethod CoverageGpuChecks.Run`. This exercises the
+shader source on Vulkan, not the Windows D3D11 bundle or a headset stream.
+
+The latest Frame logs were read over SSH without changing device files or
+settings. The PC provider packaged 3,293 coverage masks during the reported
+run, with no readback errors. These logs have no current per-eye opacity
+measurement. They establish sender activity, not the visual root cause or a headset
+result for this repair.
 
 All three variants have also been compiled against the supplied actual
 Unity/interop assemblies, using BepInEx 5.4.22.0 (Mono), BepInEx 6 BE 789
@@ -141,7 +169,7 @@ Reference source checkpoints:
 * GloomhavenVR source-client/coverage example: `2b9ef4009ddd5240f20db8af139923778d23d1b9`.
 * Supplied Demeo Assembly-CSharp SHA-256: `726ab6a4aaf502a4bcce0c13e288cea3a899b8d4c27241c8aa11676ebcb74e1e`.
 * Supplied Demeo URP runtime SHA-256: `5bc1a4c2d8d461ab6ab8be3a5933b2f14e96f76b04ac12f0ce8b731d8b1825c7`.
-* Coverage bundle SHA-256: `3cf010b2828442b4e9d1f2a97225de8a3a7f0f34169cc839d3673912558741d1`.
+* Coverage bundle SHA-256: `5de4c0ecdc042c91908611ec3debde764996a91cfab08774997d7816c893109b`.
 
 ## Reading runtime logs
 
@@ -151,6 +179,9 @@ Virtual Desktop background is expected with `NativePassthrough=false` or when
 the Frame / Steam Link identity is unconfirmed. New installs default to `true`. The installer prints the configuration path;
 startup also reports when no INI was found. Configs in the loader root remain
 available even when the game's working directory is elsewhere.
+
+In version 1.4.1, `URP opaque depth coverage is active` confirms that the first
+opaque repair actually recorded commands, beyond merely preparing its hook.
 
 A SteamVR provider log with `no-declaration` for the game's PID and
 `masked-frames=0` shows that native coverage was not delivered. It does not
