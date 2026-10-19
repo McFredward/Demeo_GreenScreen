@@ -20,7 +20,7 @@ Mixed reality for the PCVR versions of Demeo, Demeo Battles & Demeo Battlemarked
 * Start the game & turn off the basement environment in the setting ingame.
 
 <ins>**Demeo Battlemarked**</ins> <br>
-> **Note:** The new Unity 6000 version has currently issues with BepInEx, so for Battlemarked I switched back to **MelonLoader**.
+The prebuilt Battlemarked ZIP targets **MelonLoader**. The source installer below also supports an existing BepInEx IL2CPP installation.
 
 * Download [MelonLoader Installer](https://lemonloader.com/melonloader/) and install it for Demeo Battlemarked. **Make sure to enable nightly builds!**
 * Download `DemeoBattlemarked.zip` from [here](https://github.com/McFredward/Demeo_GreenScreen/releases) and unzip the file into `Battlemarked\Mods`.
@@ -82,13 +82,13 @@ For Unity 6 URP, the mod temporarily enables alpha processing, uses separate eye
 
 ## Build and install automatically (Windows)
 
-Install the appropriate mod loader first and start each IL2CPP game once so its interop assemblies are generated. Install the **.NET SDK 8 or newer**, clone this repository, close the games, and run from PowerShell:
+Install BepInEx or MelonLoader first and start each IL2CPP game once so its interop assemblies are generated. Install the **.NET SDK 8 or newer**, clone this repository, close the games, and run from PowerShell:
 
 ```powershell
 .\scripts\install.ps1
 ```
 
-The script finds all three games through Steam's registry entry, `libraryfolders.vdf` and app manifests, builds against each game's actual local assemblies, and copies its mod DLL into `BepInEx/plugins` or `Mods`. Existing nested plugin locations and config files are retained; the previous DLL is saved as `.dll.bak`.
+The script finds all three games through Steam's registry entry, `libraryfolders.vdf` and app manifests, builds against each game's actual local assemblies, and copies its mod DLL into `BepInEx/plugins` or `Mods`. It checks for a `BepInEx` folder first for every game, including Battlemarked, and otherwise detects MelonLoader. Both loaders have matching mod entry points for all three games. Existing nested plugin locations and config files are retained; the previous DLL is saved as `.dll.bak`.
 
 ```powershell
 .\scripts\install.ps1 -ListOnly
@@ -96,7 +96,11 @@ The script finds all three games through Steam's registry entry, `libraryfolders
 .\scripts\install.ps1 -Game Demeo
 .\scripts\install.ps1 -Game DemeoBattles -GamePath "D:\SteamLibrary\steamapps\common\Demeo Battles"
 .\scripts\install.ps1 -SteamLibrary "D:\SteamLibrary"
+.\scripts\install.ps1 -Game DemeoBattlemarked -Loader BepInEx
+.\scripts\install.ps1 -Loader MelonLoader
 ```
+
+`-Loader` overrides automatic detection when needed. BepInEx uses `core` and, for IL2CPP, `interop`; MelonLoader uses `net35`/`net472` for Mono or `net6` plus `Il2CppAssemblies` for IL2CPP. An incomplete BepInEx folder reports the missing DLL instead of silently selecting another loader.
 
 The installer preflights every selected game before installing anything. A missing loader/interop directory or a running game stops installation; a failed build leaves that game's installed DLL intact. It does not install the separate Steam Frame companion.
 
@@ -110,13 +114,13 @@ dotnet build GreenScreen.csproj -c DEMEOBATTLES -p:GameDirectory="C:/Games/Demeo
 dotnet build GreenScreen.csproj -c DEMEOBATTLEMARKED -p:GameDirectory="C:/Games/Battlemarked"
 ```
 
-`UnityAssemblyDirectory` and `LoaderDirectory` can override the reference locations independently. Loader and game assemblies are not copied into the output. The coverage shader is embedded in the mod DLL; rebuilding it requires Unity 2021.3 with Windows build support (see `unity/Assets/Editor/BuildCoverage.cs`).
+Use `-p:LoaderBackend=BepInEx` or `-p:LoaderBackend=MelonLoader` to select a loader explicitly. `UnityAssemblyDirectory` and `LoaderDirectory` can override the reference locations independently. Loader and game assemblies are not copied into the output. The coverage shader is embedded in the mod DLL; rebuilding it requires Unity 2021.3 with Windows build support (see `unity/Assets/Editor/BuildCoverage.cs`).
 
 ### CI builds without an installed game
 
 Development happens on `dev`. CI checks `dev`/`main` pushes and pull requests. Every push to `main` builds `Demeo.zip`, `DemeoBattles.zip` and `DemeoBattlemarked.zip`, available together with checksums in the workflow's **Demeo-mods** artifact. The workflow does not push commits or create releases.
 
-CI uses committed [metadata-only references](libs/RefAsm/README.md). Every method body is removed, and CI verifies that all MethodDef RVAs are zero. Public loader dependencies are downloaded from SHA-256-pinned archives. ZIP packaging allows only the mod DLL, example config, README and licence.
+CI uses committed [metadata-only references](libs/RefAsm/README.md). Every method body is removed, and CI verifies that all MethodDef RVAs are zero. Public loader dependencies are downloaded from SHA-256-pinned archives. CI compiles and checks both loader variants for each game; the three ZIPs retain their documented defaults (BepInEx for Demeo/Battles, MelonLoader for Battlemarked). The local installer builds the variant detected on your PC. ZIP packaging allows only the mod DLL, example config, README and licence.
 
 Run the same package build locally without a game installation:
 

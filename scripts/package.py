@@ -20,10 +20,15 @@ def main():
     destination.mkdir(exist_ok=True)
     archives = []
     for configuration, (name, assembly, framework) in GAMES.items():
+        backend = "MelonLoader" if configuration == "DEMEOBATTLEMARKED" else "BepInEx"
+        alternative = "BepInEx" if backend == "MelonLoader" else "MelonLoader"
+        subprocess.run(["dotnet", "build", str(ROOT / "GreenScreen.csproj"), "-c", configuration,
+                        f"-p:LoaderBackend={alternative}", "-p:UseReferenceAssemblies=true",
+                        "-p:Optimize=true", "--nologo"], cwd=ROOT, check=True)
         subprocess.run(["dotnet", "build", str(ROOT / "GreenScreen.csproj"), "-c", configuration,
                         "-p:UseReferenceAssemblies=true", "-p:Optimize=true",
                         "-p:ContinuousIntegrationBuild=true", "--nologo"], cwd=ROOT, check=True)
-        binary = ROOT / "bin" / configuration / framework / assembly
+        binary = ROOT / "bin" / backend / configuration / framework / assembly
         files = {assembly: binary, "greenscreen.ini.example": ROOT / "greenscreen.ini.example",
                  "README.md": ROOT / "README.md", "LICENSE": ROOT / "LICENSE"}
         archive_path = destination / f"{name}.zip"

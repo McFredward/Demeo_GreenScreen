@@ -60,9 +60,11 @@ namespace UnityEngine
     public class GameObject : Object
     {
         public static Camera[] Scene = Array.Empty<Camera>();
+        public static readonly Dictionary<string,GameObject> Named=new Dictionary<string,GameObject>();
+        public bool activeSelf=true;
         public static T[] FindObjectsOfType<T>() => (T[])(object)Scene;
-        public static GameObject Find(string path) => null;
-        public void SetActive(bool enabled) { }
+        public static GameObject Find(string path) => Named.TryGetValue(path,out var item) && item.activeSelf ? item : null;
+        public void SetActive(bool enabled) { activeSelf=enabled; }
     }
     public class WaitForSeconds { public WaitForSeconds(float seconds) { } }
     public enum CameraType { Game, Reflection }

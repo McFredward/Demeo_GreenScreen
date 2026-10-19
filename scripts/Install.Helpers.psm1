@@ -78,4 +78,63 @@ function ConvertTo-MSBuildLiteral {
     $result
 }
 
-Export-ModuleMember -Function Get-DemeoGames, Get-SteamLibraries, Find-DemeoInstallations, ConvertTo-MSBuildLiteral
+function Resolve-DemeoLoaderPaths {
+    param($Install, [ValidateSet('Auto','BepInEx','MelonLoader')][string]$Loader='Auto')
+    $spec = $Install.Spec
+    $bepRoot = Join-Path $Install.Path 'BepInEx'
+    $melonRoot = Join-Path $Install.Path 'MelonLoader'
+    if ($Loader -eq 'Auto') {
+        # Prefer the existing BepInEx installation, including Battlemarked.
+        if (Test-Path -LiteralPath $bepRoot -PathType Container) { $Loader = 'BepInEx' }
+        elseif (Test-Path -LiteralPath $melonRoot -PathType Container) { $Loader = 'MelonLoader' }
+        else {
+            throw "$($spec.Name): neither BepInEx nor MelonLoader exists beside $($Install.Executable). Check the game path used by the loader installer, or use -GamePath with that game folder."
+        }
+    }
+    $required = @('0Harmony.dll')
+    if ($Loader -eq 'BepInEx') {
+        $directory = Join-Path $bepRoot 'core'
+        $destination = Join-Path $bepRoot 'plugins'
+        if ($spec.Id -eq 'DEMEO') { $required += 'BepInEx.dll' }
+        else { $required += @('BepInEx.Core.dll','BepInEx.Unity.Common.dll','BepInEx.Unity.IL2CPP.dll','Il2CppInterop.Runtime.dll') }
+        $assemblies = Join-Path $bepRoot 'interop'
+    } else {
+        $destination = Join-Path $Install.Path 'Mods'
+        $runtimes = if ($spec.Id -eq 'DEMEO') { @('net472','net35') } else { @('net6') }
+        $directory = $null
+        foreach ($runtime in $runtimes) {
+            $candidate = Join-Path $melonRoot $runtime
+            if (Test-Path -LiteralPath (Join-Path $candidate 'MelonLoader.dll') -PathType Leaf) {
+                $directory = $candidate
+                break
+            }
+        }
+        if (-not $directory) {
+            $checked = ($runtimes | ForEach-Object { Join-Path (Join-Path $melonRoot $_) 'MelonLoader.dll' }) -join ', '
+            $found = if (Test-Path -LiteralPath $melonRoot -PathType Container) {
+                @(Get-ChildItem -LiteralPath $melonRoot -Filter MelonLoader.dll -File -Recurse | ForEach-Object FullName) -join ', '
+            } else { '' }
+            throw "$($spec.Name): compatible MelonLoader runtime DLL not found. Checked: $checked. Found: $found. Install current x64 MelonLoader for $($Install.Executable), or select -Loader BepInEx if installed."
+        }
+        $required += 'MelonLoader.dll'
+        if ($spec.Id -ne 'DEMEO') { $required += 'Il2CppInterop.Runtime.dll' }
+        $assemblies = Join-Path $melonRoot 'Il2CppAssemblies'
+    }
+    foreach ($dll in $required) {
+        $file = Join-Path $directory $dll
+        if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+            throw "$($spec.Name): detected $Loader in $($Install.Path), but required DLL is missing: $file. Check that this loader installation is complete and matches the game's Mono/IL2CPP backend. Use -Loader to select another installed loader."
+        }
+    }
+    if ($spec.Id -eq 'DEMEO') { $assemblies = Join-Path $Install.Data 'Managed' }
+    $gameDlls = @('UnityEngine.CoreModule.dll')
+    if ($spec.Id -ne 'DEMEO') { $gameDlls += 'Il2Cppmscorlib.dll' }
+    foreach ($dll in $gameDlls) {
+        if (-not (Test-Path -LiteralPath (Join-Path $assemblies $dll) -PathType Leaf)) {
+            throw "$($spec.Name): $Loader game/interop references missing in $assemblies ($dll). Start this game once with $Loader, exit it, then run this script again."
+        }
+    }
+    [pscustomobject]@{ Backend=$Loader; Loader=$directory; Assemblies=$assemblies; PluginRoot=$destination }
+}
+
+Export-ModuleMember -Function Get-DemeoGames, Get-SteamLibraries, Find-DemeoInstallations, ConvertTo-MSBuildLiteral, Resolve-DemeoLoaderPaths

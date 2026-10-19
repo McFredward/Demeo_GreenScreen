@@ -23,9 +23,45 @@ internal static class IntegrationChecks
         WriteConfig(true); Tick(); // Reload invalidates a previous declaration.
         SteamLinkCoverageBridge.Grant(); Tick();
     }
+    private static Action Callback(object instance,string name) => () => instance.GetType()
+        .GetMethod(name,System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)
+        .Invoke(instance,null);
+    private static void CheckLoaderLifecycle(Camera camera)
+    {
+        Action initialize,update,shutdown;
+#if MELONLOADER
+        var mod=new GreenScreenMod();
+        initialize=mod.OnInitializeMelon; update=mod.OnUpdate; shutdown=mod.OnDeinitializeMelon;
+#elif DEMEO
+        var mod=new BepInExPlugin();
+        initialize=Callback(mod,"Awake"); update=Callback(mod,"Update"); shutdown=Callback(mod,"OnDestroy");
+#else
+        var mod=new BepInExPlugin(); var driver=new PassthroughDriver(IntPtr.Zero);
+        initialize=mod.Load; update=Callback(driver,"Update"); shutdown=()=>mod.Unload();
+#endif
+        Color original=camera.backgroundColor;
+        initialize(); Time.frameCount++; update();
+        Check(camera.backgroundColor==new Color(0,1,0,1),"loader initialization and Update drive the shared camera lifecycle");
+#if DEMEOBATTLEMARKED
+        var room=new GameObject(); var table=new GameObject();
+        GameObject.Named["BakeScale40x1/MainEnvironment/RoomBaked"]=room;
+        GameObject.Named["BakeScale40x1/MainEnvironment/Table/SM_GameTableModern"]=table;
+        Check(room.activeSelf && table.activeSelf,"environment scan waits until after initialization");
+        Time.unscaledTime+=.6f; Time.frameCount++; update();
+        Check(!room.activeSelf && !table.activeSelf,"both loaders remove Battlemarked environment and configured table");
+        var lateFog=new GameObject(); GameObject.Named["BakeScale40x1/MainEnvironment/DistanceFogCatcher"]=lateFog;
+        Time.unscaledTime+=1.1f; Time.frameCount++; update();
+        Check(!lateFog.activeSelf,"late-created environment is removed on a later maintenance tick");
+        GameObject.Named.Clear();
+#endif
+        shutdown();
+        Check(camera.backgroundColor==original,"loader unload restores the game camera");
+        Time.unscaledTime+=1.1f; Time.frameCount++; update();
+        Check(camera.backgroundColor==original,"remaining driver callbacks stay inactive after unload");
+    }
     public static void Main()
     {
-#if !DEMEOBATTLEMARKED
+#if !MELONLOADER
         BepInExPlugin.Log=new BepInEx.Logging.ManualLogSource();
 #endif
         string working=Environment.CurrentDirectory;
@@ -52,6 +88,7 @@ internal static class IntegrationChecks
             File.Delete(ConfigPath);
             var camera=new Camera(); Color original=camera.backgroundColor;
             GameObject.Scene=new[] { camera };
+            CheckLoaderLifecycle(camera);
             NativePassthrough.Initialize(); Tick();
             Check(camera.backgroundColor==new Color(0,1,0,1),"Virtual Desktop remains default");
             Check(camera.clearFlags==CameraClearFlags.Skybox && camera.Commands==0,"default leaves clear policy and render commands alone");

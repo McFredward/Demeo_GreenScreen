@@ -1,11 +1,12 @@
 # Steam Link native source
 
-All three loader entry points use the same configuration, source negotiation,
-camera owner and URP adapter. Native passthrough is disabled by default.
+All three games support BepInEx and MelonLoader entry points with the same
+configuration, source negotiation, camera owner and URP adapter. Native passthrough is disabled by default.
 
 `NativePassthrough.Tick` runs on the Unity thread through BepInEx Mono Update,
-a BepInEx IL2CPP driver, or MelonLoader OnUpdate. Config polling and camera
-discovery run on a cold tick. Existing colour and table settings remain valid.
+a BepInEx IL2CPP driver, or MelonLoader OnUpdate. Battlemarked's environment
+removal uses the shared maintenance tick, including late-created scene objects.
+Config polling and camera discovery run on a cold tick. Existing colour and table settings remain valid.
 The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
@@ -79,9 +80,7 @@ Run the portable production-code checks:
 
 ```sh
 dotnet run --project tests/ProtocolChecks.csproj
-dotnet run --project tests/IntegrationChecks.csproj -p:Game=DEMEO
-dotnet run --project tests/IntegrationChecks.csproj -p:Game=DEMEOBATTLES
-dotnet run --project tests/IntegrationChecks.csproj -p:Game=DEMEOBATTLEMARKED
+python3 scripts/check-integration.py
 ```
 
 Protocol checks execute the real parser and observer, including malformed or
@@ -94,9 +93,10 @@ They do not execute Windows pipes, a real XR runtime, Unity GPU rendering or the
 native encoder/receiver chain.
 
 All three variants have also been compiled against the supplied actual
-Unity/interop assemblies, using BepInEx 5.4.22.0, BepInEx 6 BE 789 and MelonLoader
-0.7.3 respectively. The metadata-only CI builds are checked separately. A
-successful IL2CPP compilation is not a runtime or headset result.
+Unity/interop assemblies, using BepInEx 5.4.22.0 (Mono), BepInEx 6 BE 789
+(IL2CPP) and MelonLoader 0.7.3. Both loaders are compiled for every game.
+The metadata-only CI builds are checked separately. A successful IL2CPP
+compilation is not a runtime or headset result.
 
 No headset run is certified here. Native alpha preservation across D3D11/XR
 submission, both eyes, translucent/additive game materials, depthless effects,

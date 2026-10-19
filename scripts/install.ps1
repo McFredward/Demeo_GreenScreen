@@ -15,6 +15,8 @@ param(
     [string]$Game='All',
     [string]$GamePath,
     [string[]]$SteamLibrary,
+    [ValidateSet('Auto','BepInEx','MelonLoader')]
+    [string]$Loader='Auto',
     [switch]$ListOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -44,28 +46,8 @@ try {
     # Complete preflight for every selected game before replacing any DLL.
     foreach ($install in $installed) {
         $spec = $install.Spec
-        if ($spec.Id -eq 'DEMEO') {
-            $assemblies = Join-Path $install.Data 'Managed'
-            $loader = Join-Path $install.Path 'BepInEx/core'
-            $requiredLoader = 'BepInEx.dll'
-            $pluginRoot = Join-Path $install.Path 'BepInEx/plugins'
-        } elseif ($spec.Id -eq 'DEMEOBATTLES') {
-            $assemblies = Join-Path $install.Path 'BepInEx/interop'
-            $loader = Join-Path $install.Path 'BepInEx/core'
-            $requiredLoader = 'BepInEx.Unity.IL2CPP.dll'
-            $pluginRoot = Join-Path $install.Path 'BepInEx/plugins'
-        } else {
-            $assemblies = Join-Path $install.Path 'MelonLoader/Il2CppAssemblies'
-            $loader = Join-Path $install.Path 'MelonLoader/net6'
-            $requiredLoader = 'MelonLoader.dll'
-            $pluginRoot = Join-Path $install.Path 'Mods'
-        }
-        if (-not (Test-Path -LiteralPath (Join-Path $loader $requiredLoader) -PathType Leaf)) {
-            throw "$($spec.Name): install its BepInEx/MelonLoader version first (see README.md). Missing: $loader/$requiredLoader"
-        }
-        if (-not (Test-Path -LiteralPath (Join-Path $assemblies 'UnityEngine.CoreModule.dll') -PathType Leaf)) {
-            throw "$($spec.Name): game/interop references missing in $assemblies. Start the game once with its loader, exit it, then run this script again."
-        }
+        $resolved = Resolve-DemeoLoaderPaths -Install $install -Loader $Loader
+        $pluginRoot = $resolved.PluginRoot
         $running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
             try { $_.Path -and [IO.Path]::GetFullPath($_.Path) -eq [IO.Path]::GetFullPath($install.Executable) } catch { $false }
         })
@@ -76,15 +58,16 @@ try {
         }
         if ($existing.Count -gt 1) { throw "$($spec.Name): multiple copies of $($spec.Dll) exist. Remove duplicates before updating." }
         $destination = if ($existing.Count -eq 1) { $existing[0].DirectoryName } else { $pluginRoot }
-        $plans += [pscustomobject]@{ Install=$install; Assemblies=$assemblies; Loader=$loader; Destination=$destination; PluginRoot=$pluginRoot }
+        $plans += [pscustomobject]@{ Install=$install; Assemblies=$resolved.Assemblies; Loader=$resolved.Loader; Backend=$resolved.Backend; Destination=$destination; PluginRoot=$pluginRoot }
     }
     foreach ($plan in $plans) {
         $spec = $plan.Install.Spec
         if (-not $PSCmdlet.ShouldProcess($plan.Install.Path, "Build and install $($spec.Dll)")) { continue }
-        $output = Join-Path $repo ('.build/install/' + $spec.Id)
-        Write-Host "Building $($spec.Name) against its installed game/loader files..."
+        $output = Join-Path $repo ('.build/install/' + $plan.Backend + '/' + $spec.Id)
+        Write-Host "Building $($spec.Name) for detected $($plan.Backend) against $($plan.Loader)..."
         & dotnet build (Join-Path $repo 'GreenScreen.csproj') -c $spec.Id --nologo --output $output `
             '-p:UseReferenceAssemblies=false' '-p:Optimize=true' `
+            "-p:LoaderBackend=$($plan.Backend)" `
             "-p:UnityAssemblyDirectory=$(ConvertTo-MSBuildLiteral $plan.Assemblies)" `
             "-p:LoaderDirectory=$(ConvertTo-MSBuildLiteral $plan.Loader)"
         if ($LASTEXITCODE -ne 0) { throw "$($spec.Name) build failed; its installed DLL was not replaced." }

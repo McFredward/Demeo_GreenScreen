@@ -6,11 +6,14 @@
     <TargetFramework Condition="'$(Configuration)' != 'DEMEO'">net6.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
+    <LoaderBackend Condition="'$(LoaderBackend)' == '' And '$(Configuration)' == 'DEMEOBATTLEMARKED'">MelonLoader</LoaderBackend>
+    <LoaderBackend Condition="'$(LoaderBackend)' == ''">BepInEx</LoaderBackend>
     <!-- All games expose the same assembly names. Never resolve another game's
          metadata DLL from SDK candidate-file globs before this HintPath. -->
     <AssemblySearchPaths>{HintPathFromItem};{TargetFrameworkDirectory};{RawFileName}</AssemblySearchPaths>
     <DefineConstants>$(DefineConstants);$(Configuration)</DefineConstants>
-    <OutputPath>bin/$(Configuration)</OutputPath>
+    <DefineConstants Condition="'$(LoaderBackend)' == 'MelonLoader'">$(DefineConstants);MELONLOADER</DefineConstants>
+    <OutputPath>bin/$(LoaderBackend)/$(Configuration)</OutputPath>
     <AssemblyName Condition="'$(Configuration)' == 'DEMEO'">Demeo_GreenScreen</AssemblyName>
     <AssemblyName Condition="'$(Configuration)' == 'DEMEOBATTLES'">DemeoBattles_GreenScreen</AssemblyName>
     <AssemblyName Condition="'$(Configuration)' == 'DEMEOBATTLEMARKED'">DemeoBattlemarked_GreenScreen</AssemblyName>
@@ -18,16 +21,21 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'DEMEO'">
     <GameDirectory Condition="'$(GameDirectory)' == ''">$(SteamLibraryPath)/Demeo</GameDirectory>
-    <LoaderDirectory Condition="'$(LoaderDirectory)' == ''">$(GameDirectory)/BepInEx/core</LoaderDirectory>
     <UnityAssemblyDirectory Condition="'$(UnityAssemblyDirectory)' == ''">$(GameDirectory)/demeo_Data/Managed</UnityAssemblyDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'DEMEOBATTLES'">
     <GameDirectory Condition="'$(GameDirectory)' == ''">$(SteamLibraryPath)/Demeo Battles</GameDirectory>
-    <LoaderDirectory Condition="'$(LoaderDirectory)' == ''">$(GameDirectory)/BepInEx/core</LoaderDirectory>
-    <UnityAssemblyDirectory Condition="'$(UnityAssemblyDirectory)' == ''">$(GameDirectory)/BepInEx/interop</UnityAssemblyDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'DEMEOBATTLEMARKED'">
     <GameDirectory Condition="'$(GameDirectory)' == ''">$(SteamLibraryPath)/Battlemarked</GameDirectory>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(LoaderBackend)' == 'BepInEx'">
+    <LoaderDirectory Condition="'$(LoaderDirectory)' == ''">$(GameDirectory)/BepInEx/core</LoaderDirectory>
+    <UnityAssemblyDirectory Condition="'$(UnityAssemblyDirectory)' == ''">$(GameDirectory)/BepInEx/interop</UnityAssemblyDirectory>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(LoaderBackend)' == 'MelonLoader'">
+    <LoaderDirectory Condition="'$(LoaderDirectory)' == '' And '$(Configuration)' == 'DEMEO' And Exists('$(GameDirectory)/MelonLoader/net472/MelonLoader.dll')">$(GameDirectory)/MelonLoader/net472</LoaderDirectory>
+    <LoaderDirectory Condition="'$(LoaderDirectory)' == '' And '$(Configuration)' == 'DEMEO'">$(GameDirectory)/MelonLoader/net35</LoaderDirectory>
     <LoaderDirectory Condition="'$(LoaderDirectory)' == ''">$(GameDirectory)/MelonLoader/net6</LoaderDirectory>
     <UnityAssemblyDirectory Condition="'$(UnityAssemblyDirectory)' == ''">$(GameDirectory)/MelonLoader/Il2CppAssemblies</UnityAssemblyDirectory>
   </PropertyGroup>
@@ -36,7 +44,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(UseReferenceAssemblies)' == 'true'">
     <UnityAssemblyDirectory>$(MSBuildThisFileDirectory)libs/RefAsm/$(Configuration)</UnityAssemblyDirectory>
-    <LoaderDirectory>$(MSBuildThisFileDirectory).build/loaders/$(Configuration)</LoaderDirectory>
+    <LoaderDirectory>$(MSBuildThisFileDirectory).build/loaders/$(LoaderBackend)/$(Configuration)</LoaderDirectory>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="tests/**/*.cs;unity/**/*.cs;.planning/**/*.cs" />
@@ -51,10 +59,13 @@
                Condition="Exists('$(UnityAssemblyDirectory)/UnityEngine.VRModule.dll')" />
     <Reference Include="UnityEngine.AssetBundleModule" HintPath="$(UnityAssemblyDirectory)/UnityEngine.AssetBundleModule.dll" Private="false" />
   </ItemGroup>
-  <ItemGroup Condition="'$(Configuration)' == 'DEMEO'">
+  <ItemGroup Condition="'$(LoaderBackend)' == 'MelonLoader'">
+    <Reference Include="MelonLoader" HintPath="$(LoaderDirectory)/MelonLoader.dll" Private="false" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LoaderBackend)' == 'BepInEx' And '$(Configuration)' == 'DEMEO'">
     <Reference Include="BepInEx" HintPath="$(LoaderDirectory)/BepInEx.dll" Private="false" />
   </ItemGroup>
-  <ItemGroup Condition="'$(Configuration)' == 'DEMEOBATTLES'">
+  <ItemGroup Condition="'$(LoaderBackend)' == 'BepInEx' And '$(Configuration)' != 'DEMEO'">
     <Reference Include="BepInEx.Core" HintPath="$(LoaderDirectory)/BepInEx.Core.dll" Private="false" />
     <Reference Include="BepInEx.Unity.Common" HintPath="$(LoaderDirectory)/BepInEx.Unity.Common.dll" Private="false" />
     <Reference Include="BepInEx.Unity.IL2CPP" HintPath="$(LoaderDirectory)/BepInEx.Unity.IL2CPP.dll" Private="false" />
@@ -63,10 +74,9 @@
     <Reference Include="Il2Cppmscorlib" HintPath="$(UnityAssemblyDirectory)/Il2Cppmscorlib.dll" Private="false" />
     <Reference Include="Il2CppInterop.Runtime" HintPath="$(LoaderDirectory)/Il2CppInterop.Runtime.dll" Private="false" />
   </ItemGroup>
-  <ItemGroup Condition="'$(Configuration)' == 'DEMEOBATTLEMARKED'">
-    <Reference Include="MelonLoader" HintPath="$(LoaderDirectory)/MelonLoader.dll" Private="false" />
-  </ItemGroup>
   <Target Name="ValidateGameConfiguration" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(LoaderBackend)' != 'BepInEx' And '$(LoaderBackend)' != 'MelonLoader'"
+           Text="Select LoaderBackend=BepInEx or LoaderBackend=MelonLoader." />
     <Message Condition="'$(UseReferenceAssemblies)' == 'true'" Importance="high"
              Text="Building $(Configuration) against metadata-only references (no local game code)." />
     <Error Condition="'$(Configuration)' != 'DEMEO' And '$(Configuration)' != 'DEMEOBATTLES' And '$(Configuration)' != 'DEMEOBATTLEMARKED'"

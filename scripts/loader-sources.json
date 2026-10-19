@@ -1,17 +1,36 @@
 {
-  "DEMEO": {
-    "url": "https://github.com/BepInEx/BepInEx/releases/download/v5.4.22/BepInEx_x64_5.4.22.0.zip",
-    "sha256": "4c149960673f0a387ba7c016c837096ab3a41309d9140f88590bb507c59eda3f",
-    "prefix": "BepInEx/core/"
+  "BepInEx": {
+    "DEMEO": {
+      "url": "https://github.com/BepInEx/BepInEx/releases/download/v5.4.22/BepInEx_x64_5.4.22.0.zip",
+      "sha256": "4c149960673f0a387ba7c016c837096ab3a41309d9140f88590bb507c59eda3f",
+      "prefix": "BepInEx/core/"
+    },
+    "DEMEOBATTLES": {
+      "url": "https://builds.bepinex.dev/projects/bepinex_be/789/BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.789%2B6cea286.zip",
+      "sha256": "29519614d0121a3eefc9df6d61436f0c09a2c5f85b0a7d92559a135ce3055eb1",
+      "prefix": "BepInEx/core/"
+    },
+    "DEMEOBATTLEMARKED": {
+      "url": "https://builds.bepinex.dev/projects/bepinex_be/789/BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.789%2B6cea286.zip",
+      "sha256": "29519614d0121a3eefc9df6d61436f0c09a2c5f85b0a7d92559a135ce3055eb1",
+      "prefix": "BepInEx/core/"
+    }
   },
-  "DEMEOBATTLES": {
-    "url": "https://builds.bepinex.dev/projects/bepinex_be/789/BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.789%2B6cea286.zip",
-    "sha256": "29519614d0121a3eefc9df6d61436f0c09a2c5f85b0a7d92559a135ce3055eb1",
-    "prefix": "BepInEx/core/"
-  },
-  "DEMEOBATTLEMARKED": {
-    "url": "https://github.com/LavaGang/MelonLoader/releases/download/v0.7.3/MelonLoader.x64.zip",
-    "sha256": "5b2b2f3d1cd42b59ec886c5bdc2663edae87a0097a4f4a8f58c0965a99dda416",
-    "prefix": "MelonLoader/net6/"
+  "MelonLoader": {
+    "DEMEO": {
+      "url": "https://github.com/LavaGang/MelonLoader/releases/download/v0.7.3/MelonLoader.x64.zip",
+      "sha256": "5b2b2f3d1cd42b59ec886c5bdc2663edae87a0097a4f4a8f58c0965a99dda416",
+      "prefix": "MelonLoader/net35/"
+    },
+    "DEMEOBATTLES": {
+      "url": "https://github.com/LavaGang/MelonLoader/releases/download/v0.7.3/MelonLoader.x64.zip",
+      "sha256": "5b2b2f3d1cd42b59ec886c5bdc2663edae87a0097a4f4a8f58c0965a99dda416",
+      "prefix": "MelonLoader/net6/"
+    },
+    "DEMEOBATTLEMARKED": {
+      "url": "https://github.com/LavaGang/MelonLoader/releases/download/v0.7.3/MelonLoader.x64.zip",
+      "sha256": "5b2b2f3d1cd42b59ec886c5bdc2663edae87a0097a4f4a8f58c0965a99dda416",
+      "prefix": "MelonLoader/net6/"
+    }
   }
 }

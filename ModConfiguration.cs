@@ -71,7 +71,7 @@ namespace GreenScreen
             try
             {
                 string assemblyDirectory = Path.GetDirectoryName(typeof(ConfigurationStore).Assembly.Location);
-#if DEMEOBATTLEMARKED
+#if MELONLOADER
                 string legacyDirectory = "Mods";
 #else
                 string legacyDirectory = Path.Combine("BepInEx", "plugins");

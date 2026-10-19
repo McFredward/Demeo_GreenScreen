@@ -4,11 +4,14 @@
     <TargetFramework>net8.0</TargetFramework>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <Game Condition="'$(Game)' == ''">DEMEO</Game>
+    <LoaderBackend Condition="'$(LoaderBackend)' == '' And '$(Game)' == 'DEMEOBATTLEMARKED'">MelonLoader</LoaderBackend>
+    <LoaderBackend Condition="'$(LoaderBackend)' == ''">BepInEx</LoaderBackend>
     <DefineConstants>$(DefineConstants);$(Game)</DefineConstants>
-    <OutputPath>bin/Integration/$(Game)/</OutputPath>
+    <DefineConstants Condition="'$(LoaderBackend)' == 'MelonLoader'">$(DefineConstants);MELONLOADER</DefineConstants>
+    <OutputPath>bin/Integration/$(LoaderBackend)/$(Game)/</OutputPath>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../BepInExMod.cs;../ModConfiguration.cs;../NativePassthrough.cs;../OpaqueCoverage.cs;../SrpOutput.cs" />
+    <Compile Include="../ModEntryPoints.cs;../ModConfiguration.cs;../NativePassthrough.cs;../OpaqueCoverage.cs;../SrpOutput.cs" />
     <Compile Include="UnityBoundary.cs;IntegrationChecks.cs" />
     <EmbeddedResource Include="../assets/nativecoverage.bundle" LogicalName="GreenScreen.NativeCoverage" />
   </ItemGroup>
