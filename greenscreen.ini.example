@@ -7,4 +7,6 @@ B=0
 Disable=true
 
 [STEAMLINK]
-NativePassthrough=false
+; Effective only on a detected Steam Frame connected through Steam Link.
+; Other headsets/transports automatically use the colour-key background.
+NativePassthrough=true

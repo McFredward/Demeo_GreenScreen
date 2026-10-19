@@ -8,9 +8,12 @@ On `main` pushes the three ZIPs, `SHA256SUMS` and source commit receipt are
 uploaded as one Actions artifact. Pull requests and `dev` builds run the same
 checks without uploading release artifacts. No secret or write token is needed.
 
-The ZIPs have an explicit four-file allowlist: the game's mod DLL,
-`greenscreen.ini.example`, `README.md`, and `LICENSE`. Game, interop, reference
-and loader DLLs are never copied into the archives. Dependencies use
+The ZIPs have an explicit five-file allowlist: the game's mod DLL,
+`greenscreen.ini`, `README.md`, `LICENSE`, and `licenses/OpenVR-LICENSE.txt`.
+The shipped INI enables native passthrough automatically on confirmed Frame /
+Steam Link sessions. Game, interop, reference and BepInEx/MelonLoader DLLs
+are excluded. The mod embeds an owned PE identity reader and a pinned public
+OpenVR application SDK loader with its BSD licence; neither is game code. Dependencies use
 `Private=false` and packaging does not recursively collect a build directory.
 
 ## Reference generation
@@ -63,13 +66,16 @@ A single existing plugin DLL can be updated in its existing subfolder. Duplicate
 copies are refused. A successful build is staged beside the destination and
 atomically replaces the DLL with one `.dll.bak` backup. Config files are not
 overwritten, including legacy root configs and `custom_color.ini`. A new
-default config is created only when none exists. Native passthrough remains
-disabled until the user enables its INI option.
+default config is created only when none exists. New configs set
+`NativePassthrough=true`; an independent runtime identity gate always disables
+native mode outside Steam Frame over Steam Link. Existing `false` settings
+remain explicit opt-outs.
 
 ## Checks and limits
 
 ```sh
 dotnet run --project tests/ProtocolChecks.csproj
+dotnet run --project tests/IdentityChecks.csproj
 python3 scripts/check-integration.py
 pwsh -NoProfile -File tests/InstallerChecks.ps1
 python3 scripts/fetch-build-deps.py

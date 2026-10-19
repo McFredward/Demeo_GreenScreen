@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../SteamLinkConnection.cs;IdentityChecks.cs" />
+    <EmbeddedResource Include="../assets/steamlink/connection-reader.exe" LogicalName="GreenScreen.SteamLink.connection-reader.exe" />
+    <EmbeddedResource Include="../assets/steamlink/openvr_api.bin" LogicalName="GreenScreen.SteamLink.openvr_api.dll" />
+  </ItemGroup>
+</Project>

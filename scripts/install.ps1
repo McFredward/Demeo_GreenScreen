@@ -99,6 +99,6 @@ try {
         }
         Write-Host "Installed $target (SHA-256 $((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash))"
         Write-Host "Configuration: $activeConfig"
-        Write-Host 'Steam Link native passthrough requires [STEAMLINK] NativePassthrough=true in that file; false keeps the Virtual Desktop colour-key mode.'
+        Write-Host 'New configs enable native passthrough automatically for Frame over Steam Link. Other headsets/transports use the colour-key background. NativePassthrough=false opts out; existing configs are preserved.'
     }
 } finally { Pop-Location }

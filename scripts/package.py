@@ -29,8 +29,9 @@ def main():
                         "-p:UseReferenceAssemblies=true", "-p:Optimize=true",
                         "-p:ContinuousIntegrationBuild=true", "--nologo"], cwd=ROOT, check=True)
         binary = ROOT / "bin" / backend / configuration / framework / assembly
-        files = {assembly: binary, "greenscreen.ini.example": ROOT / "greenscreen.ini.example",
-                 "README.md": ROOT / "README.md", "LICENSE": ROOT / "LICENSE"}
+        files = {assembly: binary, "greenscreen.ini": ROOT / "greenscreen.ini.example",
+                 "README.md": ROOT / "README.md", "LICENSE": ROOT / "LICENSE",
+                 "licenses/OpenVR-LICENSE.txt": ROOT / "licenses/OpenVR-LICENSE.txt"}
         archive_path = destination / f"{name}.zip"
         with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for relative, source in files.items():
@@ -40,8 +41,10 @@ def main():
                 raise RuntimeError("Unexpected archive contents")
             if [n for n in archive.namelist() if n.endswith(".dll")] != [assembly]:
                 raise RuntimeError("Only the mod DLL may be distributed")
+            if "NativePassthrough=true" not in archive.read("greenscreen.ini").decode():
+                raise RuntimeError("The shipped config must enable automatic Frame/Steam Link passthrough")
         archives.append(archive_path)
-        print(f"Packaged {archive_path.name}: mod DLL, example config, README, licence")
+        print(f"Packaged {archive_path.name}: mod DLL, active config, README, licences")
     (destination / "SHA256SUMS").write_text("".join(
         f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n" for path in archives))
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()

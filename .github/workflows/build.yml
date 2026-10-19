@@ -30,6 +30,11 @@ jobs:
         run: python3 scripts/check-refasm.py
       - name: Check protocol and connection lifetime
         run: dotnet run --project tests/ProtocolChecks.csproj
+      - name: Check Frame and Steam Link identity admission
+        run: |
+          dotnet run --project tests/IdentityChecks.csproj
+          cc -std=c11 -Wall -Wextra -Werror tests/IdentityReaderChecks.c -o /tmp/demeo-identity-checks
+          /tmp/demeo-identity-checks
       - name: Check loader and rendering lifecycles
         run: python3 scripts/check-integration.py
       - name: Check Steam discovery and installation
@@ -39,6 +44,8 @@ jobs:
         run: python3 scripts/fetch-build-deps.py
       - name: Build and package all three games
         run: python3 scripts/package.py
+      - name: Verify identity resources in all six produced mods
+        run: dotnet run --project tests/IdentityChecks.csproj -- --artifacts
       - name: Ensure full assemblies are rejected by the reference gate
         run: |
           if python3 scripts/check-refasm.py bin/BepInEx/DEMEO/netstandard2.1/Demeo_GreenScreen.dll; then

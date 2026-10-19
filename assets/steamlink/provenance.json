@@ -1,0 +1,24 @@
+{
+  "source": "McFredward/GloomhavenVR",
+  "sourceCommit": "fd45d606f02f936d4541c56530d49a53cc4f874b",
+  "identity": "HMD0 through public OpenVR IVRSystem_022; isolated Background client; no Unity OpenVR initialization",
+  "openvrCommit": "751538d6cbde9d060e5906c1d45c8cedeaf0ee18",
+  "artifacts": {
+    "assets/steamlink/connection-reader.exe": {
+      "bytes": 42496,
+      "sha256": "cec82e68968441902e717c6bc595ff0ae0b0b03ffe72bc5eb26cbfe19c40a30f"
+    },
+    "assets/steamlink/openvr_api.bin": {
+      "bytes": 826688,
+      "sha256": "5e591aa3f4a991edcc8910921833edafa67a1b117849bbb4e235df9833bed7a3"
+    },
+    "licenses/OpenVR-LICENSE.txt": {
+      "bytes": 1488,
+      "sha256": "f56ff606104d4ef18e617921a75c73ad73b5a1a1d70c69590c29de16919e04ad"
+    }
+  },
+  "sourceFiles": {
+    "tools/steamlink-connection-reader.c": "3a9a2344e00b2c8c2cb7ef86b6de13ff4b6d64c705ebd1cc7b7148e9945c6c29",
+    "src/GloomhavenVR/Core/SteamLink/SteamLinkConnection.cs": "842369c1684ce62b358bb6a56869521bb206a719f7f40e0c327e70a35673ec21"
+  }
+}

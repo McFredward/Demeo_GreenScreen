@@ -21,7 +21,7 @@ internal static class IntegrationChecks
     private static void EnableNative()
     {
         WriteConfig(true); Tick(); // Reload invalidates a previous declaration.
-        SteamLinkCoverageBridge.Grant(); Tick();
+        SteamLinkConnection.Frame(); SteamLinkCoverageBridge.Grant(); Tick();
     }
     private static Action Callback(object instance,string name) => () => instance.GetType()
         .GetMethod(name,System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)
@@ -70,7 +70,7 @@ internal static class IntegrationChecks
         Environment.CurrentDirectory=temp;
         try
         {
-            Check(!ModConfiguration.Parse(Array.Empty<string>()).SteamLinkNativePassthrough,"native mode is opt-in");
+            Check(ModConfiguration.Parse(Array.Empty<string>()).SteamLinkNativePassthrough,"native preference defaults on, with hardware admission required");
             Check(ModConfiguration.Parse(new[] { "[steamlink]", "nativepassthrough=TrUe" }).SteamLinkNativePassthrough,"case insensitive option");
             Check(ModConfiguration.Parse(new[] { "[STEAMLINK]", "NativePassthrough=1" }).SteamLinkNativePassthrough,"numeric true");
             Check(!ModConfiguration.Parse(new[] { "[STEAMLINK]", "NativePassthrough=invalid" }).SteamLinkNativePassthrough,"invalid option fails disabled");
@@ -104,9 +104,9 @@ internal static class IntegrationChecks
             int messages=TestLog.Messages.Count;
             Check(!ConfigurationStore.Refresh() && TestLog.Messages.Count==messages,"unchanged configuration does not flood the log");
             File.Delete(rootConfig); ConfigurationStore.Refresh();
-            Check(!ConfigurationStore.Current.SteamLinkNativePassthrough && ConfigurationStore.ActivePath==""
-                && TestLog.Messages.Exists(message=>message.Contains("no INI found") && message.Contains("disabled")),
-                "missing config explicitly reports disabled native mode and defaults safely");
+            Check(ConfigurationStore.Current.SteamLinkNativePassthrough && ConfigurationStore.ActivePath==""
+                && TestLog.Messages.Exists(message=>message.Contains("no INI found") && message.Contains("identity")),
+                "missing config defaults to automatic Frame identity admission");
             Environment.CurrentDirectory=temp;
             var camera=new Camera(); Color original=camera.backgroundColor;
             GameObject.Scene=new[] { camera };
@@ -114,9 +114,11 @@ internal static class IntegrationChecks
             Check(TestLog.Messages.Exists(message=>message.Contains("Unity Update is active")),"first Unity Update is observable in loader logs");
             NativePassthrough.Initialize(); Tick();
             Check(camera.backgroundColor==new Color(0,1,0,1),"Virtual Desktop remains default");
-            Check(TestLog.Messages.Exists(message=>message.Contains("native passthrough disabled")),"green fallback explicitly reports disabled native mode");
+            Check(TestLog.Messages.Exists(message=>message.Contains("Frame through Steam Link is not confirmed")),"non-Frame fallback explicitly reports the hardware gate");
             Check(camera.clearFlags==CameraClearFlags.Skybox && camera.Commands==0,"default leaves clear policy and render commands alone");
             WriteConfig(true); Tick();
+            Check(camera.backgroundColor==new Color(0,1,0,1) && camera.Commands==0,"INI true cannot enable native mode on an unconfirmed headset");
+            SteamLinkConnection.Frame(); Tick();
             Check(camera.backgroundColor==Color.black && camera.Commands==0,"missing companion keeps opaque background");
             SteamLinkCoverageBridge.Grant(); Tick();
             Check(camera.backgroundColor==Color.clear && camera.Commands==1,"granted built-in source gets transparent clear and depth prefix");
@@ -162,7 +164,7 @@ internal static class IntegrationChecks
             Check(pipeline.m_AllowPostProcessAlphaOutput && camera.backgroundColor==Color.clear,"URP preserves post-processing alpha");
             camera.stereoEnabled=false; Tick(); RenderPipelineManager.Render(camera);
             Check(camera.backgroundColor==Color.clear,"modern URP XR does not depend on the legacy camera stereo flag");
-            Check(!UnityEngine.Experimental.Rendering.XRSystem.singlePassAllowed,"URP prepares separate eye render passes");
+            Check(UnityEngine.Experimental.Rendering.XRSystem.singlePassAllowed,"URP retains its one-pass/two-eye layout so native pass indices remain valid");
             Check(!((UniversalAdditionalCameraData)camera.Extra).renderPostProcessing,"URP bypasses potentially stripped alpha post-processing variants");
             Check(camera.Commands==0 && !camera.forceIntoRenderTexture,"URP uses native alpha pipeline");
             RenderPipelineManager.Render(camera);
@@ -173,7 +175,7 @@ internal static class IntegrationChecks
             Check(pipeline.m_AllowPostProcessAlphaOutput,"URP can prepare again at next boundary");
             NativePassthrough.Shutdown();
             Check(!pipeline.m_AllowPostProcessAlphaOutput,"unload restores original pipeline setting");
-            Check(UnityEngine.Experimental.Rendering.XRSystem.singlePassAllowed,"unload restores original stereo policy");
+            Check(UnityEngine.Experimental.Rendering.XRSystem.singlePassAllowed,"unload retains the original stereo policy");
             Check(((UniversalAdditionalCameraData)camera.Extra).renderPostProcessing,"unload restores original camera post-processing");
             Check(camera.backgroundColor==original,"URP unload restores original camera background");
             pipeline.m_AllowPostProcessAlphaOutput=true;
@@ -193,8 +195,26 @@ internal static class IntegrationChecks
             pipeline.m_AllowPostProcessAlphaOutput=false;
             NativePassthrough.Initialize(); EnableNative();
             Check(camera.backgroundColor==Color.clear,"Linear URP keeps normal sRGB output instead of requiring a Gamma project");
-            Check(!UnityEngine.Experimental.Rendering.XRSystem.singlePassAllowed,"legacy single-pass setting does not override owned URP MultiPass policy");
+            Check(UnityEngine.Experimental.Rendering.XRSystem.singlePassAllowed,"native single-pass array layout is retained for both eyes");
             Check(pipeline.m_HDRColorBufferPrecision==UniversalRenderPipelineAsset.HdrPrecision.Bits64,"HDR intermediate retains alpha");
+            InputDevices.Change(new InputDevice { isValid=true, characteristics=InputDeviceCharacteristics.Controller, Id=2 });
+            Check(SteamLinkConnection.Available,"controller changes do not revoke the HMD identity");
+            InputDevices.Disconnect(InputDevices.Head);
+            RenderPipelineManager.Render(camera);
+            Check(!SteamLinkConnection.Available && !SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba && camera.backgroundColor==Color.black,
+                "HMD disconnect revokes source authority before the next render");
+            Tick();
+            Check(camera.backgroundColor==new Color(0,1,0,1) && !pipeline.m_AllowPostProcessAlphaOutput,
+                "unconfirmed HMD restores the regular background and URP settings regardless of INI");
+            var manager=UnityEngine.XR.Management.XRGeneralSettings.Instance.Manager;
+            manager.activeLoader=new UnityEngine.XR.OpenXR.OpenXRLoader();
+            UnityEngine.XR.OpenXR.OpenXRRuntime.name="Virtual Desktop";
+            SteamLinkConnection.Frame(); Time.unscaledTime+=1.1f; Tick();
+            Check(!SteamLinkConnection.Available && camera.backgroundColor==new Color(0,1,0,1),
+                "another game OpenXR runtime blocks native mode even if a separate SteamVR Frame session is available");
+            UnityEngine.XR.OpenXR.OpenXRRuntime.name="SteamVR/OpenXR";
+            Time.unscaledTime+=1.1f; EnableNative();
+            Check(camera.backgroundColor==Color.clear,"confirmed Frame is admitted through the game's SteamVR OpenXR loader");
             NativePassthrough.Shutdown();
             Check(pipeline.m_HDRColorBufferPrecision==UniversalRenderPipelineAsset.HdrPrecision.Bits32,"HDR intermediate precision restored");
             Console.WriteLine($"Configuration and render lifecycle checks passed: {_checks}");

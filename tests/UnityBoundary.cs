@@ -46,6 +46,8 @@ namespace Il2CppSystem
     }
     public class Action<T,U> : Delegate
     { public void Invoke(T a,U b) { foreach (var callback in Functions) callback.DynamicInvoke(a,b); } }
+    public class Action<T> : Delegate
+    { public void Invoke(T a) { foreach (var callback in Functions) callback.DynamicInvoke(a); } }
 }
 namespace UnityEngine
 {
@@ -205,6 +207,33 @@ namespace UnityEngine.Rendering.Universal
 }
 namespace UnityEngine.XR
 {
+    public enum XRNode { Head }
+    [Flags] public enum InputDeviceCharacteristics { None=0, HeadMounted=1, Controller=2 }
+    public struct InputDevice
+    {
+        public bool isValid;
+        public InputDeviceCharacteristics characteristics;
+        public int Id;
+    }
+    public static class InputDevices
+    {
+        public static InputDevice Head=new InputDevice { isValid=true, characteristics=InputDeviceCharacteristics.HeadMounted, Id=1 };
+        public static InputDevice GetDeviceAtXRNode(XRNode node) => Head;
+#if DEMEO
+        public static event Action<InputDevice> deviceConnected,deviceDisconnected,deviceConfigChanged;
+#else
+        private static Il2CppSystem.Action<InputDevice> deviceConnected,deviceDisconnected,deviceConfigChanged;
+        public static void add_deviceConnected(Il2CppSystem.Action<InputDevice> callback) => deviceConnected=Il2CppSystem.Delegate.Combine(deviceConnected,callback).Cast<Il2CppSystem.Action<InputDevice>>();
+        public static void add_deviceDisconnected(Il2CppSystem.Action<InputDevice> callback) => deviceDisconnected=Il2CppSystem.Delegate.Combine(deviceDisconnected,callback).Cast<Il2CppSystem.Action<InputDevice>>();
+        public static void add_deviceConfigChanged(Il2CppSystem.Action<InputDevice> callback) => deviceConfigChanged=Il2CppSystem.Delegate.Combine(deviceConfigChanged,callback).Cast<Il2CppSystem.Action<InputDevice>>();
+        public static void remove_deviceConnected(Il2CppSystem.Action<InputDevice> callback) => deviceConnected=Il2CppSystem.Delegate.Remove(deviceConnected,callback)?.Cast<Il2CppSystem.Action<InputDevice>>();
+        public static void remove_deviceDisconnected(Il2CppSystem.Action<InputDevice> callback) => deviceDisconnected=Il2CppSystem.Delegate.Remove(deviceDisconnected,callback)?.Cast<Il2CppSystem.Action<InputDevice>>();
+        public static void remove_deviceConfigChanged(Il2CppSystem.Action<InputDevice> callback) => deviceConfigChanged=Il2CppSystem.Delegate.Remove(deviceConfigChanged,callback)?.Cast<Il2CppSystem.Action<InputDevice>>();
+#endif
+        public static void Change(InputDevice device) => deviceConfigChanged?.Invoke(device);
+        public static void Disconnect(InputDevice device) => deviceDisconnected?.Invoke(device);
+        public static void Connect(InputDevice device) => deviceConnected?.Invoke(device);
+    }
     public class XRDisplaySubsystem
     {
         public struct XRRenderPass
@@ -223,6 +252,21 @@ namespace UnityEngine.XR
         public static UnityEngine.RenderTextureDescriptor eyeTextureDesc=new UnityEngine.RenderTextureDescriptor
         { width=2000,height=2000,volumeDepth=1,msaaSamples=4,dimension=UnityEngine.Rendering.TextureDimension.Tex2D };
     }
+}
+namespace UnityEngine.XR.Management
+{
+    public class XRGeneralSettings
+    {
+        public static XRGeneralSettings Instance { get; }=new XRGeneralSettings();
+        public XRManagerSettings Manager { get; }=new XRManagerSettings();
+    }
+    public class XRManagerSettings { public UnityEngine.Object activeLoader { get; set; }=new Unity.XR.OpenVR.OpenVRLoader(); }
+}
+namespace Unity.XR.OpenVR { public class OpenVRLoader : UnityEngine.Object { } }
+namespace UnityEngine.XR.OpenXR
+{
+    public class OpenXRLoader : UnityEngine.Object { }
+    public static class OpenXRRuntime { public static string name { get; set; }="SteamVR/OpenXR"; }
 }
 namespace HarmonyLib
 {
@@ -274,6 +318,17 @@ namespace MelonLoader.Utils
 }
 namespace GreenScreen
 {
+    internal static class SteamLinkConnection
+    {
+        internal enum Reason { NoSession,Pending,Ready,WrongHeadset,WrongTransport }
+        internal sealed class Snapshot { internal Reason State; }
+        internal static Snapshot Current=new Snapshot { State=Reason.WrongHeadset };
+        internal static bool Available => Current.State==Reason.Ready;
+        internal static void Tick(bool wanted,float now) { if (!wanted) Reset(); }
+        internal static void Reset() => Current=new Snapshot { State=Reason.NoSession };
+        internal static void Invalidate() => Current=new Snapshot { State=Reason.Pending };
+        internal static void Frame() => Current=new Snapshot { State=Reason.Ready };
+    }
     internal static class TestLog { internal static readonly List<string> Messages=new List<string>(); }
     internal static class SteamLinkCoverageBridge
     {

@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- Each executable needs its own SDK apphost and restore intermediates.
+         A shared obj/apphost can otherwise launch another test project's DLL. -->
+    <BaseIntermediateOutputPath>obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

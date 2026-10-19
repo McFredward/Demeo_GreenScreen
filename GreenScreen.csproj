@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Configurations>DEMEO;DEMEOBATTLES;DEMEOBATTLEMARKED</Configurations>
-    <Version>1.3.0</Version>
+    <Version>1.4.0</Version>
     <TargetFramework Condition="'$(Configuration)' == 'DEMEO'">netstandard2.1</TargetFramework>
     <TargetFramework Condition="'$(Configuration)' != 'DEMEO'">net6.0</TargetFramework>
     <LangVersion>latest</LangVersion>
@@ -49,7 +49,9 @@
   <ItemGroup>
     <Compile Remove="tests/**/*.cs;unity/**/*.cs;.planning/**/*.cs" />
     <EmbeddedResource Include="assets/nativecoverage.bundle" LogicalName="GreenScreen.NativeCoverage" />
-    <None Update="greenscreen.ini.example" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="assets/steamlink/connection-reader.exe" LogicalName="GreenScreen.SteamLink.connection-reader.exe" />
+    <EmbeddedResource Include="assets/steamlink/openvr_api.bin" LogicalName="GreenScreen.SteamLink.openvr_api.dll" />
+    <None Update="greenscreen.ini.example" TargetPath="greenscreen.ini" CopyToOutputDirectory="PreserveNewest" />
     <Reference Include="0Harmony" HintPath="$(LoaderDirectory)/0Harmony.dll" Private="false" />
     <Reference Include="UnityEngine" HintPath="$(UnityAssemblyDirectory)/UnityEngine.dll" Private="false" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(UnityAssemblyDirectory)/UnityEngine.CoreModule.dll" Private="false" />

@@ -1,5 +1,5 @@
 # Demeo_GreenScreen
-Mixed reality for the PCVR versions of Demeo, Demeo Battles & Demeo Battlemarked. The default mode replaces the background colour for [Virtual Desktop](https://www.meta.com/de-de/experiences/1261331807302580/). An optional native-alpha mode integrates [Steam Link Native Passthrough](https://github.com/McFredward/steam-link-native-passthrough) for Steam Frame.
+Mixed reality for the PCVR versions of Demeo, Demeo Battles & Demeo Battlemarked. On a detected Steam Frame over Steam Link, native passthrough is enabled by default. Other headsets and transports use a background colour for [Virtual Desktop](https://www.meta.com/de-de/experiences/1261331807302580/). Native alpha integrates [Steam Link Native Passthrough](https://github.com/McFredward/steam-link-native-passthrough) for Steam Frame.
 
 <p align="center">
   <img src="demeo_green.jpg" width="50%" height="50%">
@@ -39,7 +39,7 @@ Red: 0, Green: 255, Blue: 0, Similarity: 37, Smoothness: 5
 </p>
 
 ## Additional Settings
-* Create the file `greenscreen.ini` in the Folder where the .dll is located and insert the following:
+* The ZIP includes `greenscreen.ini` beside the mod DLL. Edit it to customize the settings:
 
 ```ini
 [COLOR]
@@ -51,7 +51,7 @@ B=0
 Disable=false
 
 [STEAMLINK]
-NativePassthrough=false
+NativePassthrough=true
 ```
 
 The `[TABLE]` section is only relevant for Battlemarked - this way you can re-enable the table mesh (per default its disabled).
@@ -59,13 +59,13 @@ Feel free to adjust the `[COLOR]` values as desired, ensuring they stay within t
 Additionally, please update the color in the VirtualDesktop configuration accordingly. <br>
 If you discover a color or configuration that, in your opinion, performs better than the default green, let me know :)
 
-### Optional: native Steam Link passthrough
+### Automatic native Steam Link passthrough
 
 This integration is experimental and needs an in-headset test for each game. It sends the game's ordinary RGB image with independent alpha; green game objects are not removed by a colour key.
 
 1. Install the mod for your game as above. Demeo and Battles still need the basement environment disabled in the game settings.
 2. Install matching PC and Steam Frame companions using the [Steam Link Native Passthrough installer](https://github.com/McFredward/steam-link-native-passthrough#installation). Its supported hardware/runtime requirements apply.
-3. Put `greenscreen.ini` beside the mod DLL (a sample is included as `greenscreen.ini.example`) and enable:
+3. Keep the included `greenscreen.ini` beside the mod DLL. Its shipped setting is:
 
    ```ini
    [STEAMLINK]
@@ -76,11 +76,13 @@ This integration is experimental and needs an in-headset test for each game. It 
 
 Changing `NativePassthrough` or `[COLOR]` in the INI takes effect within about one second. Set `NativePassthrough=false` to return to Virtual Desktop's colour-key mode. `custom_color.ini`, unsectioned RGB values, and a config in the loader's plugins/Mods root remain supported; `greenscreen.ini` beside the DLL takes priority.
 
-After installation, the script prints the active INI path. Native passthrough is disabled in a newly created config: installing the DLL alone keeps the green Virtual Desktop background. At game startup the mod logs the selected INI path, `NativePassthrough` value, and whether its Unity update callback is running. The loader's plugins/Mods root is resolved from the loader API rather than the process working directory.
+Native passthrough activates only when the running headset is identified as Steam Frame connected through Steam Link. Other headsets, Virtual Desktop, unknown identities and unsupported platforms use the colour-key background even with `NativePassthrough=true`. Detection uses the same isolated public OpenVR background reader as GloomhavenVR, with periodic rechecks and immediate invalidation on HMD device changes.
+
+After installation, the script prints the active INI path. New configs default to `NativePassthrough=true`; existing configs retain their setting. At game startup the mod logs the selected INI path, `NativePassthrough` value, and whether its Unity update callback is running. The loader's plugins/Mods root is resolved from the loader API rather than the process working directory.
 
 The native mode waits for a verified, live sender connection before enabling transparency. Missing companions, unsupported eye buffers or lost permission leave an opaque black background, with the reason in the mod log. Installation and a successful source handshake do not prove a correct headset picture.
 
-For Unity 6 URP, the mod temporarily enables alpha processing, uses separate eye render passes, and preserves alpha in HDR intermediates when needed. Game post-processing is temporarily bypassed because released games can have its alpha shader variants stripped. It keeps Linear project lighting and Unity's normal sRGB output. These settings are restored on opt-out or unload. Eye resolution, MSAA and field of view are retained. Custom shaders can still discard or distort alpha; see [integration details and validation limits](docs/STEAM-LINK-INTEGRATION.md).
+For Unity 6 URP, the mod temporarily enables alpha processing, retains the game's original stereo layout, and preserves alpha in HDR intermediates when needed. Game post-processing is temporarily bypassed because released games can have its alpha shader variants stripped. It keeps Linear project lighting and Unity's normal sRGB output. These settings are restored on opt-out or unload. Eye resolution, MSAA and field of view are retained. Custom shaders can still discard or distort alpha; see [integration details and validation limits](docs/STEAM-LINK-INTEGRATION.md).
 
 ## Build and install automatically (Windows)
 
@@ -122,7 +124,7 @@ Use `-p:LoaderBackend=BepInEx` or `-p:LoaderBackend=MelonLoader` to select a loa
 
 Development happens on `dev`. CI checks `dev`/`main` pushes and pull requests. Every push to `main` builds `Demeo.zip`, `DemeoBattles.zip` and `DemeoBattlemarked.zip`, available together with checksums in the workflow's **Demeo-mods** artifact. The workflow does not push commits or create releases.
 
-CI uses committed [metadata-only references](libs/RefAsm/README.md). Every method body is removed, and CI verifies that all MethodDef RVAs are zero. Public loader dependencies are downloaded from SHA-256-pinned archives. CI compiles and checks both loader variants for each game; the three ZIPs retain their documented defaults (BepInEx for Demeo/Battles, MelonLoader for Battlemarked). The local installer builds the variant detected on your PC. ZIP packaging allows only the mod DLL, example config, README and licence.
+CI uses committed [metadata-only references](libs/RefAsm/README.md). Every method body is removed, and CI verifies that all MethodDef RVAs are zero. Public loader dependencies are downloaded from SHA-256-pinned archives. CI compiles and checks both loader variants for each game; the three ZIPs retain their documented defaults (BepInEx for Demeo/Battles, MelonLoader for Battlemarked). The local installer builds the variant detected on your PC. ZIP packaging allows only the mod DLL, active `greenscreen.ini`, README and licences. The mod embeds a small owned identity reader and Valve's pinned public OpenVR SDK loader; game assemblies and mod loader assemblies are excluded.
 
 Run the same package build locally without a game installation:
 
@@ -145,7 +147,8 @@ See [CI and installation details](docs/BUILD-AND-INSTALL.md) for reference regen
 * [BepInEx](https://github.com/BepInEx/BepInEx) using the LGPL2.1 license
 * [MelonLoader](https://github.com/LavaGang/MelonLoader) using the Apache-2.0
 * [Steam Link Native Passthrough](https://github.com/McFredward/steam-link-native-passthrough) for the paired PC/Frame companion and application source protocol
-* [GloomhavenVR](https://github.com/McFredward/GloomhavenVR) for the source-negotiation client and opaque-depth coverage approach (GPL-3.0)
+* [GloomhavenVR](https://github.com/McFredward/GloomhavenVR) for the headset identity reader, source-negotiation client and opaque-depth coverage approach (GPL-3.0)
+* [Valve OpenVR SDK](https://github.com/ValveSoftware/openvr) 1.26.7 (BSD-3-Clause); bundled licence in `licenses/OpenVR-LICENSE.txt`
 
 If you have any suggestions, feel free to open an Issue. Or contact me (McFredward) in via Discord.
 

@@ -8,7 +8,7 @@ namespace GreenScreen
     {
         internal Color BackgroundColor = new Color(0f, 1f, 0f, 1f);
         internal bool DisableTable = true;
-        internal bool SteamLinkNativePassthrough;
+        internal bool SteamLinkNativePassthrough = true;
 
         internal static ModConfiguration Parse(string[] lines)
         {
@@ -39,8 +39,8 @@ namespace GreenScreen
                 {
                     if (TryBoolean(value, out bool disable)) settings.DisableTable = disable;
                 }
-                if (section == "STEAMLINK" && key == "NATIVEPASSTHROUGH"
-                    && TryBoolean(value, out bool native)) settings.SteamLinkNativePassthrough = native;
+                if (section == "STEAMLINK" && key == "NATIVEPASSTHROUGH")
+                    settings.SteamLinkNativePassthrough = TryBoolean(value, out bool native) && native;
             }
             if (r >= 0 && g >= 0 && b >= 0)
                 settings.BackgroundColor = new Color(r / 255f, g / 255f, b / 255f, 1f);
@@ -78,6 +78,7 @@ namespace GreenScreen
 #else
                 string legacyDirectory = BepInEx.Paths.PluginPath;
 #endif
+                if (string.IsNullOrEmpty(assemblyDirectory)) assemblyDirectory = legacyDirectory;
                 string path = Resolve(assemblyDirectory, legacyDirectory);
                 var file = path.Length == 0 ? null : new FileInfo(path);
                 DateTime modified = file == null ? DateTime.MinValue : file.LastWriteTimeUtc;
@@ -92,14 +93,14 @@ namespace GreenScreen
                 Utils.LogInfo("GreenScreen configuration: "
                     + (ActivePath.Length == 0 ? "no INI found; expected " + Path.Combine(assemblyDirectory, "greenscreen.ini") : ActivePath)
                     + "; Steam Link NativePassthrough=" + next.SteamLinkNativePassthrough + "."
-                    + (next.SteamLinkNativePassthrough ? " Native source negotiation requested."
+                    + (next.SteamLinkNativePassthrough ? " Enabled only after Frame/Steam Link identity is confirmed."
                         : " Virtual Desktop colour-key mode; Steam Link native passthrough is disabled. Set [STEAMLINK] NativePassthrough=true in this INI to enable it."));
                 return true;
             }
             catch (Exception error)
             {
                 // A partially saved or unreadable INI must revoke opt-in.
-                Current = new ModConfiguration();
+                Current = new ModConfiguration { SteamLinkNativePassthrough = false };
                 ActivePath = "";
                 if (_length != -2) Utils.LogInfo("Could not read greenscreen.ini: " + error.Message);
                 _length = -2;

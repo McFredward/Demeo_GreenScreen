@@ -17,7 +17,7 @@ namespace GreenScreen
         private static CameraState _head;
         private static RenderTexture _target;
         private static RenderPipelineAsset _pipeline;
-        private static RenderSettingLease _alphaProcessing, _hdrPrecision, _stereoPolicy;
+        private static RenderSettingLease _alphaProcessing, _hdrPrecision;
         private static readonly List<RenderSettingLease> PostProcessing = new List<RenderSettingLease>();
         private static int _cameraVersion, _preparedCameraVersion;
         private static OpaqueCoverage _coverage;
@@ -80,12 +80,15 @@ namespace GreenScreen
                 ScanCameras();
             }
             ModConfiguration settings = ConfigurationStore.Current;
-            if (!settings.SteamLinkNativePassthrough)
+            SteamLinkConnectionLifecycle.Tick(settings.SteamLinkNativePassthrough);
+            if (!settings.SteamLinkNativePassthrough || !SteamLinkConnection.Available)
             {
                 SteamLinkCoverageBridge.Tick(false, Time.unscaledTime);
                 LeaveNative();
                 foreach (CameraState state in Cameras) state.SetBackground(settings.BackgroundColor, false);
-                Report("Steam Link native passthrough disabled; using the configured Virtual Desktop background colour.");
+                Report(settings.SteamLinkNativePassthrough
+                    ? "Native passthrough inactive: Frame through Steam Link is not confirmed (" + SteamLinkConnection.Current.State + "). Using the configured background colour."
+                    : "Steam Link native passthrough disabled; using the configured Virtual Desktop background colour.");
                 return;
             }
 
@@ -193,8 +196,9 @@ namespace GreenScreen
             {
                 object asset = RuntimeObject(_pipeline, "UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset");
                 if (asset == null) { reason = "Only the built-in renderer and Unity 6 URP are supported."; LeaveNative(); return false; }
-                if (!SrpOutput.TryMultiPass(out _stereoPolicy))
-                { reason = "This URP build cannot prepare separate eye render passes."; LeaveNative(); return false; }
+                // Preserve URP's native XR layout. Forcing split passes over a
+                // one-pass/two-view provider breaks XRSystem.ReconfigurePass:
+                // multipassId is not a native render-pass index for the right eye.
                 if (head.Camera.allowHDR && !RenderSettingLease.IsFalse(asset, "supportsHDR")
                     && !RenderSettingLease.TryAcquire(asset, "m_HDRColorBufferPrecision", 1, out _hdrPrecision))
                 { reason = "This URP build cannot preserve alpha through HDR intermediates."; LeaveNative(); return false; }
@@ -234,15 +238,14 @@ namespace GreenScreen
         {
             if (_head == null || camera != _head.Camera) return;
             bool valid;
-            try { valid = _frame == Time.frameCount && StereoCamera(camera) && Profile(camera) == null
+            try { valid = _frame == Time.frameCount && SteamLinkConnection.Available && StereoCamera(camera) && Profile(camera) == null
                 && ReferenceEquals(_grant, SteamLinkCoverageBridge.Current)
                 && _grant != null && _grant.CanAcceptOrdinaryRgba
                 && _target == camera.targetTexture && _pipeline == GraphicsSettings.currentRenderPipeline
                 && camera.allowHDR == _allowHdr && camera.actualRenderingPath == _renderingPath
                 && camera.clearFlags == CameraClearFlags.SolidColor && camera.backgroundColor == Color.clear
                 && (_alphaProcessing == null || _alphaProcessing.Current)
-                && (_hdrPrecision == null || _hdrPrecision.Current)
-                && (_stereoPolicy == null || _stereoPolicy.Current); }
+                && (_hdrPrecision == null || _hdrPrecision.Current); }
             catch { valid = false; }
             foreach (RenderSettingLease lease in PostProcessing) valid &= lease.Current;
             if (valid) return;
@@ -262,7 +265,6 @@ namespace GreenScreen
             _coverage?.Dispose(); _coverage = null;
             _alphaProcessing?.Dispose(); _alphaProcessing = null;
             _hdrPrecision?.Dispose(); _hdrPrecision = null;
-            _stereoPolicy?.Dispose(); _stereoPolicy = null;
             if (_head != null)
             {
                 _head.RestoreIntermediate();
@@ -275,6 +277,7 @@ namespace GreenScreen
         {
             if (!_started) return;
             _started = false;
+            SteamLinkConnectionLifecycle.Reset();
             SteamLinkCoverageBridge.Reset();
 #if DEMEO
             Camera.onPreCull -= PreCullCallback;

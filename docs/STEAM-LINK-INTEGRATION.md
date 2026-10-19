@@ -1,7 +1,8 @@
 # Steam Link native source
 
 All three games support BepInEx and MelonLoader entry points with the same
-configuration, source negotiation, camera owner and URP adapter. Native passthrough is disabled by default.
+configuration, source negotiation, camera owner and URP adapter. Native passthrough is enabled by default only on a confirmed Frame / Steam Link
+session. The active INI is included in each ZIP.
 
 `NativePassthrough.Tick` runs on the Unity thread through BepInEx Mono Update,
 a BepInEx IL2CPP driver, or MelonLoader OnUpdate. Battlemarked's environment
@@ -10,6 +11,25 @@ Config polling and camera discovery run on a cold tick. Existing colour and tabl
 The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
+
+## Headset and transport admission
+
+The isolated background reader queries connected HMD0/class and public OpenVR
+tracking/model/registered-driver properties. It accepts canonical Steam Frame /
+vrlink and the observed Deckard MP / cv profile used by this Frame, as in
+GloomhavenVR. It never accepts cv or SteamVR alone. The helper and public
+OpenVR application SDK loader are embedded with length/SHA-256/PE checks and
+extracted into the mod's own local cache. The Unity process never initializes a
+second OpenVR client. Artifact provenance and source are in `assets/steamlink`
+and `tools/steamlink-connection-reader.c`; the Valve BSD notice ships in the ZIP.
+
+The game's active XR Management loader must also be OpenVR or OpenXR running
+`SteamVR/OpenXR`; a separate SteamVR session cannot authorize a game using
+Virtual Desktop's native OpenXR runtime. A positive identity is rechecked every two seconds, expires if refresh stalls,
+and is invalidated immediately on HMD device/config changes. Other headsets and
+transports restore the regular background and renderer settings regardless of
+the INI value. Identity is cooperative public device metadata, independent of
+source negotiation and receiver/texture/frame proof. Both gates are required.
 
 ## Source contract
 
@@ -46,12 +66,21 @@ RGBA/BGRA UNorm and their sRGB views. The game's lighting space is not changed,
 and RGB is not multiplied by alpha again. HDR headset output is refused; HDR
 intermediates use the alpha-capable 64-bit precision while this source is owned.
 
-URP's `XRSystem.singlePassAllowed=false` creates separate rendering passes for
-the eye views. URP may retain a two-slice XR allocation internally. It resolves
-the original eye output through its ordinary native submission path; that
-internal allocation never authorizes an array resource in the companion. The
-companion still independently requires its actual single-slice source shape.
+URP retains the game's original stereo layout. It may render two views in a
+single two-slice XR pass. The companion independently requires its actual
+single-slice source shape after the game's normal submission/resolve path;
+the internal array never authorizes an array resource in the companion.
 URP's legacy XRSettings flag is not used as proof of the active SRP layout.
+
+The earlier forced `singlePassAllowed=false` split was removed after the
+maintainer reported a black right eye. In the supplied Unity 6000.0.60f1 code,
+`CreateDefaultLayout` can split one native render pass into two XRPass objects,
+but `ReconfigurePass` then uses each XRPass's multipass ID as a native render-pass
+index. It also assigns all native views to the split pass. The second split
+pass therefore need not correspond to an existing native render-pass index.
+Preserving the native layout avoids this invalid reconfiguration without
+copying a left eye, changing resolution, or accepting a previous eye image.
+This is a source-proven correction; headset verification is still required.
 
 `m_AllowPostProcessAlphaOutput` requests alpha preservation. The adapter also
 temporarily disables `renderPostProcessing` on active game cameras: URP can
@@ -80,6 +109,7 @@ Run the portable production-code checks:
 
 ```sh
 dotnet run --project tests/ProtocolChecks.csproj
+dotnet run --project tests/IdentityChecks.csproj
 python3 scripts/check-integration.py
 ```
 
@@ -117,8 +147,8 @@ Reference source checkpoints:
 
 Check the loader log for `GreenScreen configuration:` (absolute INI path and
 `NativePassthrough` value) and `GreenScreen Unity Update is active.`. The green
-Virtual Desktop background is expected with `NativePassthrough=false`, which is
-the default for a new installation. The installer prints the configuration path;
+Virtual Desktop background is expected with `NativePassthrough=false` or when
+the Frame / Steam Link identity is unconfirmed. New installs default to `true`. The installer prints the configuration path;
 startup also reports when no INI was found. Configs in the loader root remain
 available even when the game's working directory is elsewhere.
 

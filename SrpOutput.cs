@@ -79,15 +79,5 @@ namespace GreenScreen
             return views == 2 ? null : "The current XR source does not contain exactly two eye views.";
         }
 
-        // URP's XRSystem always requests an array target, then creates a pass per
-        // eye when this policy is false. Changing XRSettings' legacy stereo flag
-        // or the display texture layout alone does not control that renderer.
-        // Native DirectMode/encoder admission still independently requires the
-        // real submitted single-slice resources; an array never bypasses it.
-        internal static bool TryMultiPass(out RenderSettingLease lease) => _system != null
-            ? RenderSettingLease.TryAcquire(_system, "singlePassAllowed", false, out lease)
-            : NoLease(out lease);
-
-        private static bool NoLease(out RenderSettingLease lease) { lease = null; return false; }
     }
 }
