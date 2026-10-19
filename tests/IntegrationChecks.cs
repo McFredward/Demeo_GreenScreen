@@ -86,11 +86,35 @@ internal static class IntegrationChecks
             Check(ConfigurationStore.Resolve("nested","legacy")==Path.Combine("nested","greenscreen.ini"),"config beside DLL precedes loader root");
 
             File.Delete(ConfigPath);
+            string loaderRoot=Path.Combine(temp,"installed-loader");
+            Directory.CreateDirectory(loaderRoot);
+#if MELONLOADER
+            MelonLoader.Utils.MelonEnvironment.ModsDirectory=loaderRoot;
+#else
+            BepInEx.Paths.PluginPath=loaderRoot;
+#endif
+            string rootConfig=Path.Combine(loaderRoot,"greenscreen.ini");
+            File.WriteAllText(rootConfig,"[STEAMLINK]\nNativePassthrough=true\n");
+            Environment.CurrentDirectory=Path.Combine(temp,"nested");
+            ConfigurationStore.Refresh();
+            Check(ConfigurationStore.Current.SteamLinkNativePassthrough && ConfigurationStore.ActivePath==rootConfig,
+                "loader root config is found independently of the process working directory");
+            Check(TestLog.Messages.Exists(message=>message.Contains(rootConfig) && message.Contains("NativePassthrough=True")),
+                "log identifies the loaded config path and enabled native mode");
+            int messages=TestLog.Messages.Count;
+            Check(!ConfigurationStore.Refresh() && TestLog.Messages.Count==messages,"unchanged configuration does not flood the log");
+            File.Delete(rootConfig); ConfigurationStore.Refresh();
+            Check(!ConfigurationStore.Current.SteamLinkNativePassthrough && ConfigurationStore.ActivePath==""
+                && TestLog.Messages.Exists(message=>message.Contains("no INI found") && message.Contains("disabled")),
+                "missing config explicitly reports disabled native mode and defaults safely");
+            Environment.CurrentDirectory=temp;
             var camera=new Camera(); Color original=camera.backgroundColor;
             GameObject.Scene=new[] { camera };
             CheckLoaderLifecycle(camera);
+            Check(TestLog.Messages.Exists(message=>message.Contains("Unity Update is active")),"first Unity Update is observable in loader logs");
             NativePassthrough.Initialize(); Tick();
             Check(camera.backgroundColor==new Color(0,1,0,1),"Virtual Desktop remains default");
+            Check(TestLog.Messages.Exists(message=>message.Contains("native passthrough disabled")),"green fallback explicitly reports disabled native mode");
             Check(camera.clearFlags==CameraClearFlags.Skybox && camera.Commands==0,"default leaves clear policy and render commands alone");
             WriteConfig(true); Tick();
             Check(camera.backgroundColor==Color.black && camera.Commands==0,"missing companion keeps opaque background");

@@ -112,3 +112,21 @@ Reference source checkpoints:
 * Supplied Demeo Assembly-CSharp SHA-256: `726ab6a4aaf502a4bcce0c13e288cea3a899b8d4c27241c8aa11676ebcb74e1e`.
 * Supplied Demeo URP runtime SHA-256: `5bc1a4c2d8d461ab6ab8be3a5933b2f14e96f76b04ac12f0ce8b731d8b1825c7`.
 * Coverage bundle SHA-256: `3cf010b2828442b4e9d1f2a97225de8a3a7f0f34169cc839d3673912558741d1`.
+
+## Reading runtime logs
+
+Check the loader log for `GreenScreen configuration:` (absolute INI path and
+`NativePassthrough` value) and `GreenScreen Unity Update is active.`. The green
+Virtual Desktop background is expected with `NativePassthrough=false`, which is
+the default for a new installation. The installer prints the configuration path;
+startup also reports when no INI was found. Configs in the loader root remain
+available even when the game's working directory is elsewhere.
+
+A SteamVR provider log with `no-declaration` for the game's PID and
+`masked-frames=0` shows that native coverage was not delivered. It does not
+identify whether the option was disabled, configuration was missing, source
+eligibility failed, or negotiation failed; correlate it with the mod log.
+`AcquireSync FAILED with WAIT_TIMEOUT` and `ReleaseSync FAILED` are separate
+native texture-synchronization failures. If they occur before the game's
+connection, a game-only render-setting change cannot explain their onset.
+These messages alone do not identify the responsible component.

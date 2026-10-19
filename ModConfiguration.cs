@@ -61,6 +61,8 @@ namespace GreenScreen
     internal static class ConfigurationStore
     {
         internal static ModConfiguration Current { get; private set; } = new ModConfiguration();
+        internal static string ActivePath { get; private set; } = "";
+        private static bool _loaded;
         private static string _path = "";
         private static DateTime _modified;
         private static long _length = -1;
@@ -72,25 +74,33 @@ namespace GreenScreen
             {
                 string assemblyDirectory = Path.GetDirectoryName(typeof(ConfigurationStore).Assembly.Location);
 #if MELONLOADER
-                string legacyDirectory = "Mods";
+                string legacyDirectory = MelonLoader.Utils.MelonEnvironment.ModsDirectory;
 #else
-                string legacyDirectory = Path.Combine("BepInEx", "plugins");
+                string legacyDirectory = BepInEx.Paths.PluginPath;
 #endif
                 string path = Resolve(assemblyDirectory, legacyDirectory);
                 var file = path.Length == 0 ? null : new FileInfo(path);
                 DateTime modified = file == null ? DateTime.MinValue : file.LastWriteTimeUtc;
                 long length = file == null ? 0 : file.Length;
-                if (path == _path && modified == _modified && length == _length) return false;
+                if (_loaded && path == _path && modified == _modified && length == _length) return false;
                 ModConfiguration next = file == null ? new ModConfiguration()
                     : ModConfiguration.Parse(File.ReadAllLines(path));
                 Current = next;
+                ActivePath = path.Length == 0 ? "" : Path.GetFullPath(path);
                 _path = path; _modified = modified; _length = length;
+                _loaded = true;
+                Utils.LogInfo("GreenScreen configuration: "
+                    + (ActivePath.Length == 0 ? "no INI found; expected " + Path.Combine(assemblyDirectory, "greenscreen.ini") : ActivePath)
+                    + "; Steam Link NativePassthrough=" + next.SteamLinkNativePassthrough + "."
+                    + (next.SteamLinkNativePassthrough ? " Native source negotiation requested."
+                        : " Virtual Desktop colour-key mode; Steam Link native passthrough is disabled. Set [STEAMLINK] NativePassthrough=true in this INI to enable it."));
                 return true;
             }
             catch (Exception error)
             {
                 // A partially saved or unreadable INI must revoke opt-in.
                 Current = new ModConfiguration();
+                ActivePath = "";
                 if (_length != -2) Utils.LogInfo("Could not read greenscreen.ini: " + error.Message);
                 _length = -2;
                 return true;

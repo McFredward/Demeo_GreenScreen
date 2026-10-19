@@ -76,6 +76,8 @@ This integration is experimental and needs an in-headset test for each game. It 
 
 Changing `NativePassthrough` or `[COLOR]` in the INI takes effect within about one second. Set `NativePassthrough=false` to return to Virtual Desktop's colour-key mode. `custom_color.ini`, unsectioned RGB values, and a config in the loader's plugins/Mods root remain supported; `greenscreen.ini` beside the DLL takes priority.
 
+After installation, the script prints the active INI path. Native passthrough is disabled in a newly created config: installing the DLL alone keeps the green Virtual Desktop background. At game startup the mod logs the selected INI path, `NativePassthrough` value, and whether its Unity update callback is running. The loader's plugins/Mods root is resolved from the loader API rather than the process working directory.
+
 The native mode waits for a verified, live sender connection before enabling transparency. Missing companions, unsupported eye buffers or lost permission leave an opaque black background, with the reason in the mod log. Installation and a successful source handshake do not prove a correct headset picture.
 
 For Unity 6 URP, the mod temporarily enables alpha processing, uses separate eye render passes, and preserves alpha in HDR intermediates when needed. Game post-processing is temporarily bypassed because released games can have its alpha shader variants stripped. It keeps Linear project lighting and Unity's normal sRGB output. These settings are restored on opt-out or unload. Eye resolution, MSAA and field of view are retained. Custom shaders can still discard or distort alpha; see [integration details and validation limits](docs/STEAM-LINK-INTEGRATION.md).

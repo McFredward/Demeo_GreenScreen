@@ -76,6 +76,7 @@ namespace GreenScreen
     internal static class ModLifecycle
     {
         private static bool _running;
+        private static bool _updateReported;
 #if DEMEOBATTLEMARKED
         private static float _nextEnvironmentScan;
 #endif
@@ -83,6 +84,7 @@ namespace GreenScreen
         {
             if (_running) return;
             _running = true;
+            _updateReported = false;
             NativePassthrough.Initialize();
             InvalidateEnvironment();
         }
@@ -95,6 +97,11 @@ namespace GreenScreen
         internal static void Update()
         {
             if (!_running) return;
+            if (!_updateReported)
+            {
+                _updateReported = true;
+                Utils.LogInfo("GreenScreen Unity Update is active.");
+            }
             NativePassthrough.Tick();
 #if DEMEOBATTLEMARKED
             if (Time.unscaledTime < _nextEnvironmentScan) return;

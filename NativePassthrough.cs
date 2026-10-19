@@ -85,6 +85,7 @@ namespace GreenScreen
                 SteamLinkCoverageBridge.Tick(false, Time.unscaledTime);
                 LeaveNative();
                 foreach (CameraState state in Cameras) state.SetBackground(settings.BackgroundColor, false);
+                Report("Steam Link native passthrough disabled; using the configured Virtual Desktop background colour.");
                 return;
             }
 

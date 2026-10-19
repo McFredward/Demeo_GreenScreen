@@ -236,10 +236,11 @@ namespace HarmonyLib
 namespace Boardgame { public class GameStartup { } }
 namespace BepInEx
 {
+    public static class Paths { public static string PluginPath=System.IO.Path.GetFullPath("BepInEx/plugins"); }
     public class BepInPlugin : Attribute { public BepInPlugin(string id,string name,string version) { } }
     public class BaseUnityPlugin : UnityEngine.MonoBehaviour { public Logging.ManualLogSource Logger=new Logging.ManualLogSource(); }
 }
-namespace BepInEx.Logging { public class ManualLogSource { public void LogInfo(string message) { } } }
+namespace BepInEx.Logging { public class ManualLogSource { public void LogInfo(string message) => GreenScreen.TestLog.Messages.Add(message); } }
 namespace BepInEx.Unity.IL2CPP
 {
     public class BasePlugin
@@ -263,12 +264,17 @@ namespace MelonLoader
         public virtual void OnSceneWasLoaded(int index,string scene) { }
     }
     public static class Melon<T> { public static Logger Logger=new Logger(); }
-    public class Logger { public void Msg(string message) { } }
+    public class Logger { public void Msg(string message) => GreenScreen.TestLog.Messages.Add(message); }
     public static class MelonLogger { public static void Msg(string message) { } }
     public static class MelonCoroutines { public static void Start(System.Collections.IEnumerator routine) { } }
 }
+namespace MelonLoader.Utils
+{
+    public static class MelonEnvironment { public static string ModsDirectory=System.IO.Path.GetFullPath("Mods"); }
+}
 namespace GreenScreen
 {
+    internal static class TestLog { internal static readonly List<string> Messages=new List<string>(); }
     internal static class SteamLinkCoverageBridge
     {
         internal sealed class Snapshot { internal bool CanAcceptOrdinaryRgba; }

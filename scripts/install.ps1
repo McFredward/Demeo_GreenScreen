@@ -86,15 +86,19 @@ try {
             }
         } finally { if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Force } }
         Copy-Item -LiteralPath (Join-Path $repo 'greenscreen.ini.example') -Destination (Join-Path $plan.Destination 'greenscreen.ini.example') -Force
-        $hasConfig = $false
-        foreach ($directory in @($plan.Destination,$plan.PluginRoot)) {
-            foreach ($name in @('greenscreen.ini','custom_color.ini')) {
-                if (Test-Path -LiteralPath (Join-Path $directory $name) -PathType Leaf) { $hasConfig = $true }
+        $activeConfig = $null
+        foreach ($name in @('greenscreen.ini','custom_color.ini')) {
+            foreach ($directory in @($plan.Destination,$plan.PluginRoot)) {
+                $candidate = Join-Path $directory $name
+                if (-not $activeConfig -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { $activeConfig = $candidate }
             }
         }
-        if (-not $hasConfig) {
-            Copy-Item -LiteralPath (Join-Path $repo 'greenscreen.ini.example') -Destination (Join-Path $plan.Destination 'greenscreen.ini')
+        if (-not $activeConfig) {
+            $activeConfig = Join-Path $plan.Destination 'greenscreen.ini'
+            Copy-Item -LiteralPath (Join-Path $repo 'greenscreen.ini.example') -Destination $activeConfig
         }
         Write-Host "Installed $target (SHA-256 $((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash))"
+        Write-Host "Configuration: $activeConfig"
+        Write-Host 'Steam Link native passthrough requires [STEAMLINK] NativePassthrough=true in that file; false keeps the Virtual Desktop colour-key mode.'
     }
 } finally { Pop-Location }
