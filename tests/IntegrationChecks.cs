@@ -190,17 +190,42 @@ internal static class IntegrationChecks
             Check(TestLog.Messages.Exists(message=>message.Contains("URP opaque depth coverage is active")),
                 "the first executed opaque repair is observable in game logs");
             var source=new RenderTexture(); var sourceDescription=source.descriptor;
-            sourceDescription.volumeDepth=2; sourceDescription.dimension=TextureDimension.Tex2DArray; source.descriptor=sourceDescription;
+            sourceDescription.volumeDepth=2; sourceDescription.dimension=TextureDimension.Tex2DArray; sourceDescription.msaaSamples=8; source.descriptor=sourceDescription;
             FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData { enableAlphaOutput=true },
                 new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
             RenderPipelineManager.End(camera);
-            Check(TestLog.Messages.Exists(message=>message.Contains("slice 0 alpha min/mean/max=64/64/64") && message.Contains("slice 1 alpha min/mean/max=255/255/255")),
-                "the bounded asynchronous probe distinguishes both source-array alpha values without RGB output");
+            Check(TestLog.Messages.Exists(message=>message.Contains("XR output alpha measurement:")
+                && message.Contains("view 0 region 1 alpha min/mean/max=64/64/64") && message.Contains("view 1 region 1 alpha min/mean/max=255/255/255")),
+                "the bounded asynchronous probe distinguishes both final XR views without RGB output");
+            Check(AsyncGPUReadback.Targets.TrueForAll(target=>target!=source && target.name.StartsWith("XR output")),
+                "the probe reads final XR targets and never the pooled MSAA8 game intermediate");
             int reads=AsyncGPUReadback.Requests;
             FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData(),new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
             RenderPipelineManager.End(camera);
             Check(AsyncGPUReadback.Requests==reads && SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
                 "alpha measurements are rate limited and do not change source permission");
+            var originalXr=XRSettings.eyeTextureDesc;
+            XRSettings.eyeTextureDesc.volumeDepth=2; XRSettings.eyeTextureDesc.dimension=TextureDimension.Tex2DArray;
+            XRDisplaySubsystem.ReverseSlices=true;
+            XRDisplaySubsystem.Viewport=new Rect { x=100,y=200,width=1600,height=1500 };
+            Time.unscaledTime+=2.1f; Tick();
+            FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData(),new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
+            RenderPipelineManager.End(camera);
+            Check(AsyncGPUReadback.Slices[reads]==1 && AsyncGPUReadback.Slices[reads+1]==0
+                && TestLog.Messages.Exists(message=>message.Contains("/crop=884,200,32,1500")),
+                "array probes follow the provider's actual slice mapping and cropped viewports rather than guessing an eye index");
+            Time.unscaledTime+=2.1f; Tick(); AsyncGPUReadback.Deferred=true;
+            int firstReply=AsyncGPUReadback.DeferredReplies.Count, beforeReplies=TestLog.Messages.Count;
+            FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData(),new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
+            RenderPipelineManager.End(camera);
+            AsyncGPUReadback.DeferredReplies[firstReply+1]();
+            Check(TestLog.Messages.Count==beforeReplies,"an early second-eye reply does not publish an incomplete pair");
+            AsyncGPUReadback.DeferredReplies[firstReply]();
+            Check(TestLog.Messages[TestLog.Messages.Count-1].Contains("view 0 region 1 alpha min/mean/max=255/255/255")
+                && TestLog.Messages[TestLog.Messages.Count-1].Contains("view 1 region 1 alpha min/mean/max=64/64/64"),
+                "out-of-order GPU replies retain the exact requested view and slice");
+            AsyncGPUReadback.CompletePending=null; AsyncGPUReadback.Deferred=false;
+            XRDisplaySubsystem.ReverseSlices=false; XRDisplaySubsystem.Viewport=null; XRSettings.eyeTextureDesc=originalXr;
             var replacement=new Camera(); camera.isActiveAndEnabled=false;
             GameObject.Scene=new[]{replacement}; Camera.main=replacement; Tick();
             Check(replacement.backgroundColor==Color.clear && SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
@@ -237,7 +262,14 @@ internal static class IntegrationChecks
             Check(((UniversalAdditionalCameraData)camera.Extra).renderPostProcessing,"unload restores original camera post-processing");
             Check(camera.backgroundColor==original,"URP unload restores original camera background");
             pipeline.m_AllowPostProcessAlphaOutput=true;
-            NativePassthrough.Initialize(); EnableNative(); NativePassthrough.Shutdown();
+            NativePassthrough.Initialize(); EnableNative();
+            int beforeInvalidView=AsyncGPUReadback.Requests;
+            XRDisplaySubsystem.Viewport=new Rect { x=50000,width=100,height=100 };
+            FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData(),new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
+            RenderPipelineManager.End(camera);
+            Check(AsyncGPUReadback.Requests==beforeInvalidView && SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
+                "an invalid diagnostic viewport disables only the probe, without issuing an unsafe GPU request or revoking native output");
+            XRDisplaySubsystem.Viewport=null; NativePassthrough.Shutdown();
             Check(pipeline.m_AllowPostProcessAlphaOutput,"pre-existing alpha processing survives teardown");
             var renderer=(UniversalRenderer)((UniversalAdditionalCameraData)camera.Extra).scriptableRenderer;
             renderer.renderingModeActual=UniversalRenderer.RenderingMode.Deferred;

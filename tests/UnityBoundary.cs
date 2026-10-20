@@ -90,6 +90,7 @@ namespace UnityEngine
     public enum TextureFormat { RGBA32 }
     public struct Color32 { public byte r,g,b,a; }
     public struct Vector2Int { public int x,y; }
+    public struct Rect { public float x,y,width,height; }
     public struct Color : IEquatable<Color>
     {
         public float r, g, b, a;
@@ -140,6 +141,7 @@ namespace UnityEngine
     }
     public class RenderTexture : Object
     {
+        public int TestPass;
         public RenderTextureDescriptor descriptor=XR.XRSettings.eyeTextureDesc;
         public int width=>descriptor.width;
         public int height=>descriptor.height;
@@ -243,19 +245,34 @@ namespace UnityEngine.Rendering
     {
         public bool hasError;
         public int layerCount;
-        public UnityEngine.Color32[] GetData<T>(int layer) => new[] { new UnityEngine.Color32 { a=layer==0 ? (byte)64 : (byte)255 } };
+        public int TestLength;
+        public byte TestAlpha;
+        public UnityEngine.Color32[] GetData<T>(int layer)
+        {
+            var data=new UnityEngine.Color32[TestLength];
+            for(int i=0;i<data.Length;i++) data[i].a=TestAlpha;
+            return data;
+        }
     }
     public static class AsyncGPUReadback
     {
         public static int Requests;
         public static bool Deferred;
         public static Action CompletePending;
+        public static readonly List<Action> DeferredReplies=new List<Action>();
+        public static readonly List<UnityEngine.RenderTexture> Targets=new List<UnityEngine.RenderTexture>();
+        public static readonly List<int> Slices=new List<int>();
 #if DEMEO
         public static void Request(UnityEngine.RenderTexture target,int mip,int x,int width,int y,int height,int z,int depth,UnityEngine.TextureFormat format,Action<AsyncGPUReadbackRequest> callback)
 #else
         public static void Request(UnityEngine.RenderTexture target,int mip,int x,int width,int y,int height,int z,int depth,UnityEngine.TextureFormat format,Il2CppSystem.Action<AsyncGPUReadbackRequest> callback)
 #endif
-        { Requests++; Action complete=()=>callback.Invoke(new AsyncGPUReadbackRequest { layerCount=depth }); if(Deferred) CompletePending=complete; else complete(); }
+        {
+            Requests++; Targets.Add(target); Slices.Add(z);
+            Action complete=()=>callback.Invoke(new AsyncGPUReadbackRequest { layerCount=depth,TestLength=width*height,
+                TestAlpha=target.TestPass==1 || z==1 ? (byte)255 : (byte)64 });
+            if(Deferred) { CompletePending+=complete; DeferredReplies.Add(complete); } else complete();
+        }
     }
 }
 namespace UnityEngine.Rendering.Universal
@@ -316,13 +333,21 @@ namespace UnityEngine.XR
     }
     public class XRDisplaySubsystem
     {
+        public static bool ReverseSlices;
+        public static UnityEngine.Rect? Viewport;
+        public struct XRRenderParameter { public UnityEngine.Rect viewport; public int textureArraySlice; }
         public struct XRRenderPass
         {
             public UnityEngine.RenderTextureDescriptor renderTargetDesc;
             public int GetRenderParameterCount() => renderTargetDesc.volumeDepth==2 ? 2 : 1;
+            public void GetRenderParameter(UnityEngine.Camera camera,int index,out XRRenderParameter parameter)
+                => parameter=new XRRenderParameter { textureArraySlice=ReverseSlices ? 1-index : index,
+                    viewport=Viewport ?? new UnityEngine.Rect { width=renderTargetDesc.width,height=renderTargetDesc.height } };
         }
         public int GetRenderPassCount() => XRSettings.eyeTextureDesc.volumeDepth==2 ? 1 : 2;
         public void GetRenderPass(int index,out XRRenderPass pass) => pass=new XRRenderPass { renderTargetDesc=XRSettings.eyeTextureDesc };
+        public UnityEngine.RenderTexture GetRenderTextureForRenderPass(int index)
+            => new UnityEngine.RenderTexture { descriptor=XRSettings.eyeTextureDesc,TestPass=index,name="XR output "+index };
     }
     public static class XRSettings
     {

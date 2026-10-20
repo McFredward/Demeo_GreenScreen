@@ -60,6 +60,7 @@ namespace GreenScreen
         }
 
         internal static bool Running => _running != null && _running();
+        internal static XRDisplaySubsystem ActiveDisplay => _display?.Invoke();
         internal static object CameraData(Camera camera)
         {
             if (_cameraData == null) throw new InvalidOperationException("URP camera API is unavailable.");

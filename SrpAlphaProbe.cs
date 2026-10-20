@@ -2,34 +2,43 @@
 using System;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.XR;
 
 namespace GreenScreen
 {
-    // Temporary bounded measurements for the reported per-eye divergence.
-    // Only alpha summaries are logged; no images or RGB values are exported.
+    // Bounded alpha summaries of final XR targets; no image or RGB exports.
+    // AsyncGPUReadback owns staging storage. Never read a pooled URP input.
     internal static class SrpAlphaProbe
     {
         private static HarmonyLib.Harmony _patch;
         private static MethodInfo _target;
-        private static Func<object, object> _camera, _texture, _alphaOutput, _scaling, _properties, _viewport;
-        private static RenderTexture _source;
+        private static Func<object, object> _camera, _texture, _alphaOutput;
         private static Camera _owner;
         private static int _frame = -1, _remaining = 24, _epoch;
-        private static bool _pending, _attempted, _alpha;
+        private static bool _attempted, _alpha;
         private static float _next;
+        private static string _sourceInfo;
+        private static Batch _active;
+        private const int Width = 32;
+
+        private sealed class Batch
+        {
+            internal readonly int Epoch = _epoch;
+            internal readonly string[] Results = new string[2];
+            internal readonly RenderTexture[] Targets = new RenderTexture[2];
+            internal readonly int[] Slices = new int[2], X = new int[2], Y = new int[2], Heights = new int[2];
 #if DEMEO
-        private static readonly Action<AsyncGPUReadbackRequest> Completed = Complete;
+            internal readonly Action<AsyncGPUReadbackRequest>[] Callbacks = new Action<AsyncGPUReadbackRequest>[2];
 #else
-        private static readonly Il2CppSystem.Action<AsyncGPUReadbackRequest> Completed =
-            Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action<AsyncGPUReadbackRequest>>(
-                (Action<AsyncGPUReadbackRequest>)Complete);
+            internal readonly Il2CppSystem.Action<AsyncGPUReadbackRequest>[] Callbacks = new Il2CppSystem.Action<AsyncGPUReadbackRequest>[2];
 #endif
-        private static string _description;
-        private static int _requestEpoch;
-        private static int _width, _height;
+            internal string Description;
+            internal int Pending;
+        }
 
         internal static void Prepare()
         {
@@ -49,30 +58,24 @@ namespace GreenScreen
                 if (parameters == null || parameters.Length != 5) throw new MissingMethodException("URP FinalBlitPass.ExecutePass");
                 _camera = SrpOpaqueCoverage.Reader(parameters[4].ParameterType, "camera", out _);
                 _texture = SrpOpaqueCoverage.Reader(parameters[2].ParameterType, "rt", out _);
-                _scaling = SrpOpaqueCoverage.Reader(parameters[2].ParameterType, "useScaling", out _);
-                _properties = SrpOpaqueCoverage.Reader(parameters[2].ParameterType, "rtHandleProperties", out Type propertyType);
-                _viewport = SrpOpaqueCoverage.Reader(propertyType, "currentViewportSize", out _);
                 _alphaOutput = SrpOpaqueCoverage.Reader(parameters[1].ParameterType, "enableAlphaOutput", out _);
                 _patch = new HarmonyLib.Harmony("McFredward.DemeoGreenScreen.AlphaProbe");
                 _patch.Patch(_target, postfix: new HarmonyMethod(typeof(SrpAlphaProbe).GetMethod(nameof(AfterBlit), BindingFlags.Static | BindingFlags.NonPublic)));
             }
-            catch (Exception error) { Utils.LogInfo("URP alpha measurement unavailable: " + error.Message); }
+            catch (Exception error) { Utils.LogInfo("XR output alpha measurement unavailable: " + error.Message); }
         }
 
         private static void AfterBlit(object __1, object __2, object __4)
         {
-            if (_remaining == 0 || _pending || Time.unscaledTime < _next) return;
+            if (_remaining == 0 || _active != null || Time.unscaledTime < _next) return;
             try
             {
                 Camera camera = _camera(__4) as Camera;
                 if (!NativePassthrough.OwnsSrpSource(camera)) return;
-                _source = _texture(__2) as RenderTexture;
-                if (_source == null) return;
-                _width = _source.width; _height = _source.height;
-                if (_scaling(__2) is bool scaling && scaling && _viewport(_properties(__2)) is Vector2Int viewport)
-                { _width = Math.Min(_width, viewport.x); _height = Math.Min(_height, viewport.y); }
-                _owner = camera;
-                _frame = Time.frameCount;
+                var source = _texture(__2) as RenderTexture;
+                _sourceInfo = source == null ? "; blit-input=external" : "; blit-input=" + source.width + "x" + source.height
+                    + "/" + source.graphicsFormat + "; input-MSAA=" + source.antiAliasing;
+                _owner = camera; _frame = Time.frameCount;
                 _alpha = _alphaOutput(__1) is bool enabled && enabled;
             }
             catch (Exception error) { ReportFailure(error); }
@@ -80,60 +83,131 @@ namespace GreenScreen
 
         internal static void AfterCamera(Camera camera)
         {
-            if (_remaining == 0 || _pending || camera != _owner || _frame != Time.frameCount || _source == null) return;
-            if (!NativePassthrough.OwnsSrpSource(camera)) { _source = null; return; }
+            if (_remaining == 0 || _active != null || camera != _owner || _frame != Time.frameCount) return;
+            if (!NativePassthrough.OwnsSrpSource(camera)) return;
             try
             {
                 if (!SystemInfo.supportsAsyncGPUReadback) throw new NotSupportedException("Async GPU readback is unavailable.");
-                var source = _source; _source = null;
-                int width = Math.Min(32, _width), height = Math.Min(32, _height);
-                if (width <= 0 || height <= 0) return;
-                int slices = Math.Min(2, source.volumeDepth);
-                _description = "camera=" + camera.name + "; frame=" + _frame + "; source=" + source.width + "x" + source.height
-                    + "/" + source.graphicsFormat + "; viewport=" + _width + "x" + _height
-                    + "; MSAA=" + source.antiAliasing + "; slices=" + slices + "; finalAlpha=" + _alpha;
-                _requestEpoch = _epoch; _pending = true; _remaining--; _next = Time.unscaledTime + 2f;
-                AsyncGPUReadback.Request(source, 0, (_width - width) / 2, width,
-                    (_height - height) / 2, height, 0, slices, TextureFormat.RGBA32, Completed);
+                var display = SrpOutput.ActiveDisplay;
+                if (display == null) return;
+                int passes = display.GetRenderPassCount(), views = 0;
+                if (passes < 1 || passes > 2) throw new NotSupportedException("Unknown XR pass layout.");
+                var batch = new Batch();
+                var description = new StringBuilder("camera=").Append(camera.name).Append("; frame=").Append(_frame)
+                    .Append(_sourceInfo).Append("; finalAlpha=").Append(_alpha);
+                for (int passIndex = 0; passIndex < passes; passIndex++)
+                {
+                    display.GetRenderPass(passIndex, out XRDisplaySubsystem.XRRenderPass pass);
+                    var descriptor = pass.renderTargetDesc;
+                    // The XR provider owns this persistent target. Do not use
+                    // the pooled final-blit input or mutate/resolve either one.
+                    var target = display.GetRenderTextureForRenderPass(passIndex);
+                    if (target == null || !target.IsCreated() || !NativePassthrough.ValidTarget(descriptor, true)
+                        || target.width != descriptor.width || target.height != descriptor.height
+                        || target.volumeDepth != descriptor.volumeDepth || target.graphicsFormat != descriptor.graphicsFormat)
+                        throw new NotSupportedException("Current XR target is unavailable or differs from pass " + passIndex
+                            + " (" + descriptor.width + "x" + descriptor.height + "/" + descriptor.graphicsFormat
+                            + "/MSAA" + descriptor.msaaSamples + "/" + descriptor.dimension + ").");
+                    int parameters = pass.GetRenderParameterCount();
+                    if (parameters < 1 || parameters > 2) throw new NotSupportedException("Unknown XR view layout.");
+                    for (int parameterIndex = 0; parameterIndex < parameters; parameterIndex++)
+                    {
+                        if (views == 2) throw new NotSupportedException("More than two XR views.");
+                        pass.GetRenderParameter(camera, parameterIndex, out XRDisplaySubsystem.XRRenderParameter parameter);
+                        Rect viewport = parameter.viewport;
+                        int left = (int)Math.Ceiling(viewport.x), bottom = (int)Math.Ceiling(viewport.y);
+                        int right = (int)Math.Floor(viewport.x + viewport.width), top = (int)Math.Floor(viewport.y + viewport.height);
+                        int slice = parameter.textureArraySlice;
+                        if (left < 0 || bottom < 0 || right > descriptor.width || top > descriptor.height
+                            || right - left < Width || top - bottom < Width || top - bottom > 16384
+                            || slice < 0 || slice >= descriptor.volumeDepth)
+                            throw new NotSupportedException("XR viewport or array slice is outside its target.");
+                        batch.Targets[views] = target; batch.Slices[views] = slice;
+                        batch.X[views] = left + (right - left - Width) / 2; batch.Y[views] = bottom;
+                        batch.Heights[views] = top - bottom;
+                        description.Append("; view ").Append(views).Append("=pass ").Append(passIndex).Append("/slice ")
+                            .Append(slice).Append('/').Append(descriptor.width).Append('x').Append(descriptor.height)
+                            .Append('/').Append(descriptor.graphicsFormat).Append("/MSAA").Append(target.antiAliasing)
+                            .Append("/crop=").Append(batch.X[views]).Append(',').Append(bottom).Append(',').Append(Width).Append(',').Append(top - bottom);
+                        views++;
+                    }
+                }
+                if (views != 2) throw new NotSupportedException("Two XR views are required.");
+                batch.Description = description.ToString(); batch.Pending = 2;
+                _active = batch; _frame = -1; _remaining--; _next = Time.unscaledTime + 2f;
+                for (int view = 0; view < 2; view++)
+                {
+                    int capturedView = view;
+                    try
+                    {
+                        Action<AsyncGPUReadbackRequest> completed = request => Complete(batch, capturedView, request);
+#if DEMEO
+                        batch.Callbacks[view] = completed;
+#else
+                        batch.Callbacks[view] = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action<AsyncGPUReadbackRequest>>(completed);
+#endif
+                        AsyncGPUReadback.Request(batch.Targets[view], 0, batch.X[view], Width, batch.Y[view], batch.Heights[view],
+                            batch.Slices[view], 1, TextureFormat.RGBA32, batch.Callbacks[view]);
+                    }
+                    catch (Exception error) { batch.Results[view] = "; view " + view + " request failed: " + error.Message; Finish(batch, view); }
+                }
             }
-            catch (Exception error) { _pending = false; ReportFailure(error); }
+            catch (Exception error) { ReportFailure(error); }
         }
 
-        private static void Complete(AsyncGPUReadbackRequest request)
+        private static void Complete(Batch batch, int view, AsyncGPUReadbackRequest request)
         {
-            _pending = false;
-            if (_requestEpoch != _epoch) return;
-            if (request.hasError) { Utils.LogInfo("URP alpha measurement failed: " + _description); return; }
             try
             {
-                var text = new StringBuilder("URP alpha measurement: ").Append(_description);
-                for (int eye = 0; eye < request.layerCount; eye++)
+                if (batch.Epoch != _epoch) return;
+                if (request.hasError) { batch.Results[view] = "; view " + view + " GPU readback failed"; return; }
+                var data = request.GetData<Color32>(0);
+                if (request.layerCount != 1 || data.Length != Width * batch.Heights[view])
+                    throw new InvalidOperationException("Unexpected XR snapshot length.");
+                var text = new StringBuilder();
+                // Three 32x32 samples from a bounded vertical strip. Only alpha
+                // is inspected; no RGB values or image files are produced.
+                for (int region = 0; region < 3; region++)
                 {
-                    var data = request.GetData<Color32>(eye);
+                    int row = Math.Max(0, Math.Min(batch.Heights[view] - Width, batch.Heights[view] * (region + 1) / 4 - Width / 2));
                     int min = 255, max = 0, zero = 0, opaque = 0; long sum = 0;
-                    for (int i = 0; i < data.Length; i++)
+                    for (int i = row * Width; i < (row + Width) * Width; i++)
                     {
                         int alpha = data[i].a; min = Math.Min(min, alpha); max = Math.Max(max, alpha); sum += alpha;
                         if (alpha == 0) zero++; if (alpha == 255) opaque++;
                     }
-                    text.Append("; slice ").Append(eye).Append(" alpha min/mean/max=").Append(min).Append('/')
-                        .Append(data.Length == 0 ? 0 : sum / data.Length).Append('/').Append(max)
-                        .Append(", zero/partial/opaque=").Append(zero).Append('/').Append(data.Length - zero - opaque).Append('/').Append(opaque);
+                    text.Append("; view ").Append(view).Append(" region ").Append(region).Append(" alpha min/mean/max=").Append(min).Append('/')
+                        .Append(sum / (Width * Width)).Append('/').Append(max)
+                        .Append(", zero/partial/opaque=").Append(zero).Append('/').Append(Width * Width - zero - opaque).Append('/').Append(opaque);
                 }
-                Utils.LogInfo(text.ToString());
+                batch.Results[view] = text.ToString();
             }
-            catch (Exception error) { ReportFailure(error); }
+            catch (Exception error) { batch.Results[view] = "; view " + view + " measurement failed: " + error.Message; }
+            finally { Finish(batch, view); }
+        }
+
+        private static void Finish(Batch batch, int view)
+        {
+            // Break managed/native delegate cycles after this callback. Unity
+            // retains its executing native delegate until the callback returns.
+            batch.Callbacks[view] = null; batch.Targets[view] = null;
+            if (Interlocked.Decrement(ref batch.Pending) != 0) return;
+            if (ReferenceEquals(_active, batch)) _active = null;
+            if (batch.Epoch == _epoch)
+                Utils.LogInfo("XR output alpha measurement: " + batch.Description + batch.Results[0] + batch.Results[1]);
         }
 
         private static void ReportFailure(Exception error)
         {
             _remaining = 0;
-            Utils.LogInfo("URP alpha measurement stopped: " + error.GetType().Name + ": " + error.Message);
+            Utils.LogInfo("XR output alpha measurement stopped: " + error.GetType().Name + ": " + error.Message);
         }
 
         internal static void Shutdown()
         {
-            _epoch++; _remaining = 24; _source = null; _owner = null; _frame = -1; _next = 0;
+            _epoch++; _remaining = 24; _owner = null; _frame = -1; _next = 0;
+            // Keep in-flight native callback delegates rooted until both replies
+            // arrive, including after unload/reload. Old replies never log.
             _patch?.Unpatch(_target, typeof(SrpAlphaProbe).GetMethod(nameof(AfterBlit), BindingFlags.Static | BindingFlags.NonPublic));
             _patch = null; _attempted = false;
         }

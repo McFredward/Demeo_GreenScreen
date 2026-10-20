@@ -226,6 +226,44 @@ the Unity final-blit input; it does not measure submitted OpenVR textures,
 native conversion or Frame output. These values are needed to localize the
 remaining defect before changing that chain.
 
+The maintainer's 1.4.3 run confirms that the green startup flash is gone,
+while the intro/right-eye and left-eye transparency defects remain. The 24
+input measurements have 15 fully opaque centre pairs, three fully zero pairs,
+and six different/mixed pairs, with an RGBA8 sRGB, 8x-MSAA intermediate.
+These small samples are not identified opaque objects: stereo parallax and
+camera movement can legitimately change them. They do not establish an
+always-translucent left input, a correct final blit, or a correct native mask.
+
+The same run's Frame logs contain 77 packet/frame retries in the latest
+19:44 session and an unrecoverable FEC error at 19:45:35.703, followed by late
+metadata, empty decoder submissions and encoder reset. Those events can
+explain brief ghosting/jumps, but there is no timestamped observation linking
+the reported table artifact to that event. They do not explain the persistent
+eye defect. The Demeo plugin log contains no plugin exception; the BepInEx
+Unity-log-writer startup failure limits visibility into Unity-native messages.
+Frame counters show no rejected mask uploads, quarantined pool entries,
+guarded-submit refusals or device loss. They are cumulative, not eye proof.
+
+Starting with 1.4.4, the probe reads the XR provider's actual targets from
+`XRDisplaySubsystem.GetRenderTextureForRenderPass` after camera submission.
+The final-blit input is used only for descriptor logging. The probe follows
+each pass's actual `GetRenderParameter` slice and viewport, and requests a
+32-pixel-wide vertical strip per view. It reports alpha summaries for three
+32-by-32 regions at 25/50/75 percent of that viewport's height. A pair has one
+Unity frame number; independently completed callbacks retain their own view
+identity, and no next pair starts before both replies complete. There are at
+most 24 pairs, at least two seconds apart. Readback storage is bounded to
+2 MiB per view (normally about 0.5 MiB at 4040 pixels), with no file or RGB
+exports. No pooled URP input is asynchronously read, no partial MSAA resource
+copy is attempted, and no source mask, render setting, XR layout or Frame
+configuration is changed. Provider/descriptor mismatches disable only the
+probe. Late callbacks after unload cannot emit new-session measurements.
+
+This remains a diagnostic checkpoint, not an eye fix. Final XR alpha still
+is not evidence of the SteamVR conversion, encoded mask or Frame output.
+The actual provider readback needs the next headset run; compilation and
+lifecycle tests are not that runtime result.
+
 A separate Windows Unity 2021.3 player loaded the exact shipped D3D11 bundle
 under Wine 9/wined3d and passed the single-sample stereo/depth/RGB comparisons.
 Its 4x MSAA readback fixture returned zero RGB and alpha even before the repair,
