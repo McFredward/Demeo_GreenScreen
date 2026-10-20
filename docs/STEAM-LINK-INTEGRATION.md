@@ -278,6 +278,41 @@ raw and converted viewport/slice/extent in failures, and permits four bounded
 preflight failures with a two-second delay instead of permanently stopping
 on the first transient invalid viewport. Native source admission is unchanged.
 
+The maintainer's 1.4.5 run on 2026-10-20 still has the intro/right-eye and
+left-eye transparency defects. Unlike 1.4.4, it completes all 24 final-XR
+measurement pairs: ten on `Main Camera`, fourteen on
+`MainCamera_VR_Lobby_HighQuality`. Both views use pass 0, separate slices 0/1,
+and 4040-by-4040 RGBA8 sRGB, single-sample provider targets; the logged
+final-blit input is still 8x MSAA. Both middle samples are entirely A255 in
+18 of 24 pairs. All six samples are A255 at frames 309, 489, 1212 and 2000,
+and all six are A0 at frames 1574, 1754 and 1934. This does not establish
+uniformly translucent left-eye alpha at the measured Unity boundary. Samples
+are not labelled game objects, however, and cannot certify the complete image,
+unmeasured frames, RGB or any later submission/conversion/rendering step.
+
+The corresponding PC session is 20:31:17--20:33:10 CEST (Demeo PID 46816).
+The Frame logs were collected read-only at 18:34:19 UTC into the ignored
+`frame-145` debug directory. They show no rejected mask uploads, quarantined
+pool entries, guarded-submit refusals or device loss. These cumulative counters
+do not prove correct per-eye mask content or mapping. The retained `vrlink`
+log has 59 substantive packet/frame retries, decoder recovery at startup and
+late metadata for frames 4763 and 9939. These are possible causes of brief
+flicker/ghosting, without a timestamped observation proving that connection;
+they do not explain the persistent one-eye defect by themselves.
+
+Taking over camera properties is already part of this adapter. Replacing
+Demeo's complete VR rendering would additionally require ownership of its
+camera transitions, stereo views, fades, UI and native presentation. The
+GloomhavenVR scene implementation controls its own rig and currently requires
+built-in Forward, Gamma SDR and MultiPass; Demeo uses Unity 6 URP with a native
+two-view array. Cloning a Camera or disabling URP single-pass rendering alone
+does not reproduce that presentation contract. In particular, the previously
+rejected split-pass workaround cannot be reintroduced over a one-pass provider.
+The next unmeasured boundary is the actual per-eye OpenVR/SteamVR input before
+native coverage extraction. Establish its alpha and the corresponding converted
+mask before attributing this run to camera ownership or shipping another render
+workaround. No new eye fix is established by these logs.
+
 Additional native API validation is available with a licensed Unity 2021.3
 Editor and a Vulkan graphics device on Linux:
 
