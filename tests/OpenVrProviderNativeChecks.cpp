@@ -69,6 +69,9 @@ UnitySubsystemErrorCode UNITY_INTERFACE_API destroy(UnitySubsystemHandle h, Unit
     return kUnitySubsystemErrorCodeSuccess;
 }
 struct Texture { void* handle; int type, colourSpace; };
+struct Bounds { float uMin, vMin, uMax, vMax; };
+Bounds* providerBounds = nullptr;
+std::array<bool, 2> capturedWhole{};
 std::array<ID3D11Texture2D*, 2> submitted{};
 std::array<unsigned, 2> slices{};
 unsigned indexedCalls = 0;
@@ -78,16 +81,19 @@ int capturedColourSpace = -1;
 std::array<unsigned, 2> capturedEyeFlags{};
 HANDLE submitEntered = nullptr, submitContinue = nullptr;
 bool blockSubmit = false;
-int capture(int eye, const Texture* texture, const void*, unsigned flags) {
+unsigned blockedWidth = 160;
+int capture(int eye, const Texture* texture, const void* bounds, unsigned flags) {
     check(eye == 0 || eye == 1, "native eye selector");
     capturedFlags = flags; capturedEyeFlags[eye] = flags;
     capturedType = texture->type; capturedColourSpace = texture->colourSpace;
+    if (!providerBounds && bounds) providerBounds = const_cast<Bounds*>(static_cast<const Bounds*>(bounds));
+    capturedWhole[eye] = bounds == nullptr;
     submitted[eye] = static_cast<ID3D11Texture2D*>(texture->handle);
     if (blockSubmit && eye == 0) {
         SetEvent(submitEntered);
         WaitForSingleObject(submitContinue, 30000);
         D3D11_TEXTURE2D_DESC shape{}; submitted[eye]->GetDesc(&shape);
-        check(shape.ArraySize == 1 && shape.Width == 160, "in-flight native submit retains its 2D resource after opt-out");
+        check(shape.ArraySize == 1 && shape.Width == blockedWidth, "in-flight native submit retains its 2D resource during replacement/opt-out");
     }
     return 0;
 }
@@ -105,22 +111,23 @@ void fill(Image& image, unsigned eye, unsigned frame, unsigned slice = 0) {
     D3D11_TEXTURE2D_DESC d{}; image.texture->GetDesc(&d);
     std::vector<std::array<unsigned char, 4>> pixels(d.Width * d.Height);
     for (unsigned y = 0; y < d.Height; ++y) for (unsigned x = 0; x < d.Width; ++x)
-        pixels[y*d.Width+x] = {static_cast<unsigned char>(eye ? 17 : 231), static_cast<unsigned char>(frame), 83,
-            static_cast<unsigned char>((x + y + eye * 73 + frame) % 256)};
+        pixels[y*d.Width+x] = {static_cast<unsigned char>(eye ? 17 : 231), static_cast<unsigned char>(frame + x*3), static_cast<unsigned char>(83 + y*5),
+            static_cast<unsigned char>((x*3 + y*5 + eye * 73 + frame) % 256)};
     context.p->UpdateSubresource(image.texture, slice, nullptr, pixels.data(), d.Width * 4, 0);
 }
-void verify(ID3D11Texture2D* source, unsigned eye, unsigned frame, unsigned slice = 0, unsigned array = 1) {
+void verify(ID3D11Texture2D* source, unsigned eye, unsigned frame, unsigned slice = 0, unsigned array = 1,
+            unsigned left = 0, unsigned top = 0, unsigned width = 160, unsigned height = 80) {
     D3D11_TEXTURE2D_DESC d{}; source->GetDesc(&d);
     check(d.ArraySize == array && d.MipLevels == 1 && d.SampleDesc.Count == 1, "submitted native eye retains its original resolved image shape");
-    check(d.Width == 160 && d.Height == 80, "native resolution scale retained");
+    check(d.Width == width && d.Height == height, "the exact submitted pixel extent is retained without scaling");
     d.Usage = D3D11_USAGE_STAGING; d.BindFlags = d.MiscFlags = 0; d.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
     Com<ID3D11Texture2D> staging; check(SUCCEEDED(device.p->CreateTexture2D(&d, nullptr, staging.out())), "actual eye readback storage");
     context.p->CopyResource(staging.p, source);
     D3D11_MAPPED_SUBRESOURCE data{}; check(SUCCEEDED(context.p->Map(staging.p, slice, D3D11_MAP_READ, 0, &data)), "actual submitted eye readback");
     for (unsigned y = 0; y < d.Height; ++y) for (unsigned x = 0; x < d.Width; ++x) {
         const auto* pixel = static_cast<const unsigned char*>(data.pData) + y * data.RowPitch + x * 4;
-        check(pixel[0] == (eye ? 17 : 231) && pixel[1] == frame && pixel[2] == 83, "native submit preserves this eye's RGB");
-        check(pixel[3] == (x + y + eye * 73 + frame) % 256, "native submit preserves every alpha byte in the correct eye/frame");
+        check(pixel[0] == (eye ? 17 : 231) && pixel[1] == (frame + (x+left)*3)%256 && pixel[2] == (83 + (y+top)*5)%256, "native submit preserves this eye's exact per-pixel RGB");
+        check(pixel[3] == ((x+left)*3 + (y+top)*5 + eye * 73 + frame) % 256, "native submit preserves every alpha byte in the correct eye/frame");
     }
     context.p->Unmap(staging.p, slice);
 }
@@ -232,6 +239,57 @@ extern "C" __declspec(dllexport) int RunProviderChecks(const wchar_t* path, void
             check(WaitForSingleObject(graphics, 30000) == WAIT_OBJECT_0, "managed reverse callbacks complete on the native graphics thread");
             CloseHandle(graphics);
             if (work.error) std::rethrow_exception(work.error);
+            check(providerBounds != nullptr, "actual SDK supplied its live viewport bounds");
+            const Bounds savedBounds = *providerBounds;
+            // The fixture owns this provider object. Change its real bounds,
+            // exercise its actual Submit, then prepare GPU storage cold through
+            // the production managed callback. No private executable is patched.
+            for (const auto crop : {Bounds{.1f,.1f,.7f,.7f}, Bounds{0,0,.5f,.5f}}) {
+                *providerBounds = crop;
+                const unsigned left = crop.uMin == 0 ? 0 : 16, top = crop.vMin == 0 ? 0 : 8;
+                const unsigned width = crop.uMin == 0 ? 80 : 96, height = crop.vMin == 0 ? 40 : 48;
+                submitted = {};
+                check(submit(provider, 0, 0) && submit(provider, 1, 0), "new viewport has a valid full-image 2D handoff while cold preparation is pending");
+                check(!capturedWhole[0] && !capturedWhole[1], "pending viewport preserves the original native bounds for both eyes");
+                verify(submitted[0],0,2);verify(submitted[1],1,2);
+                Sleep(2100); // Test-only: honor the production cold allocation cadence.
+                enable();
+                for (int stage=0;stage<2;++stage) {
+                    check(submit(provider,0,stage)&&submit(provider,1,stage), "actual SDK submits a prepared cropped pair");
+                    check(capturedWhole[0]&&capturedWhole[1], "prepared cropped eyes use documented whole-texture bounds");
+                    for (unsigned eye=0;eye<2;++eye) verify(submitted[eye],eye,2,0,1,left,top,width,height);
+                }
+            }
+            *providerBounds = Bounds{.1234567f,0,1,1};
+            check(submit(provider,0,0)&&submit(provider,1,0)&&!capturedWhole[0]&&!capturedWhole[1],
+                "non-integer native viewport retains full 2D copies and original bounds");
+            verify(submitted[0],0,2);verify(submitted[1],1,2);
+            *providerBounds = Bounds{0,0,1,1};
+            check(submit(provider,0,0)&&submit(provider,1,0)&&capturedWhole[0]&&capturedWhole[1],
+                "whole-viewport recovery immediately reuses the prepared full 2D pair");
+            verify(submitted[0],0,2);verify(submitted[1],1,2);
+            *providerBounds = Bounds{.1f,.1f,.7f,.7f};
+            check(submit(provider,0,0)&&submit(provider,1,0), "request the crop used by the held native submit");
+            Sleep(2100);enable();enable(); // The second cold tick retires the old pool.
+            *providerBounds = Bounds{0,0,.5f,.5f};
+            check(submit(provider,0,0)&&submit(provider,1,0), "queue a successor crop without withdrawing the valid full-image source");
+            *providerBounds = Bounds{.1f,.1f,.7f,.7f};
+            Sleep(2100);
+            submitEntered = CreateEventW(nullptr,TRUE,FALSE,nullptr);submitContinue = CreateEventW(nullptr,TRUE,FALSE,nullptr);
+            check(submitEntered&&submitContinue,"owned crop-lifetime coordination events");
+            blockedWidth=96;blockSubmit=true;
+            GraphicsWork heldCrop{[&]{check(submit(provider,0,0),"held native submit completes after crop replacement");},{}};
+            HANDLE cropThread=CreateThread(nullptr,0,graphicsThread,&heldCrop,0,nullptr);
+            check(cropThread&&WaitForSingleObject(submitEntered,30000)==WAIT_OBJECT_0,"native submit holds the predecessor crop across cold publication");
+            enable(); // Publish the requested 80x40 successor while 96x48 is borrowed.
+            SetEvent(submitContinue);
+            check(WaitForSingleObject(cropThread,30000)==WAIT_OBJECT_0,"replacing a crop never waits for graphics completion on the cold thread");
+            CloseHandle(cropThread);CloseHandle(submitEntered);CloseHandle(submitContinue);
+            submitEntered=submitContinue=nullptr;blockSubmit=false;blockedWidth=160;
+            if(heldCrop.error)std::rethrow_exception(heldCrop.error);
+            verify(submitted[0],0,2,0,1,16,8,96,48);
+            enable(); // No reader remains; retiring the predecessor is now safe.
+            *providerBounds = savedBounds;
             check(indexedCalls == 0 && mode() == 1 && provider[SinglePassOffset] == 1 && provider[CreatedOffset] == 1,
                 "all native submits use 2D resources while SDK mode and live arrays remain unchanged");
             for (auto& image : images) for (unsigned eye = 0; eye < 2; ++eye) verify(image.second.texture, eye, 2, eye, 2);

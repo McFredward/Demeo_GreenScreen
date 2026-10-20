@@ -28,7 +28,9 @@ internal static class NativeSubmitChecks
             try
             {
                 if (!OpenVrSubmission.Ensure(out string reason)) throw new Exception(reason);
-                SteamLinkCoverageBridge.Grant(); OpenVrSubmission.Activate(SteamLinkCoverageBridge.Current);
+                if (SteamLinkCoverageBridge.Current == null || !SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba)
+                    SteamLinkCoverageBridge.Grant();
+                OpenVrSubmission.Activate(SteamLinkCoverageBridge.Current);
             }
             catch (Exception error) { failure = error; }
         };

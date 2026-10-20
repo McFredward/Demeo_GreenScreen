@@ -34,6 +34,14 @@ namespace GreenScreen
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate void Unmap(IntPtr self, IntPtr resource, uint sub);
 
         private readonly IntPtr[] _sources = new IntPtr[2], _targets = new IntPtr[4], _staging = new IntPtr[2], _queries = new IntPtr[2];
+        private sealed class CropPool
+        {
+            internal readonly long Key;
+            internal readonly IntPtr[] Targets;
+            internal CropPool(long key, IntPtr[] targets) { Key = key; Targets = targets; }
+            internal void Dispose() { for (int i = 0; i < Targets.Length; i++) Release(ref Targets[i]); }
+        }
+        private CropPool _cropped, _retiredCrop;
         private IntPtr _device, _context;
         private CopyRegion _copy;
         private EndQuery _end;
@@ -43,6 +51,7 @@ namespace GreenScreen
         private Shape _shape;
         private readonly bool[] _pending = new bool[2];
         private readonly long[] _next = new long[2], _samples = new long[2], _summaries = new long[6];
+        private readonly long[] _pendingCrop = new long[2], _sampleCrop = new long[2];
         private int _readbackError;
         private bool _readback;
 
@@ -123,16 +132,62 @@ namespace GreenScreen
 
         internal bool Matches(IntPtr first, IntPtr second) => first == _sources[0] && second == _sources[1];
         internal bool Contains(IntPtr source) => source == _sources[0] || source == _sources[1];
-        internal IntPtr Copy(IntPtr source, int eye)
+        internal bool Viewport(IntPtr bounds, out long crop)
+        {
+            crop = 0;
+            if (bounds == IntPtr.Zero) return true;
+            if (!OpenVrNativeSettings.Region(bounds, 16, IntPtr.Zero, false)) return false;
+            return OpenVrViewport.TryPack(Marshal.PtrToStructure<OpenVrViewport.Bounds>(bounds), _shape.Width, _shape.Height, out crop);
+        }
+        internal bool HasCrop(long crop)
+        { var pool = Volatile.Read(ref _cropped); return crop == 0 || pool != null && pool.Key == crop; }
+        internal bool CropRetirementPending => _retiredCrop != null;
+        internal void CollectCrop()
+        { var old = _retiredCrop; _retiredCrop = null; old?.Dispose(); }
+
+        // Cold device allocation only. Publish an immutable pool and retain its
+        // predecessor until the outer adapter has no in-flight borrowers. The
+        // existing full 2D handoff and live source grant remain available.
+        internal void PrepareCrop(long crop)
+        {
+            if (HasCrop(crop)) return;
+            uint x = OpenVrViewport.X(crop), y = OpenVrViewport.Y(crop);
+            uint w = OpenVrViewport.Width(crop, _shape.Width), h = OpenVrViewport.Height(crop, _shape.Height);
+            if (w < 32 || h < 32 || x + w > _shape.Width || y + h > _shape.Height)
+                throw new NotSupportedException("The requested OpenVR viewport no longer belongs to this source.");
+            Shape target = _shape; target.Width = w; target.Height = h; target.Format = 28;
+            target.Slices = 1; target.Usage = 0; target.Bind = 0x28; target.Cpu = target.Misc = 0;
+            var create = Method<CreateTexture>(_device, 5); var next = new IntPtr[4];
+            try
+            {
+                for (int i = 0; i < next.Length; i++)
+                {
+                    int hr = create(_device, ref target, IntPtr.Zero, out next[i]);
+                    if (hr < 0 || next[i] == IntPtr.Zero) Marshal.ThrowExceptionForHR(hr < 0 ? hr : unchecked((int)0x80004005));
+                }
+            }
+            catch { for (int i = 0; i < next.Length; i++) Release(ref next[i]); throw; }
+            if (_retiredCrop != null)
+            { for (int i = 0; i < next.Length; i++) Release(ref next[i]); return; }
+            _retiredCrop = Interlocked.Exchange(ref _cropped, new CropPool(crop, next));
+        }
+
+        internal unsafe IntPtr Copy(IntPtr source, int eye, long crop, ref bool canonical, bool validViewport)
         {
             int stage = source == _sources[0] ? 0 : 1;
-            IntPtr target = _targets[stage * 2 + eye];
-            _copy(_context, target, 0, 0, 0, 0, source, (uint)eye, IntPtr.Zero);
-            if (_readback) Sample(eye, target);
+            var pool = Volatile.Read(ref _cropped);
+            canonical &= crop == 0 || pool != null && pool.Key == crop;
+            IntPtr target = canonical && crop != 0 ? pool.Targets[stage * 2 + eye] : _targets[stage * 2 + eye];
+            uint x = OpenVrViewport.X(crop), y = OpenVrViewport.Y(crop);
+            uint w = OpenVrViewport.Width(crop, _shape.Width), h = OpenVrViewport.Height(crop, _shape.Height);
+            Box box = new Box { Left = x, Top = y, Right = x + w, Bottom = y + h, Back = 1 };
+            _copy(_context, target, 0, 0, 0, 0, source, (uint)eye,
+                canonical && crop != 0 ? (IntPtr)(&box) : IntPtr.Zero);
+            if (_readback && validViewport) Sample(eye, target, crop, canonical);
             return target;
         }
 
-        private unsafe void Sample(int eye, IntPtr target)
+        private unsafe void Sample(int eye, IntPtr target, long crop, bool canonical)
         {
             if (_pending[eye])
             {
@@ -161,6 +216,7 @@ namespace GreenScreen
                                 long summary = (long)min | (long)(sum / 1024) << 8 | (long)max << 16 | (long)zero << 24 | (long)partial << 40;
                                 Interlocked.Exchange(ref _summaries[eye * 3 + region], summary);
                             }
+                            Interlocked.Exchange(ref _sampleCrop[eye], _pendingCrop[eye]);
                             Interlocked.Increment(ref _samples[eye]);
                         }
                         finally { _unmap(_context, _staging[eye], 0); }
@@ -171,14 +227,16 @@ namespace GreenScreen
             }
             long now = Stopwatch.GetTimestamp();
             if (now < _next[eye]) return;
+            uint width = OpenVrViewport.Width(crop, _shape.Width), height = OpenVrViewport.Height(crop, _shape.Height);
+            uint left = canonical ? 0 : OpenVrViewport.X(crop), top = canonical ? 0 : OpenVrViewport.Y(crop);
             for (int region = 0; region < 3; region++)
             {
-                uint x = (_shape.Width - 32) / 2;
-                uint y = Math.Min(_shape.Height - 32, Math.Max(16, _shape.Height * (uint)(region + 1) / 4) - 16);
+                uint x = left + (width - 32) / 2;
+                uint y = top + Math.Min(height - 32, Math.Max(16, height * (uint)(region + 1) / 4) - 16);
                 Box box = new Box { Left = x, Top = y, Right = x + 32, Bottom = y + 32, Back = 1 };
                 _copy(_context, _staging[eye], 0, 0, (uint)region * 32, 0, target, 0, (IntPtr)(&box));
             }
-            _end(_context, _queries[eye]); _pending[eye] = true; _next[eye] = now + Stopwatch.Frequency * 2;
+            _end(_context, _queries[eye]); _pendingCrop[eye] = crop; _pending[eye] = true; _next[eye] = now + Stopwatch.Frequency * 2;
         }
 
         internal string Statistics
@@ -193,6 +251,12 @@ namespace GreenScreen
                     text += "; eye " + eye + " region " + region + " alpha=" + (s & 255) + "/" + (s >> 8 & 255) + "/" + (s >> 16 & 255)
                         + ", zero/partial=" + (s >> 24 & 65535) + "/" + (s >> 40 & 65535);
                 }
+                for (int eye = 0; eye < 2; eye++)
+                {
+                    long crop = Interlocked.Read(ref _sampleCrop[eye]);
+                    text += "; eye " + eye + " sampled source viewport=" + OpenVrViewport.X(crop) + "," + OpenVrViewport.Y(crop)
+                        + "," + OpenVrViewport.Width(crop, _shape.Width) + "," + OpenVrViewport.Height(crop, _shape.Height);
+                }
                 return text;
             }
         }
@@ -200,6 +264,7 @@ namespace GreenScreen
         public void Dispose()
         {
             for (int i = 0; i < _targets.Length; i++) Release(ref _targets[i]);
+            _cropped?.Dispose(); CollectCrop();
             for (int i = 0; i < 2; i++) { Release(ref _staging[i]); Release(ref _queries[i]); Release(ref _sources[i]); }
             Release(ref _context); Release(ref _device);
         }

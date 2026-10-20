@@ -220,6 +220,67 @@ PC diagnostic would provide the missing working-route comparison without
 another mod/driver update. Original logs and the bounded audit are retained
 privately under `.planning/debug/frame-pc0212/`.
 
+The requested comparison is Gloomhaven PID 9084, first connected at 23:15:55
+local PC time on 2026-10-20. It uses **OpenXR** (`SteamVR/OpenXR 2.17.10`,
+Unity OpenXR 1.10, MultiPass); Demeo uses the pinned **OpenVR** provider.
+Both are measured with the same PC companion 0.2.12 and Frame companion 0.2.12.
+Gloomhaven has 18 emitted reports containing seven distinct captured eye pairs.
+They include fully opaque 255 regions, zero background regions and genuine
+fractional regions, without readback errors. Its shared source is typeless
+RGBA format 27 with sRGB view 29 and full `(0,0)..(1,1)` submitted UVs.
+Demeo's source is format 29/view 29 with `(0,0)..(0.707178,0.707178)` UVs.
+Both report native tint alpha 1, direct-foveated sampling enabled and sharpening
+zero. Source format alone is not a demonstrated cause.
+
+The same running Frame receiver's counters move from `0/7961/1`
+(opaque/zero/mixed) before Gloomhaven to `1/7961/5926` at 23:17:34: one new
+fully opaque and 5,925 new mixed masks, with no new fully-zero masks. Thus the
+working route carries a spatial coverage field through the same companions.
+This is stronger than successful negotiation and excludes an always-zero
+diagnostic or generally broken mask decoder. It does not prove which private
+OpenVR conversion, viewport or game render operation loses Demeo's coverage.
+
+Version 1.4.10 removes the cropped-texture handoff as a separate variable.
+`OpenVrViewport` accepts only ascending, finite normalized bounds whose edges
+recover integer pixels within 1/256 pixel of normalized-float rounding. An
+integer source box is copied to a matching own UNORM/Gamma 2D image, preserving
+all RGBA bytes. OpenVR receives null bounds, its documented whole-image case;
+the same source rectangle still spans the same eye/FOV. No game camera, XR
+viewport scale, scene render, shader, pose, timing, compositor API or project
+color space changes. This is a targeted candidate, not a confirmed headset fix.
+
+The graphics callback observes the actual current SDK bounds and publishes a
+packed allocation request only. GPU textures are created cold at most once
+every two seconds. Until a matching pool exists, the original full-size own
+2D images and original bounds remain available under the same source grant.
+An immutable crop pool is published atomically; its predecessor stays alive
+until all native Submit callbacks finish. At most one predecessor is retained,
+and a pending retirement delays further crop allocation. There is no render-
+thread allocation/wait, stale frame, array fallback or routine source-epoch
+reset on a viewport change. The four full-size targets add about 249 MiB at
+4040-square; four current 2857-square crop targets add about 125 MiB. A previous
+crop pool can temporarily remain during replacement. Opt-out releases the
+owned targets after in-flight callers retire.
+
+Fractional, flipped, invalid or too-small bounds retain the prior 2D behavior
+and original bounds. Statistics distinguish whole/cropped submits, pending
+preparation and unknown bounds. The alpha probe now samples inside the actual
+submitted viewport and reports that source rectangle with each eye's completed
+readback; it no longer treats an unused full-texture region as viewport evidence.
+The exact source/current-frame/eye checks remain independent of these samples.
+
+The actual supplied SDK/D3D11 fixture checks both provider stages, per-pixel
+RGB/all alpha values, offset and changed crops, unknown bounds, immediate full-
+viewport recovery and a native Submit held across cold crop-pool replacement.
+It runs the production C# callback under Windows .NET and Unity Windows Mono.
+These software checks do not execute the proprietary SteamVR handoff or prove
+the final headset appearance. The next Demeo run needs only the 1.4.10 mod;
+the existing PC 0.2.12 measurements will show whether full-image submission
+restores nonzero downstream source alpha and mixed masks.
+
+References: [Valve OpenVR Submit bounds](https://github.com/ValveSoftware/openvr/wiki/IVRCompositor%3A%3ASubmit),
+[Khronos OpenXR layer blending](https://registry.khronos.org/OpenXR/specs/1.1-khr/html/xrspec.html#composition-layer-blending).
+
 `OpenVrEyeSubmission` leases the old compositor interface object's vptr with
 an atomic compare/exchange. Its private table retains the MSVC RTTI locator and
 all 51 public methods; only Submit redirects. No executable instructions or

@@ -2,6 +2,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Diagnostics;
 
 namespace GreenScreen
 {
@@ -24,6 +25,8 @@ namespace GreenScreen
         private int _inflight, _retiring;
         private SteamLinkCoverageBridge.Snapshot _grant;
         private long _left, _right;
+        private long _requestedCrop, _wholeSubmits, _cropSubmits, _cropPending, _unknownViewport;
+        private long _nextCropPreparation;
         private SteamLinkCoverageBridge.Snapshot _pairGrant;
         private long _originRevision, _discontinuousPairs;
         private int _discontinuousRemaining;
@@ -96,6 +99,15 @@ namespace GreenScreen
                 if (Volatile.Read(ref _inflight) != 0) return false;
                 var next = OpenVrEyeTextures.Create(first, second);
                 var old = _eyes; Volatile.Write(ref _eyes, next); old?.Dispose();
+                Interlocked.Exchange(ref _requestedCrop, 0);
+            }
+            long requested = Interlocked.Read(ref _requestedCrop);
+            if (Volatile.Read(ref _inflight) == 0) _eyes.CollectCrop();
+            long now = Stopwatch.GetTimestamp();
+            if (!_eyes.HasCrop(requested) && !_eyes.CropRetirementPending && now >= _nextCropPreparation)
+            {
+                _eyes.PrepareCrop(requested);
+                _nextCropPreparation = now + Stopwatch.Frequency * 2;
             }
             return true;
         }
@@ -136,9 +148,14 @@ namespace GreenScreen
                 return _original(self, eye, ref texture, bounds, flags);
             // GPU copies preserve all RGBA bytes in the current eye and stage.
             // Original Submit receives a resolved 2D image, never the array.
-            // No binding, camera, timing, bounds or pixel-value changes.
+            // A pixel-aligned submitted crop becomes an equivalent whole 2D
+            // texture. No render, resample, camera, FOV or pixel-value change.
+            bool known = eyes.Viewport(bounds, out long crop);
+            bool canonical = known && eyes.HasCrop(crop);
+            if (!known) Interlocked.Increment(ref _unknownViewport);
             Texture separate = texture;
-            separate.Handle = eyes.Copy(texture.Handle, eye);
+            separate.Handle = eyes.Copy(texture.Handle, eye, crop, ref canonical, known);
+            if (known && !canonical) { Interlocked.Exchange(ref _requestedCrop, crop); Interlocked.Increment(ref _cropPending); }
             separate.ColourSpace = 1; // Gamma: these are Unity's already encoded SDR bytes.
             if (eye == 0)
             {
@@ -155,7 +172,12 @@ namespace GreenScreen
                 _pairFlags = _discontinuousRemaining > 0 ? 0x20u : 0;
             }
             uint submitFlags = ReferenceEquals(_pairGrant, grant) ? _pairFlags : 0;
-            int result = _original(self, eye, ref separate, bounds, submitFlags);
+            int result = _original(self, eye, ref separate, canonical ? IntPtr.Zero : bounds, submitFlags);
+            if (canonical)
+            {
+                Interlocked.Increment(ref _wholeSubmits);
+                if (crop != 0) Interlocked.Increment(ref _cropSubmits);
+            }
             if (eye == 1 && submitFlags != 0)
             { _discontinuousRemaining--; Interlocked.Increment(ref _discontinuousPairs); }
             Volatile.Write(ref _lastError, result);
@@ -179,6 +201,8 @@ namespace GreenScreen
         public string Statistics => "OpenVR separate 2D eye submission: left=" + Interlocked.Read(ref _left)
             + "; right=" + Interlocked.Read(ref _right) + "; last-error=" + Volatile.Read(ref _lastError)
             + "; origin notifications=" + OpenVrOrigin.Revision + "; discontinuous pairs=" + Interlocked.Read(ref _discontinuousPairs)
+            + "; whole-texture/cropped=" + Interlocked.Read(ref _wholeSubmits) + "/" + Interlocked.Read(ref _cropSubmits)
+            + "; viewport pending/unknown=" + Interlocked.Read(ref _cropPending) + "/" + Interlocked.Read(ref _unknownViewport)
             + ". Unity single-pass targets, cameras and timing are retained." + (_eyes?.Statistics ?? "");
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetModuleHandleW")]
