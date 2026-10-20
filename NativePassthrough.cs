@@ -70,6 +70,7 @@ namespace GreenScreen
 
         internal static void Tick()
         {
+            OpenVrEyeSubmission.CollectRetired();
             if (!_started) return;
             try { TickCore(); }
             catch (Exception error)

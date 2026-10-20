@@ -33,12 +33,24 @@ internal static class NativeSubmitChecks
             catch (Exception error) { failure = error; }
         };
         int disables = 0;
-        Configure disable = () => { SteamLinkCoverageBridge.Reset(); if (++disables >= 2) OpenVrSubmission.Reset(); };
+        Configure disable = () =>
+        {
+            if (disables == 0)
+            {
+                Time.unscaledTime += 6;
+                if (!OpenVrSubmission.Ensure(out string reason)) failure = new Exception(reason);
+                string evidence = TestLog.Messages.FindLast(line => line.StartsWith("OpenVR separate 2D eye submission:"));
+                Console.WriteLine(evidence);
+                if (evidence == null || evidence.Contains("samples left/right=0/") || evidence.Contains("/0; readback-hr"))
+                    failure = new Exception("The exact-submit GPU alpha probe did not complete for both eyes.");
+            }
+            SteamLinkCoverageBridge.Reset(); if (++disables >= 2) OpenVrSubmission.Reset();
+        };
         int result = run(provider, enable, disable);
         GC.KeepAlive(enable); GC.KeepAlive(disable);
         if (failure != null) throw failure;
-        if (result != 0) throw new Exception("Actual SDK / production indexed submit checks failed: " + result);
-        Console.WriteLine("Production C# indexed OpenVR boundary passed with the actual SDK and D3D11 eye arrays. No SteamVR/headset test.");
+        if (result != 0) throw new Exception("Actual SDK / production 2D submit checks failed: " + result);
+        Console.WriteLine("Production C# 2D OpenVR boundary passed with the actual SDK and D3D11 eye arrays. No SteamVR/headset test.");
     }
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "LoadLibraryExW", SetLastError = true)]
     private static extern IntPtr LoadLibraryEx(string path, IntPtr file, uint flags);

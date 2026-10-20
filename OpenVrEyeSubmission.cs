@@ -6,43 +6,33 @@ using System.Threading;
 namespace GreenScreen
 {
     // Public OpenVR ABI: IVRCompositor_026 (SDK 1.14.15), 51 virtual methods,
-    // Submit slot 5; FnTable:IVRCompositor_028 (SDK 2.2.3), array submit slot 6.
+    // Submit slot 5. Submit separate native 2D eyes while Unity retains its array.
     // Own one object's vptr through an atomic compare/exchange. No executable
     // instructions, global method tables, provider data or disk files are patched.
-    internal sealed class OpenVrIndexedSubmit : OpenVrSubmission.IBackend
+    internal sealed class OpenVrEyeSubmission : OpenVrSubmission.IBackend
     {
         [StructLayout(LayoutKind.Sequential)]
         internal struct Texture { internal IntPtr Handle; internal int Type, ColourSpace; }
-        [StructLayout(LayoutKind.Sequential)]
-        private struct Shape
-        {
-            internal uint Width, Height, Mips, Slices, Format, Samples, Quality, Usage, Bind, Cpu, Misc;
-        }
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate IntPtr GetInterface([MarshalAs(UnmanagedType.LPStr)] string name, out int error);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         internal delegate int Submit(IntPtr self, int eye, ref Texture texture, IntPtr bounds, uint flags);
-        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        internal delegate int IndexedSubmit(int eye, ref Texture texture, uint slice, IntPtr bounds, uint flags);
-        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        private delegate void GetShape(IntPtr self, out Shape shape);
-
         private readonly IntPtr _object, _originalTable, _table;
         private readonly Submit _original, _callback;
-        private readonly IndexedSubmit _indexed;
         private readonly OpenVrNativeSettings _provider;
-        private IntPtr _source0, _source1;
+        private OpenVrEyeTextures _eyes;
+        private int _inflight, _retiring;
         private SteamLinkCoverageBridge.Snapshot _grant;
         private long _left, _right;
         private int _lastError, _fault;
         // Native callers may have fetched an owned vptr/callback before detach.
         // Retain this tiny table and delegate until process exit; never free a
         // callback that an in-flight graphics call can still enter.
-        private static OpenVrIndexedSubmit _lifetime;
+        private static OpenVrEyeSubmission _lifetime;
 
-        private OpenVrIndexedSubmit(OpenVrNativeSettings provider, IntPtr instance, IndexedSubmit indexed)
+        private OpenVrEyeSubmission(OpenVrNativeSettings provider, IntPtr instance)
         {
-            _provider = provider; _object = instance; _indexed = indexed;
+            _provider = provider; _object = instance;
             if (!OpenVrNativeSettings.Region(instance, 8, IntPtr.Zero, true))
                 throw new NotSupportedException("The OpenVR interface object is not writable.");
             _originalTable = Marshal.ReadIntPtr(instance);
@@ -70,16 +60,12 @@ namespace GreenScreen
             var get = Marshal.GetDelegateForFunctionPointer<GetInterface>(getter);
             IntPtr instance = get("IVRCompositor_026", out int error);
             if (instance == IntPtr.Zero || error != 0) throw new NotSupportedException("IVRCompositor_026 is unavailable.");
-            IntPtr functions = get("FnTable:IVRCompositor_028", out error);
-            if (error != 0 || !OpenVrNativeSettings.Region(functions, 7 * 8, IntPtr.Zero, false))
-                throw new NotSupportedException("SteamVR does not provide indexed array submission.");
-            IntPtr entry = Marshal.ReadIntPtr(functions, 6 * 8);
-            if (!OpenVrNativeSettings.Region(entry, 1, IntPtr.Zero, false, true))
-                throw new NotSupportedException("OpenVR's indexed Submit entry is unavailable.");
             if (_lifetime == null)
-                _lifetime = new OpenVrIndexedSubmit(provider, instance, Marshal.GetDelegateForFunctionPointer<IndexedSubmit>(entry));
+                _lifetime = new OpenVrEyeSubmission(provider, instance);
             else if (_lifetime._object != instance || !_lifetime._provider.Current)
                 throw new InvalidOperationException("The initialized OpenVR interface was replaced.");
+            _lifetime.Collect();
+            if (_lifetime._retiring != 0) throw new InvalidOperationException("The previous eye submit is still completing.");
             _lifetime.Attach();
             return _lifetime;
         }
@@ -93,27 +79,29 @@ namespace GreenScreen
 
         public bool Refresh()
         {
-            if (Volatile.Read(ref _fault) != 0) throw new InvalidOperationException("Indexed Submit rejected an eye texture (error " + _lastError + ").");
+            if (Volatile.Read(ref _fault) != 0) throw new InvalidOperationException("2D Submit rejected an eye texture (error " + _lastError + ").");
             if (!_provider.Current || Marshal.ReadIntPtr(_object) != _table)
                 throw new InvalidOperationException("OpenVR provider/interface ownership changed.");
             if (!_provider.Sources(out IntPtr first, out IntPtr second)) return false;
-            if (first != _source0 || second != _source1)
+            if (_eyes == null || !_eyes.Matches(first, second))
             {
-                Deactivate(); Validate(first); Validate(second);
-                Volatile.Write(ref _source0, first); Volatile.Write(ref _source1, second);
+                Deactivate();
+                // A callback increments before reading its grant. Once the
+                // grant is null and no callback is in flight, no new callback
+                // can borrow the old GPU resources. Never wait on graphics.
+                if (Volatile.Read(ref _inflight) != 0) return false;
+                var next = OpenVrEyeTextures.Create(first, second);
+                var old = _eyes; Volatile.Write(ref _eyes, next); old?.Dispose();
             }
             return true;
         }
 
-        private static void Validate(IntPtr texture)
+        internal static void CollectRetired() => _lifetime?.Collect();
+        private void Collect()
         {
-            IntPtr table = Marshal.ReadIntPtr(texture);
-            var get = Marshal.GetDelegateForFunctionPointer<GetShape>(Marshal.ReadIntPtr(table, 10 * 8));
-            get(texture, out Shape shape);
-            if (shape.Width == 0 || shape.Height == 0 || shape.Width > 16384 || shape.Height > 16384
-                || shape.Mips != 1 || shape.Slices != 2 || shape.Samples != 1
-                || (shape.Format != 27 && shape.Format != 28 && shape.Format != 29))
-                throw new NotSupportedException("The provider's D3D11 eye resource must be a resolved two-slice RGBA array.");
+            if (Volatile.Read(ref _retiring) == 0 || Volatile.Read(ref _inflight) != 0) return;
+            var old = _eyes; Volatile.Write(ref _eyes, null); old?.Dispose();
+            Volatile.Write(ref _retiring, 0);
         }
 
         public void Activate(SteamLinkCoverageBridge.Snapshot grant) => Volatile.Write(ref _grant, grant);
@@ -121,6 +109,7 @@ namespace GreenScreen
 
         private int Forward(IntPtr self, int eye, ref Texture texture, IntPtr bounds, uint flags)
         {
+            Interlocked.Increment(ref _inflight);
             try { return ForwardCore(self, eye, ref texture, bounds, flags); }
             catch
             {
@@ -129,18 +118,23 @@ namespace GreenScreen
                 Volatile.Write(ref _lastError, 102); Volatile.Write(ref _fault, 1);
                 return 102;
             }
+            finally { Interlocked.Decrement(ref _inflight); }
         }
 
         private int ForwardCore(IntPtr self, int eye, ref Texture texture, IntPtr bounds, uint flags)
         {
             var grant = Volatile.Read(ref _grant);
+            var eyes = Volatile.Read(ref _eyes);
             if (grant == null || !grant.CanAcceptOrdinaryRgba || !ReferenceEquals(grant, SteamLinkCoverageBridge.Current)
                 || Volatile.Read(ref _fault) != 0 || self != _object || eye < 0 || eye > 1 || texture.Type != 0 || flags != 0
-                || (texture.Handle != Volatile.Read(ref _source0) && texture.Handle != Volatile.Read(ref _source1)))
+                || eyes == null || !eyes.Contains(texture.Handle))
                 return _original(self, eye, ref texture, bounds, flags);
-            // Same resource, RGB/alpha bytes, bounds, flags, colour space, eye,
-            // graphics thread and call order. No render, resolve, copy or wait.
-            int result = _indexed(eye, ref texture, (uint)eye, bounds, flags);
+            // GPU copies preserve all RGBA bytes in the current eye and stage.
+            // Original Submit receives a resolved 2D image, never the array.
+            // No binding, camera, timing, bounds or colour-space changes.
+            Texture separate = texture;
+            separate.Handle = eyes.Copy(texture.Handle, eye);
+            int result = _original(self, eye, ref separate, bounds, flags);
             Volatile.Write(ref _lastError, result);
             if (result == 0)
             {
@@ -157,10 +151,11 @@ namespace GreenScreen
             Deactivate();
             if (OpenVrNativeSettings.Region(_object, 8, IntPtr.Zero, true))
                 Interlocked.CompareExchange(ref *(IntPtr*)_object, _originalTable, _table);
+            Volatile.Write(ref _retiring, 1); Collect();
         }
-        public string Statistics => "OpenVR indexed array submission: left=" + Interlocked.Read(ref _left)
+        public string Statistics => "OpenVR separate 2D eye submission: left=" + Interlocked.Read(ref _left)
             + "; right=" + Interlocked.Read(ref _right) + "; last-error=" + Volatile.Read(ref _lastError)
-            + ". Unity single-pass targets, cameras and timing are retained.";
+            + ". Unity single-pass targets, cameras and timing are retained." + (_eyes?.Statistics ?? "");
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetModuleHandleW")]
         private static extern IntPtr GetModuleHandle(string name);

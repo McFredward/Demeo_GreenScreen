@@ -14,7 +14,7 @@ internal static class OpenVrSubmissionChecks
         public void Activate(SteamLinkCoverageBridge.Snapshot grant) { if (grant.CanAcceptOrdinaryRgba) Grants++; }
         public void Deactivate() { }
         public void Detach() { Stops++; }
-        public string Statistics => "Fake indexed submission";
+        public string Statistics => "Fake 2D submission";
     }
     internal static void Run(Action<bool, string> check)
     {
@@ -31,7 +31,7 @@ internal static class OpenVrSubmissionChecks
             OpenVrSubmission.BackendFactory = () => { opens++; return backend; };
             check(OpenVrSubmission.Ensure(out _), "single-pass native submission adapter becomes ready");
             SteamLinkCoverageBridge.Grant(); OpenVrSubmission.Activate(SteamLinkCoverageBridge.Current);
-            check(backend.Grants == 1, "only a live prepared source activates the indexed boundary");
+            check(backend.Grants == 1, "only a live prepared source activates the 2D boundary");
             for (int i = 0; i < 10; i++) check(OpenVrSubmission.Ensure(out _), "stable array submission remains ready");
             check(opens == 1 && display.Starts == starts && display.Stops == stops
                 && XRSettings.eyeTextureDesc.volumeDepth == 2 && UnityEngine.Experimental.Rendering.XRSystem.singlePassAllowed == policy,

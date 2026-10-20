@@ -104,13 +104,13 @@ def main():
                                                  "--native-submit", windows],
                                                 env=environment, stdout=output, stderr=subprocess.STDOUT, timeout=90)
             managed_output = managed_log.read_text(errors="replace")
-            log.write_text(log.read_text() + "\nProduction C# indexed boundary:\n" + managed_output)
+            log.write_text(log.read_text() + "\nProduction C# 2D eye boundary:\n" + managed_output)
             managed_success = next((line for line in managed_output.splitlines()
-                                    if line.startswith("Production C# indexed OpenVR boundary passed")), None)
+                                    if line.startswith("Production C# 2D OpenVR boundary passed")), None)
             if managed_result.returncode != 0 or managed_success is None:
-                raise RuntimeError("Production managed/native submit fixture failed; inspect " + str(log))
+                raise RuntimeError("Production managed/native 2D submit fixture failed; inspect " + str(log))
             print(managed_success)
-            indexed_result = next(line for line in managed_output.splitlines()
+            separate_2d_result = next(line for line in managed_output.splitlines()
                                   if line.startswith("Actual OpenVR provider/D3D11 checks passed:"))
             if args.unity:
                 editor = args.unity.resolve().parent / "Data"
@@ -123,17 +123,18 @@ def main():
                                                 env=environment, stdout=output, stderr=subprocess.STDOUT, timeout=90)
                 mono_output = (owned / "mono-submit.log").read_text(errors="replace")
                 log.write_text(log.read_text() + "\nUnity Windows Mono boundary:\n" + mono_output)
-                if mono_result.returncode != 0 or "Unity Windows Mono runtime: production indexed callback passed." not in mono_output:
+                if mono_result.returncode != 0 or "Unity Windows Mono runtime: production 2D callback passed." not in mono_output:
                     raise RuntimeError("Unity Mono submit fixture failed; inspect " + str(log))
-                print("Unity Windows Mono runtime: production indexed callback passed.")
+                print("Unity Windows Mono runtime: production 2D callback passed.")
             receipt = {"provider_sha256": expected,
                        "production_adapter_sha256": hashlib.sha256(source.encode()).hexdigest(),
                        "public_interface_revision": REVISION, "result": success,
-                       "indexed_result": indexed_result,
+                       "separate_2d_result": separate_2d_result,
                        "native_SDK_executed": True, "actual_D3D11_textures": True,
                        "production_managed_submit_executed": True,
                        "Unity_Windows_Mono_executed": bool(args.unity),
-                       "production_submit_sha256": hashlib.sha256((ROOT / "OpenVrIndexedSubmit.cs").read_bytes()).hexdigest(),
+                       "production_submit_sha256": hashlib.sha256((ROOT / "OpenVrEyeSubmission.cs").read_bytes()).hexdigest(),
+                       "production_eye_textures_sha256": hashlib.sha256((ROOT / "OpenVrEyeTextures.cs").read_bytes()).hexdigest(),
                        "SteamVR_or_headset_test": False}
             (ROOT / ".build/openvr-provider-native-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
         finally:

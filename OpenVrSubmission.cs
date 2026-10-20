@@ -5,8 +5,8 @@ using UnityEngine.Rendering;
 
 namespace GreenScreen
 {
-    // Keep Unity/URP's native two-view pass. Only the obsolete OpenVR submit
-    // boundary needs an explicit array slice, independently of coverage grants.
+    // Keep Unity/URP's native two-view pass. The OpenVR submit adapter copies
+    // completed slices into separate 2D eyes under a live coverage grant.
     internal static class OpenVrSubmission
     {
         internal interface IBackend
@@ -17,7 +17,7 @@ namespace GreenScreen
             void Detach();
             string Statistics { get; }
         }
-        internal static Func<IBackend> BackendFactory = OpenVrIndexedSubmit.Open;
+        internal static Func<IBackend> BackendFactory = OpenVrEyeSubmission.Open;
         private static IBackend _backend;
         private static float _nextReport;
         private static int _reports;
@@ -60,7 +60,7 @@ namespace GreenScreen
             }
             catch (Exception error)
             {
-                Release(); Failure = reason = "OpenVR indexed submission unavailable: " + error.Message;
+                Release(); Failure = reason = "OpenVR 2D eye submission unavailable: " + error.Message;
                 return false;
             }
         }

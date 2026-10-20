@@ -43,7 +43,7 @@ int wmain(int argc, wchar_t** argv) {
             auto text = api<char* (*)(void*)>(mono, "mono_string_to_utf8")(message);
             std::fprintf(stderr, "Mono callback fixture failed: %s\n", text); return 1;
         }
-        std::puts("Unity Windows Mono runtime: production indexed callback passed.");
+        std::puts("Unity Windows Mono runtime: production 2D callback passed.");
         api<void (*)(void*)>(mono, "mono_jit_cleanup")(domain);
         return 0;
     } catch (const std::exception& error) { std::fprintf(stderr, "Mono fixture host failed: %s\n", error.what()); return 1; }

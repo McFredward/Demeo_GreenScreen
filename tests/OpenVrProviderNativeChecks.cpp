@@ -69,13 +69,22 @@ std::array<unsigned, 2> slices{};
 unsigned indexedCalls = 0;
 unsigned capturedFlags = 0;
 int capturedType = -1;
+HANDLE submitEntered = nullptr, submitContinue = nullptr;
+bool blockSubmit = false;
 int capture(int eye, const Texture* texture, const void*, unsigned flags) {
     check(eye == 0 || eye == 1, "native eye selector");
     capturedFlags = flags; capturedType = texture->type;
-    submitted[eye] = static_cast<ID3D11Texture2D*>(texture->handle); return 0;
+    submitted[eye] = static_cast<ID3D11Texture2D*>(texture->handle);
+    if (blockSubmit && eye == 0) {
+        SetEvent(submitEntered);
+        WaitForSingleObject(submitContinue, 30000);
+        D3D11_TEXTURE2D_DESC shape{}; submitted[eye]->GetDesc(&shape);
+        check(shape.ArraySize == 1 && shape.Width == 160, "in-flight native submit retains its 2D resource after opt-out");
+    }
+    return 0;
 }
 int captureIndexed(int eye, const Texture* texture, unsigned slice, const void* bounds, unsigned flags) {
-    check(slice == static_cast<unsigned>(eye), "production callback explicitly selects the actual SDK eye slice");
+    check(slice == static_cast<unsigned>(eye), "legacy indexed negative-control eye slice");
     check(bounds != nullptr && texture->colourSpace == 0, "original SDK bounds and colour space preserved");
     check(texture->type == 0 && flags == 0, "indexed boundary preserves actual SDK D3D11/default flags");
     ++indexedCalls; slices[eye] = slice;
@@ -182,15 +191,21 @@ extern "C" __declspec(dllexport) int RunProviderChecks(const wchar_t* path, void
             int error = 0; auto object = get("IVRCompositor_026", &error);
             auto* nativeTable = *static_cast<void***>(object);
             enable();
+            std::array<std::array<ID3D11Texture2D*, 2>, 2> eyeTargets{};
             GraphicsWork work{[&] { for (unsigned update = 0; update < 3; ++update) {
                 // Both provider stages retain their native array shape and
                 // receive distinct per-eye/per-frame RGB plus every alpha value.
                 for (auto& image : images) for (unsigned eye = 0; eye < 2; ++eye) fill(image.second, eye, update, eye);
                 for (int stage = 0; stage < 2; ++stage) {
                     submitted = {};
-                    check(submit(provider, 0, stage) && submit(provider, 1, stage), "actual SDK enters the production managed callback for both eye submits");
-                    check(submitted[0] == submitted[1], "indexed submit retains the original array, without rendering or eye copies");
-                    for (unsigned eye = 0; eye < 2; ++eye) verify(submitted[eye], eye, update, slices[eye], 2);
+                    check(submit(provider, 0, stage) && submit(provider, 1, stage), "actual SDK enters the production 2D managed callback for both eye submits");
+                    check(submitted[0] != submitted[1], "completed eyes have distinct native 2D submit resources");
+                    for (unsigned eye = 0; eye < 2; ++eye) {
+                        if (update == 0) eyeTargets[stage][eye] = submitted[eye];
+                        check(submitted[eye] == eyeTargets[stage][eye], "each provider stage retains its own stable eye target");
+                        verify(submitted[eye], eye, update);
+                    }
+                    check(capturedFlags == 0 && capturedType == 0, "original D3D11 submit convention retained");
                 }
             } }, {}};
             HANDLE graphics = CreateThread(nullptr, 0, graphicsThread, &work, 0, nullptr);
@@ -198,8 +213,9 @@ extern "C" __declspec(dllexport) int RunProviderChecks(const wchar_t* path, void
             check(WaitForSingleObject(graphics, 30000) == WAIT_OBJECT_0, "managed reverse callbacks complete on the native graphics thread");
             CloseHandle(graphics);
             if (work.error) std::rethrow_exception(work.error);
-            check(indexedCalls == 12 && mode() == 1 && provider[SinglePassOffset] == 1 && provider[CreatedOffset] == 1,
-                "all native submits are indexed while SDK mode and live arrays remain unchanged");
+            check(indexedCalls == 0 && mode() == 1 && provider[SinglePassOffset] == 1 && provider[CreatedOffset] == 1,
+                "all native submits use 2D resources while SDK mode and live arrays remain unchanged");
+            for (auto& image : images) for (unsigned eye = 0; eye < 2; ++eye) verify(image.second.texture, eye, 2, eye, 2);
             auto* originalTable = *static_cast<void***>(object);
             std::uintptr_t nativeLocator = 0, adaptedLocator = 0;
             std::memcpy(&nativeLocator, reinterpret_cast<unsigned char*>(nativeTable) - sizeof(void*), sizeof(void*));
@@ -208,19 +224,29 @@ extern "C" __declspec(dllexport) int RunProviderChecks(const wchar_t* path, void
             using NativeSubmit = int (*)(void*, int, const Texture*, const void*, unsigned);
             auto boundary = reinterpret_cast<NativeSubmit>(originalTable[5]);
             Texture foreign{nullptr, 0, 0};
-            check(boundary(object, 0, &foreign, nullptr, 0) == 0 && indexedCalls == 12 && submitted[0] == nullptr,
+            check(boundary(object, 0, &foreign, nullptr, 0) == 0 && indexedCalls == 0 && submitted[0] == nullptr,
                 "unknown resources retain ordinary submission even with a live source grant");
             Texture known{submitted[1], 0, 0};
-            check(boundary(object, 1, &known, nullptr, 0x10) == 0 && indexedCalls == 12 && capturedFlags == 0x10,
+            check(boundary(object, 1, &known, nullptr, 0x10) == 0 && indexedCalls == 0 && capturedFlags == 0x10,
                 "non-default submit flags are forwarded without coercion");
             known.type = 2;
-            check(boundary(object, 1, &known, nullptr, 0) == 0 && indexedCalls == 12 && capturedType == 2,
+            check(boundary(object, 1, &known, nullptr, 0) == 0 && indexedCalls == 0 && capturedType == 2,
                 "non-D3D11 submit kinds are forwarded without reinterpretation");
             disable(); // Revoke the live source snapshot while callback stays attached.
-            check(submit(provider, 0, 0) && submit(provider, 1, 0) && indexedCalls == 12,
+            check(submit(provider, 0, 0) && submit(provider, 1, 0) && indexedCalls == 0,
                 "live source revocation immediately restores ordinary submission inside the callback");
+            enable();
+            submitEntered = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+            submitContinue = CreateEventW(nullptr, TRUE, FALSE, nullptr); blockSubmit = true;
+            GraphicsWork retiring{[&] { check(submit(provider, 0, 0), "in-flight native submit completes during opt-out"); }, {}};
+            HANDLE retiringThread = CreateThread(nullptr, 0, graphicsThread, &retiring, 0, nullptr);
+            check(WaitForSingleObject(submitEntered, 30000) == WAIT_OBJECT_0, "native callback reaches the held original Submit");
             disable();
             check(*static_cast<void***>(object) == nativeTable, "normal detach restores the exact original interface vptr");
+            SetEvent(submitContinue);
+            check(WaitForSingleObject(retiringThread, 30000) == WAIT_OBJECT_0, "opt-out does not wait for or deadlock the graphics callback");
+            CloseHandle(retiringThread); CloseHandle(submitEntered); CloseHandle(submitContinue); blockSubmit = false;
+            if (retiring.error) std::rethrow_exception(retiring.error);
             enable();
             check(*static_cast<void***>(object) == originalTable, "same owned interface can reattach after an opt-out");
             // An external interface owner replacing the vptr must survive our
@@ -230,12 +256,12 @@ extern "C" __declspec(dllexport) int RunProviderChecks(const wchar_t* path, void
             *static_cast<void***>(object) = foreignTable.data();
             disable(); // Detach only while owned.
             check(*static_cast<void***>(object) == foreignTable.data(), "cleanup preserves another interface owner's vptr");
-            check(submit(provider, 0, 0) && submit(provider, 1, 0) && indexedCalls == 12,
+            check(submit(provider, 0, 0) && submit(provider, 1, 0) && indexedCalls == 0,
                 "detaching restores the original interface behavior");
             *static_cast<void***>(object) = nativeTable; // The fixture owns this simulated external lease.
             destroyEyes(provider, Handle);
             closeGraphics();
-            std::printf("Actual OpenVR provider/D3D11 checks passed: %u; production indexed boundary; native graphics thread; two stages; all RGBA bytes; no headset test.\n", checks);
+            std::printf("Actual OpenVR provider/D3D11 checks passed: %u; production 2D eye boundary; native graphics thread; two stages; all RGBA bytes; no headset test.\n", checks);
             return 0;
         }
         check(stop(provider) == 0 && provider[CreatedOffset] == 1 && !images.empty(), "negative control: Stop alone retains old array textures");
