@@ -164,8 +164,31 @@ all compositor origin resets arrive as Unity input notifications.
 
 References: [Microsoft D3D11 CopySubresourceRegion](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-copysubresourceregion),
 [Valve OpenVR texture/color-space and submit flags](https://github.com/ValveSoftware/openvr/blob/f51d87ecf8f7903e859b0aa4d617ff1e5f33db5a/headers/openvr.h).
-A hardware test must still establish whether the canonical handoff restores
-nonzero masks and whether discontinuity signaling reduces the table glitches.
+The maintainer's 1.4.9 hardware test reports unchanged transparency in both eyes
+and recurring table glitches. Its PC log again reads alpha 255 in multiple
+actual-Submit regions of both eyes, without Submit/readback errors. The Frame
+adds 6,309 fully-zero masks and one mixed mask. No Unity tracking-origin
+notification reaches the new subscription, so no discontinuity pair is sent.
+This format/declaration change is not a confirmed correction.
+
+"Fully transparent" in the receiver counter describes the decoded coverage
+bytes. It does not measure the final visible opacity or require the entire
+game image to disappear. Native video RGB is preserved independently of this
+mask; with a premultiplied contribution, nonzero scene color can remain visible
+over the camera even at coverage zero. The log does not prove the headset's
+actual blend mode or a numeric 50% opacity. The user's observed translucent
+objects therefore do not contradict the zero-mask reading.
+
+PC companion patch 0.2.12 adds a small, read-only alpha probe at the native
+shared-texture input, after the existing current source/PID/eye/allocation
+proof. Its `native source alpha:` records include three raw-alpha region
+summaries per eye and the current native shader alpha-related constants. This
+is needed to distinguish loss during the game-to-SteamVR shared-texture handoff
+from loss during downstream mask generation. It changes no game render setting,
+native RGB, coverage algorithm or Frame component. See the companion's
+[boundary analysis](https://github.com/McFredward/steam-link-native-passthrough/blob/dev/docs/research/demeo-source-alpha-20261020.md).
+The next hardware test must provide these new sender measurements; the visible
+defects remain unresolved.
 
 `OpenVrEyeSubmission` leases the old compositor interface object's vptr with
 an atomic compare/exchange. Its private table retains the MSVC RTTI locator and
