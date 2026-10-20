@@ -9,8 +9,8 @@ namespace GreenScreen
 {
     // This adapter contains only ABI metadata for the supplied OpenVR provider.
     // No provider binary, instructions or replacement implementation is shipped.
-    // Changing URP's pass policy cannot change the provider's cached eye layout.
-    internal sealed class OpenVrNativeSettings : OpenVrStereoLayout.ISettings
+    // The provider remains in its original single-pass mode throughout.
+    internal sealed class OpenVrNativeSettings
     {
         internal const int FileBytes = 377856, ImageBytes = 401408;
         internal const string FileHash = "0ebad5a4ca7f4aa9b94b5f0128dcbc7bb3139fee317b91a0ec2636b448b4d702";
@@ -23,18 +23,19 @@ namespace GreenScreen
         internal const int ProviderOffset = 24, CreatedOffset = 0xb1, SinglePassOffset = 0xb2;
         private readonly IntPtr _module, _context, _provider, _handle;
         private readonly GetMode _getMode;
-        private readonly DestroyTextures _destroy;
+        private readonly NativeTexture _texture;
+        internal const string TextureExport = "?GetNativeEyeTexture@OpenVRDisplayProvider@@AEAAPEAXHH@Z";
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate int GetMode();
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate void DestroyTextures(IntPtr provider, IntPtr handle);
+        private delegate IntPtr NativeTexture(IntPtr provider, int stage, int eye);
 
-        private OpenVrNativeSettings(IntPtr module, IntPtr context, IntPtr provider, IntPtr handle, IntPtr getter, IntPtr destroy)
+        private OpenVrNativeSettings(IntPtr module, IntPtr context, IntPtr provider, IntPtr handle, IntPtr getter, IntPtr texture)
         {
             _module = module; _context = context; _provider = provider; _handle = handle;
             _getMode = Marshal.GetDelegateForFunctionPointer<GetMode>(getter);
-            _destroy = Marshal.GetDelegateForFunctionPointer<DestroyTextures>(destroy);
+            _texture = Marshal.GetDelegateForFunctionPointer<NativeTexture>(texture);
         }
 
         internal static bool Pin(byte[] bytes)
@@ -44,9 +45,9 @@ namespace GreenScreen
             return BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant() == FileHash;
         }
 
-        internal static OpenVrStereoLayout.ISettings Open()
+        internal static OpenVrNativeSettings Open()
         {
-            if (IntPtr.Size != 8) throw new NotSupportedException("OpenVR stereo switching requires Windows x64.");
+            if (IntPtr.Size != 8) throw new NotSupportedException("OpenVR indexed submission requires Windows x64.");
             IntPtr module = GetModuleHandle("XRSDKOpenVR.dll");
             if (module == IntPtr.Zero) throw new NotSupportedException("The game's OpenVR provider is not loaded.");
             var path = new StringBuilder(32768);
@@ -62,10 +63,12 @@ namespace GreenScreen
                     if (read == 0) throw new EndOfStreamException();
                     used += read;
                 }
-                if (!Pin(bytes)) throw new NotSupportedException("Unknown OpenVR provider SHA-256; stereo settings were not changed.");
+                if (!Pin(bytes)) throw new NotSupportedException("Unknown OpenVR provider SHA-256; submission was not changed.");
             }
             IntPtr getter = GetProcAddress(module, ModeExport), destroy = GetProcAddress(module, DestroyExport);
+            IntPtr texture = GetProcAddress(module, TextureExport);
             if (getter != IntPtr.Add(module, ModeGetterRva) || destroy != IntPtr.Add(module, DestroyRva)
+                || texture != IntPtr.Add(module, 0xa7c0) || !Region(texture, 8, module, false, true)
                 || !Region(getter, 8, module, false, true) || !Region(destroy, 8, module, false, true)
                 || !Region(IntPtr.Add(module, ModeRva), 2, module, true)
                 || !Region(IntPtr.Add(module, ContextRva), 8, module, false)
@@ -76,7 +79,7 @@ namespace GreenScreen
             IntPtr provider = Marshal.ReadIntPtr(context, ProviderOffset), handle = Marshal.ReadIntPtr(module, HandleRva);
             if (handle == IntPtr.Zero || !Region(provider, SinglePassOffset + 1, IntPtr.Zero, true))
                 throw new InvalidOperationException("OpenVR display is not initialized.");
-            var result = new OpenVrNativeSettings(module, context, provider, handle, getter, destroy);
+            var result = new OpenVrNativeSettings(module, context, provider, handle, getter, texture);
             if (result.Mode > 1) throw new NotSupportedException("Unknown OpenVR stereo mode.");
             return result;
         }
@@ -103,17 +106,16 @@ namespace GreenScreen
         }
         public bool ProviderSinglePass => Current && Marshal.ReadByte(_provider, SinglePassOffset) != 0;
 
-        // Caller has stopped only this XR display through Unity's public API.
-        // Stop alone does not free the SDK's cached array targets. Its ORIGINAL
-        // destroy method must retire them before Start chooses the new layout.
-        public void Rebuild(ushort expected, ushort mode)
+        // Read the two provider stages. No native settings, textures, camera
+        // policy or subsystem lifecycle are changed by this adapter.
+        internal bool Sources(out IntPtr first, out IntPtr second)
         {
-            if (mode > 1 || Mode != expected) throw new InvalidOperationException("OpenVR settings are no longer owned.");
-            if (Marshal.ReadByte(_provider, CreatedOffset) != 0) _destroy(_provider, _handle);
-            if (!Current || Marshal.ReadByte(_provider, CreatedOffset) != 0 || Mode != expected)
-                throw new InvalidOperationException("OpenVR eye textures could not be retired.");
-            Marshal.WriteInt16(_module, ModeRva, unchecked((short)mode));
-            if (Mode != mode) throw new InvalidOperationException("OpenVR stereo setting did not apply.");
+            first = second = IntPtr.Zero;
+            if (!Current || Mode != 1 || !ProviderSinglePass)
+                throw new InvalidOperationException("The original OpenVR single-pass owner changed.");
+            if (Marshal.ReadByte(_provider, CreatedOffset) == 0) return false;
+            first = _texture(_provider, 0, 0); second = _texture(_provider, 1, 0);
+            return first != IntPtr.Zero && second != IntPtr.Zero;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -124,7 +126,7 @@ namespace GreenScreen
             public UIntPtr Bytes;
             public uint State, Protect, Type;
         }
-        private static bool Region(IntPtr address, int bytes, IntPtr allocation, bool writable, bool executable = false)
+        internal static bool Region(IntPtr address, int bytes, IntPtr allocation, bool writable, bool executable = false)
         {
             if (address == IntPtr.Zero || bytes < 1 || VirtualQuery(address, out Memory info, (UIntPtr)Marshal.SizeOf<Memory>()) == UIntPtr.Zero
                 || info.State != 0x1000 || (info.Protect & 0x100) != 0 || allocation != IntPtr.Zero && info.Allocation != allocation)

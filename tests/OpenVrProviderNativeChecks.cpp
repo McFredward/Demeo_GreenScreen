@@ -9,7 +9,10 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <cstdint>
 #include <cstring>
+#include <exception>
+#include <functional>
 #include <map>
 #include <stdexcept>
 #include <vector>
@@ -62,45 +65,69 @@ UnitySubsystemErrorCode UNITY_INTERFACE_API destroy(UnitySubsystemHandle h, Unit
 }
 struct Texture { void* handle; int type, colourSpace; };
 std::array<ID3D11Texture2D*, 2> submitted{};
+std::array<unsigned, 2> slices{};
+unsigned indexedCalls = 0;
+unsigned capturedFlags = 0;
+int capturedType = -1;
 int capture(int eye, const Texture* texture, const void*, unsigned flags) {
-    check(eye == 0 || eye == 1, "native eye selector"); check(texture->type == 0 && flags == 0, "native D3D11 submit convention retained");
+    check(eye == 0 || eye == 1, "native eye selector");
+    capturedFlags = flags; capturedType = texture->type;
     submitted[eye] = static_cast<ID3D11Texture2D*>(texture->handle); return 0;
+}
+int captureIndexed(int eye, const Texture* texture, unsigned slice, const void* bounds, unsigned flags) {
+    check(slice == static_cast<unsigned>(eye), "production callback explicitly selects the actual SDK eye slice");
+    check(bounds != nullptr && texture->colourSpace == 0, "original SDK bounds and colour space preserved");
+    check(texture->type == 0 && flags == 0, "indexed boundary preserves actual SDK D3D11/default flags");
+    ++indexedCalls; slices[eye] = slice;
+    return capture(eye, texture, bounds, flags);
 }
 template<class T> T symbol(HMODULE module, const char* name) {
     auto result = reinterpret_cast<T>(GetProcAddress(module, name)); check(result != nullptr, "required native export exists"); return result;
 }
-void fill(Image& image, unsigned eye, unsigned frame) {
+void fill(Image& image, unsigned eye, unsigned frame, unsigned slice = 0) {
     D3D11_TEXTURE2D_DESC d{}; image.texture->GetDesc(&d);
     std::vector<std::array<unsigned char, 4>> pixels(d.Width * d.Height);
     for (unsigned y = 0; y < d.Height; ++y) for (unsigned x = 0; x < d.Width; ++x)
         pixels[y*d.Width+x] = {static_cast<unsigned char>(eye ? 17 : 231), static_cast<unsigned char>(frame), 83,
             static_cast<unsigned char>((x + y + eye * 73 + frame) % 256)};
-    context.p->UpdateSubresource(image.texture, 0, nullptr, pixels.data(), d.Width * 4, 0);
+    context.p->UpdateSubresource(image.texture, slice, nullptr, pixels.data(), d.Width * 4, 0);
 }
-void verify(ID3D11Texture2D* source, unsigned eye, unsigned frame) {
+void verify(ID3D11Texture2D* source, unsigned eye, unsigned frame, unsigned slice = 0, unsigned array = 1) {
     D3D11_TEXTURE2D_DESC d{}; source->GetDesc(&d);
-    check(d.ArraySize == 1 && d.MipLevels == 1 && d.SampleDesc.Count == 1, "submitted native eye is a separate resolved 2D image");
+    check(d.ArraySize == array && d.MipLevels == 1 && d.SampleDesc.Count == 1, "submitted native eye retains its original resolved image shape");
     check(d.Width == 160 && d.Height == 80, "native resolution scale retained");
     d.Usage = D3D11_USAGE_STAGING; d.BindFlags = d.MiscFlags = 0; d.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
     Com<ID3D11Texture2D> staging; check(SUCCEEDED(device.p->CreateTexture2D(&d, nullptr, staging.out())), "actual eye readback storage");
     context.p->CopyResource(staging.p, source);
-    D3D11_MAPPED_SUBRESOURCE data{}; check(SUCCEEDED(context.p->Map(staging.p, 0, D3D11_MAP_READ, 0, &data)), "actual submitted eye readback");
+    D3D11_MAPPED_SUBRESOURCE data{}; check(SUCCEEDED(context.p->Map(staging.p, slice, D3D11_MAP_READ, 0, &data)), "actual submitted eye readback");
     for (unsigned y = 0; y < d.Height; ++y) for (unsigned x = 0; x < d.Width; ++x) {
         const auto* pixel = static_cast<const unsigned char*>(data.pData) + y * data.RowPitch + x * 4;
         check(pixel[0] == (eye ? 17 : 231) && pixel[1] == frame && pixel[2] == 83, "native submit preserves this eye's RGB");
         check(pixel[3] == (x + y + eye * 73 + frame) % 256, "native submit preserves every alpha byte in the correct eye/frame");
     }
-    context.p->Unmap(staging.p, 0);
+    context.p->Unmap(staging.p, slice);
+}
+void closeGraphics() {
+    // DLL fixtures must release D3D outside DllMain/loader lock, before .NET
+    // unloads the test host. Native GPU destruction can join driver threads.
+    if (context.p) { context.p->ClearState(); context.p->Flush(); context.p->Release(); context.p = nullptr; }
+    if (device.p) { device.p->Release(); device.p = nullptr; }
+}
+struct GraphicsWork { std::function<void()> body; std::exception_ptr error; };
+DWORD WINAPI graphicsThread(void* opaque) {
+    auto& work = *static_cast<GraphicsWork*>(opaque);
+    try { work.body(); } catch (...) { work.error = std::current_exception(); }
+    return 0;
 }
 }
-int wmain(int argc, wchar_t** argv) {
+extern "C" __declspec(dllexport) int RunProviderChecks(const wchar_t* path, void (*enable)(), void (*disable)()) {
     try {
-        check(argc == 2, "usage: provider-native-checks PRIVATE_PROVIDER_DLL");
+        check(path != nullptr, "private provider path provided");
         D3D_FEATURE_LEVEL level{};
         auto status = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, device.out(), &level, context.out());
         if (FAILED(status)) status = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, device.out(), &level, context.out());
         check(SUCCEEDED(status), "actual D3D11 graphics device");
-        HMODULE module = LoadLibraryExW(argv[1], nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+        HMODULE module = LoadLibraryExW(path, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
         check(module != nullptr, "private pinned provider loads with the owned offline OpenVR boundary");
         auto* base = reinterpret_cast<unsigned char*>(module);
         auto mode = symbol<int (*)()>(module, ModeExport);
@@ -135,6 +162,7 @@ int wmain(int argc, wchar_t** argv) {
         auto submit = symbol<bool (*)(void*, int, int)>(module,
             "?SubmitToCompositor@OpenVRDisplayProvider@@AEAA_NW4EVREye@vr@@H@Z");
         symbol<void (*)(decltype(&capture))>(GetModuleHandleW(L"openvr_api.dll"), "SetFixtureSubmit")(&capture);
+        symbol<void (*)(decltype(&captureIndexed))>(GetModuleHandleW(L"openvr_api.dll"), "SetFixtureIndexedSubmit")(&captureIndexed);
         UnityXRFrameSetupHints hints{}; hints.appSetup.textureResolutionScale = 1.25f;
         hints.appSetup.zNear = .1f; hints.appSetup.zFar = 100.f; hints.appSetup.sRGB = true;
         UnityXRRenderingCapabilities capabilities{};
@@ -144,6 +172,72 @@ int wmain(int argc, wchar_t** argv) {
         check(createEyes(provider, &hints) == 0 && provider[CreatedOffset] == 1, "actual SDK creates initial eye arrays");
         UnityXRNextFrameDesc frame{}; pass(provider, 0, &hints, &frame); pass(provider, 1, &hints, &frame);
         check(frame.renderPassesCount == 1 && frame.renderPasses[0].renderParamsCount == 2, "baseline is one native pass containing both eye slices");
+        submitted = {}; check(submit(provider, 0, 0) && submit(provider, 1, 0), "original single-pass D3D11 submission executes");
+        D3D11_TEXTURE2D_DESC originalShape{}; submitted[0]->GetDesc(&originalShape);
+        check(submitted[0] == submitted[1] && originalShape.ArraySize == 2,
+            "negative control: original SDK submits the same two-slice D3D11 array for both eyes without an array selector");
+        std::puts("Original single-pass boundary confirmed: identical D3D11 array handle for both eyes; Submit_Default; no slice selector.");
+        if (enable) {
+            auto get = symbol<void* (*)(const char*, int*)>(GetModuleHandleW(L"openvr_api.dll"), "VR_GetGenericInterface");
+            int error = 0; auto object = get("IVRCompositor_026", &error);
+            auto* nativeTable = *static_cast<void***>(object);
+            enable();
+            GraphicsWork work{[&] { for (unsigned update = 0; update < 3; ++update) {
+                // Both provider stages retain their native array shape and
+                // receive distinct per-eye/per-frame RGB plus every alpha value.
+                for (auto& image : images) for (unsigned eye = 0; eye < 2; ++eye) fill(image.second, eye, update, eye);
+                for (int stage = 0; stage < 2; ++stage) {
+                    submitted = {};
+                    check(submit(provider, 0, stage) && submit(provider, 1, stage), "actual SDK enters the production managed callback for both eye submits");
+                    check(submitted[0] == submitted[1], "indexed submit retains the original array, without rendering or eye copies");
+                    for (unsigned eye = 0; eye < 2; ++eye) verify(submitted[eye], eye, update, slices[eye], 2);
+                }
+            } }, {}};
+            HANDLE graphics = CreateThread(nullptr, 0, graphicsThread, &work, 0, nullptr);
+            check(graphics != nullptr, "actual SDK submission runs on a native graphics worker thread");
+            check(WaitForSingleObject(graphics, 30000) == WAIT_OBJECT_0, "managed reverse callbacks complete on the native graphics thread");
+            CloseHandle(graphics);
+            if (work.error) std::rethrow_exception(work.error);
+            check(indexedCalls == 12 && mode() == 1 && provider[SinglePassOffset] == 1 && provider[CreatedOffset] == 1,
+                "all native submits are indexed while SDK mode and live arrays remain unchanged");
+            auto* originalTable = *static_cast<void***>(object);
+            std::uintptr_t nativeLocator = 0, adaptedLocator = 0;
+            std::memcpy(&nativeLocator, reinterpret_cast<unsigned char*>(nativeTable) - sizeof(void*), sizeof(void*));
+            std::memcpy(&adaptedLocator, reinterpret_cast<unsigned char*>(originalTable) - sizeof(void*), sizeof(void*));
+            check(nativeLocator == adaptedLocator, "the adapted interface retains the original MSVC RTTI locator");
+            using NativeSubmit = int (*)(void*, int, const Texture*, const void*, unsigned);
+            auto boundary = reinterpret_cast<NativeSubmit>(originalTable[5]);
+            Texture foreign{nullptr, 0, 0};
+            check(boundary(object, 0, &foreign, nullptr, 0) == 0 && indexedCalls == 12 && submitted[0] == nullptr,
+                "unknown resources retain ordinary submission even with a live source grant");
+            Texture known{submitted[1], 0, 0};
+            check(boundary(object, 1, &known, nullptr, 0x10) == 0 && indexedCalls == 12 && capturedFlags == 0x10,
+                "non-default submit flags are forwarded without coercion");
+            known.type = 2;
+            check(boundary(object, 1, &known, nullptr, 0) == 0 && indexedCalls == 12 && capturedType == 2,
+                "non-D3D11 submit kinds are forwarded without reinterpretation");
+            disable(); // Revoke the live source snapshot while callback stays attached.
+            check(submit(provider, 0, 0) && submit(provider, 1, 0) && indexedCalls == 12,
+                "live source revocation immediately restores ordinary submission inside the callback");
+            disable();
+            check(*static_cast<void***>(object) == nativeTable, "normal detach restores the exact original interface vptr");
+            enable();
+            check(*static_cast<void***>(object) == originalTable, "same owned interface can reattach after an opt-out");
+            // An external interface owner replacing the vptr must survive our
+            // cleanup. Its table intentionally forwards unchanged entries.
+            std::array<void*, 51> foreignTable{};
+            for (unsigned i = 0; i < foreignTable.size(); ++i) foreignTable[i] = originalTable[i];
+            *static_cast<void***>(object) = foreignTable.data();
+            disable(); // Detach only while owned.
+            check(*static_cast<void***>(object) == foreignTable.data(), "cleanup preserves another interface owner's vptr");
+            check(submit(provider, 0, 0) && submit(provider, 1, 0) && indexedCalls == 12,
+                "detaching restores the original interface behavior");
+            *static_cast<void***>(object) = nativeTable; // The fixture owns this simulated external lease.
+            destroyEyes(provider, Handle);
+            closeGraphics();
+            std::printf("Actual OpenVR provider/D3D11 checks passed: %u; production indexed boundary; native graphics thread; two stages; all RGBA bytes; no headset test.\n", checks);
+            return 0;
+        }
         check(stop(provider) == 0 && provider[CreatedOffset] == 1 && !images.empty(), "negative control: Stop alone retains old array textures");
         destroyEyes(provider, Handle); check(provider[CreatedOffset] == 0 && images.empty(), "original SDK destroy retires old target storage");
         *setting = 0; check(mode() == 0, "production change updates the actual native setting");
@@ -168,7 +262,13 @@ int wmain(int argc, wchar_t** argv) {
         frame = {}; pass(provider, 0, &hints, &frame); pass(provider, 1, &hints, &frame);
         check(frame.renderPassesCount == 1 && frame.renderPasses[0].renderParamsCount == 2, "restored SDK returns its original single-pass array layout");
         destroyEyes(provider, Handle); check(images.empty(), "fixture retires every owned GPU texture");
+        closeGraphics();
         std::printf("Actual OpenVR provider/D3D11 checks passed: %u; two native 2D eyes; exact per-eye RGB/alpha; no headset test.\n", checks);
         return 0;
     } catch (const std::exception& error) { std::fprintf(stderr, "Provider fixture failed after %u checks: %s (win32=%lu)\n", checks, error.what(), GetLastError()); return 1; }
 }
+#ifndef MANAGED_FIXTURE
+int wmain(int argc, wchar_t** argv) {
+    return argc == 2 ? RunProviderChecks(argv[1], nullptr, nullptr) : 2;
+}
+#endif

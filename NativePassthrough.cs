@@ -94,23 +94,16 @@ namespace GreenScreen
             // including the intro's switch to the lobby. The reusable engine
             // buffer avoids the old one-second stale-camera window and sorting.
             ScanCameras();
-            // Complete or roll back an outstanding native transition even while
-            // its new XR targets/identity are temporarily unavailable.
-            if (OpenVrStereoLayout.Owned && !OpenVrStereoLayout.Ensure(out _))
-            {
-                SteamLinkCoverageBridge.Reset();
-                LeaveNative();
-            }
             ModConfiguration settings = ConfigurationStore.Current;
             SteamLinkConnectionLifecycle.Tick(settings.SteamLinkNativePassthrough);
             if (!settings.SteamLinkNativePassthrough || !SteamLinkConnection.Available)
             {
                 SteamLinkCoverageBridge.Tick(false, Time.unscaledTime);
                 LeaveNative();
-                // A transient identity/peer gap must not restart XR repeatedly.
-                // Restore the provider on explicit opt-out or a confirmed other
-                // transport/headset, and retain it across ordinary scene loads.
-                if (!settings.SteamLinkNativePassthrough || LegacyBackgroundConfirmed) OpenVrStereoLayout.Reset();
+                // Stop redirecting on every identity/peer gap. Detach the
+                // passive interface lease on opt-out or a confirmed other
+                // transport/headset; it never restarts XR or changes its mode.
+                if (!settings.SteamLinkNativePassthrough || LegacyBackgroundConfirmed) OpenVrSubmission.Reset();
                 bool waiting = settings.SteamLinkNativePassthrough && !LegacyBackgroundConfirmed;
                 foreach (CameraState state in Cameras)
                 {
@@ -135,11 +128,10 @@ namespace GreenScreen
             bool eligible = count == 1 && reason == null;
             if (eligible && GraphicsSettings.currentRenderPipeline != null && SteamLinkConnectionLifecycle.UsesOpenVr)
             {
-                if (!OpenVrStereoLayout.Owned) LeaveNative();
-                eligible = OpenVrStereoLayout.Ensure(out reason);
+                eligible = OpenVrSubmission.Ensure(out reason);
             }
             else if (!SteamLinkConnectionLifecycle.UsesOpenVr || GraphicsSettings.currentRenderPipeline == null)
-                OpenVrStereoLayout.Reset();
+                OpenVrSubmission.Reset();
             SteamLinkCoverageBridge.Tick(eligible, Time.unscaledTime);
             var grant = SteamLinkCoverageBridge.Current;
             if (!eligible || !grant.CanAcceptOrdinaryRgba)
@@ -168,6 +160,7 @@ namespace GreenScreen
             _grant = grant;
             _frame = Time.frameCount;
             head.SetBackground(Color.clear, true);
+            OpenVrSubmission.Activate(grant);
             Report("Steam Link native RGBA source enabled. Both companions and a headset picture check are required.");
         }
 
@@ -210,8 +203,8 @@ namespace GreenScreen
             if (Application.platform != RuntimePlatform.WindowsPlayer || IntPtr.Size != 8)
                 return "The companion requires a Windows x64 game process.";
             bool srp = GraphicsSettings.currentRenderPipeline != null;
-            if (srp && SteamLinkConnectionLifecycle.UsesOpenVr && OpenVrStereoLayout.Failure != null)
-                return OpenVrStereoLayout.Failure;
+            if (srp && SteamLinkConnectionLifecycle.UsesOpenVr && OpenVrSubmission.Failure != null)
+                return OpenVrSubmission.Failure;
             if (srp ? !SrpOutput.Running : !XRSettings.enabled)
                 return "A running XR display is required.";
             if (srp && !SrpOutput.IsForward(camera))
@@ -321,13 +314,6 @@ namespace GreenScreen
             Report("Steam Link native passthrough unavailable: opaque depth coverage failed: " + error.Message);
         }
 
-        internal static void BeforeProviderStereoChange()
-        {
-            SteamLinkCoverageBridge.Reset();
-            LeaveNative();
-            SrpAlphaProbe.Shutdown();
-        }
-
         private static void BeforeCamera(Camera camera)
         {
             // A newly created camera can render before its first mod Update.
@@ -358,6 +344,7 @@ namespace GreenScreen
 
         private static void LeaveNative()
         {
+            OpenVrSubmission.Deactivate();
             _grant = null;
             _frame = -1;
             foreach (RenderSettingLease lease in PostProcessing) lease.Dispose();
@@ -389,7 +376,7 @@ namespace GreenScreen
             RenderPipelineManager.remove_endCameraRendering(SrpEndCallback);
 #endif
             LeaveNative();
-            OpenVrStereoLayout.Reset();
+            OpenVrSubmission.Reset();
             RestoreCameras();
             SrpOpaqueCoverage.Shutdown();
             SrpAlphaProbe.Shutdown();

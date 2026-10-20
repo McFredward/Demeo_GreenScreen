@@ -13,6 +13,9 @@ struct Object { void** table; };
 struct Texture { void* handle; int type, colourSpace; };
 using Submit = int (*)(int, const Texture*, const void*, unsigned);
 Submit capture = nullptr;
+using Indexed = int (*)(int, const Texture*, unsigned, const void*, unsigned);
+Indexed captureIndexed = nullptr;
+void* functionTable[80]{};
 void* systemTable[80]{};
 void* compositorTable[80]{};
 Object vrSystem{systemTable}, compositor{compositorTable};
@@ -30,7 +33,11 @@ Mesh* mesh(Object*, Mesh* out, int, int) { *out = {}; return out; }
 int submit(Object*, int eye, const Texture* texture, const void* bounds, unsigned flags) {
     return capture ? capture(eye, texture, bounds, flags) : 1;
 }
+int indexed(int eye, const Texture* texture, unsigned slice, const void* bounds, unsigned flags) {
+    return captureIndexed ? captureIndexed(eye, texture, slice, bounds, flags) : 1;
+}
 void initialize() {
+    static bool initialized = false; if (initialized) return; initialized = true;
     for (auto& slot : systemTable) slot = reinterpret_cast<void*>(&unexpected);
     for (auto& slot : compositorTable) slot = reinterpret_cast<void*>(&unexpected);
     systemTable[0] = reinterpret_cast<void*>(&size); systemTable[1] = reinterpret_cast<void*>(&projection);
@@ -38,14 +45,17 @@ void initialize() {
     // IVRSystem_022's mesh slot; the fixture accepts only that exact interface.
     systemTable[32] = reinterpret_cast<void*>(&mesh);
     compositorTable[5] = reinterpret_cast<void*>(&submit);
+    functionTable[6] = reinterpret_cast<void*>(&indexed);
 }
 }
 extern "C" {
 __declspec(dllexport) void SetFixtureSubmit(Submit callback) { capture = callback; }
+__declspec(dllexport) void SetFixtureIndexedSubmit(Indexed callback) { captureIndexed = callback; }
 __declspec(dllexport) void* VR_GetGenericInterface(const char* name, int* error) {
     initialize(); if (error) *error = 0;
     if (!std::strcmp(name, "IVRSystem_022")) return &vrSystem;
     if (!std::strcmp(name, "IVRCompositor_026")) return &compositor;
+    if (!std::strcmp(name, "FnTable:IVRCompositor_028")) return functionTable;
     if (error) *error = 105;
     return nullptr;
 }

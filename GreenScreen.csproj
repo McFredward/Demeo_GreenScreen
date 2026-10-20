@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Configurations>DEMEO;DEMEOBATTLES;DEMEOBATTLEMARKED</Configurations>
-    <Version>1.4.6</Version>
+    <Version>1.4.7</Version>
     <TargetFramework Condition="'$(Configuration)' == 'DEMEO'">netstandard2.1</TargetFramework>
     <TargetFramework Condition="'$(Configuration)' != 'DEMEO'">net6.0</TargetFramework>
     <LangVersion>latest</LangVersion>

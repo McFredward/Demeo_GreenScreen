@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework Condition="'$(TestTargetFramework)' == ''">net8.0</TargetFramework>
+    <TargetFramework Condition="'$(TestTargetFramework)' != ''">$(TestTargetFramework)</TargetFramework>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <Game Condition="'$(Game)' == ''">DEMEO</Game>
     <LoaderBackend Condition="'$(LoaderBackend)' == '' And '$(Game)' == 'DEMEOBATTLEMARKED'">MelonLoader</LoaderBackend>
@@ -11,8 +13,8 @@
     <OutputPath>bin/Integration/$(LoaderBackend)/$(Game)/</OutputPath>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../ModEntryPoints.cs;../ModConfiguration.cs;../NativePassthrough.cs;../OpaqueCoverage.cs;../SrpOutput.cs;../SrpOpaqueCoverage.cs;../SrpAlphaProbe.cs;../SteamLinkConnectionLifecycle.cs;../OpenVrStereoLayout.cs;../OpenVrNativeSettings.cs" />
-    <Compile Include="UnityBoundary.cs;IntegrationChecks.cs;OpenVrStereoChecks.cs" />
+    <Compile Include="../ModEntryPoints.cs;../ModConfiguration.cs;../NativePassthrough.cs;../OpaqueCoverage.cs;../SrpOutput.cs;../SrpOpaqueCoverage.cs;../SrpAlphaProbe.cs;../SteamLinkConnectionLifecycle.cs;../OpenVrSubmission.cs;../OpenVrIndexedSubmit.cs;../OpenVrNativeSettings.cs" />
+    <Compile Include="UnityBoundary.cs;IntegrationChecks.cs;OpenVrSubmissionChecks.cs;NativeSubmitChecks.cs" />
     <EmbeddedResource Include="../assets/nativecoverage.bundle" LogicalName="GreenScreen.NativeCoverage" />
   </ItemGroup>
 </Project>

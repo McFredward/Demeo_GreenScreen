@@ -9,13 +9,6 @@ using UnityEngine.Rendering.Universal.Internal;
 
 internal static class IntegrationChecks
 {
-    private sealed class ProviderSettings : OpenVrStereoLayout.ISettings
-    {
-        public bool Current => true;
-        public ushort Mode => 0;
-        public bool ProviderSinglePass => false;
-        public void Rebuild(ushort expected,ushort mode) => throw new Exception("Already MultiPass: no rebuild allowed.");
-    }
     private static int _checks;
     private static readonly string ConfigPath=Path.Combine(Path.GetDirectoryName(typeof(ConfigurationStore).Assembly.Location), "greenscreen.ini");
     private static void Check(bool value,string name) { if (!value) throw new Exception(name); _checks++; }
@@ -78,7 +71,7 @@ internal static class IntegrationChecks
             Console.WriteLine("Actual OpenVR provider pin checks passed: " + _checks);
             return;
         }
-        OpenVrStereoLayout.SettingsFactory=()=>new ProviderSettings();
+        if (args.Length == 2 && args[0] == "--native-submit") { NativeSubmitChecks.Run(args[1]); return; }
 #if !MELONLOADER
         BepInExPlugin.Log=new BepInEx.Logging.ManualLogSource();
 #endif
@@ -376,7 +369,7 @@ internal static class IntegrationChecks
             NativePassthrough.Initialize(); EnableNative();
             Check(camera.backgroundColor==Color.clear && OpaqueCoverage.Failure==null,"a new mod lifetime retries loading and recovers from a prior bundle error");
             NativePassthrough.Shutdown();
-            OpenVrStereoChecks.Run(Check);
+            OpenVrSubmissionChecks.Run(Check);
             Console.WriteLine($"Configuration and render lifecycle checks passed: {_checks}");
         }
         finally
