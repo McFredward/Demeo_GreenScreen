@@ -190,6 +190,36 @@ native RGB, coverage algorithm or Frame component. See the companion's
 The next hardware test must provide these new sender measurements; the visible
 defects remain unresolved.
 
+The next test used Demeo 1.4.9 with PC companion 0.2.12, PID 45204,
+2026-10-20 23:06:56–23:08:37 local PC time. The maintainer noticed no table
+glitches, but both-eye transparency remained. The PC compositor records seven
+`StandingZeroPoseReset` messages, versus 79 in the preceding 22:37:33–22:38:58
+session. Per-application dropped presents remain comparable: 5/8,961 versus
+4/7,424. The Frame records 97 substantive packet-retry messages versus 78;
+neither game interval contains a vrlink error. Decoder-reset errors in this
+new connection occur before Demeo connects and must not be assigned to gameplay.
+This is consistent with fewer tracking-origin bursts, not proof of a glitch
+fix or better transport. The diagnostic patch does not change tracking.
+
+All 18 emitted sender-alpha reports (eight distinct capture pairs; the final
+report repeats the last pair) read zero in all three raw regions of both eyes,
+without readback errors. The sampled native tint alpha is 1, direct-foveated
+sampling is enabled and sharpening is zero. Both PC and Frame count 7,962
+coverage masks; the Frame classifies 7,961 as fully zero and one as mixed,
+with zero rejected uploads or guarded-submit refusals. Game-side probes still
+include fully opaque regions and equal successful Submit counters.
+
+These samples narrow the investigation to the submitted/source coverage path,
+but do not establish a same-pixel alpha loss: native source size is 4040-square
+while its submitted UV range is only `(0,0)..(0.707178,0.707178)`, about
+2857-square. Both probes currently sample raw full-texture positions, so the
+last region lies outside that source crop and the capture times are not paired
+across processes. Do not call every source pixel zero or identify a private
+SteamVR instruction from this evidence. A current GloomhavenVR run with the same
+PC diagnostic would provide the missing working-route comparison without
+another mod/driver update. Original logs and the bounded audit are retained
+privately under `.planning/debug/frame-pc0212/`.
+
 `OpenVrEyeSubmission` leases the old compositor interface object's vptr with
 an atomic compare/exchange. Its private table retains the MSVC RTTI locator and
 all 51 public methods; only Submit redirects. No executable instructions or
