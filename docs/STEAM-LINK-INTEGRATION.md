@@ -264,6 +264,38 @@ is not evidence of the SteamVR conversion, encoded mask or Frame output.
 The actual provider readback needs the next headset run; compilation and
 lifecycle tests are not that runtime result.
 
+The 1.4.4 headset run did not produce XR-output measurements. Its preflight
+mistakenly treated `XRRenderParameter.viewport` as pixels, whereas the actual
+Demeo `XRSystem.BuildView` multiplies its normalized rectangle by the target
+width/height. The diagnostic stopped with the reported viewport/slice error
+before issuing any GPU readbacks. The reported eye defects still occurred;
+this run supplies no final-output alpha evidence. This was a diagnostic bug,
+not a newly established cause of the rendering defect.
+
+Version 1.4.5 applies the same float coordinate conversion as `BuildView`,
+corrects the simulated provider to return normalized rectangles, includes the
+raw and converted viewport/slice/extent in failures, and permits four bounded
+preflight failures with a two-second delay instead of permanently stopping
+on the first transient invalid viewport. Native source admission is unchanged.
+
+Additional native API validation is available with a licensed Unity 2021.3
+Editor and a Vulkan graphics device on Linux:
+
+```sh
+python3 scripts/check-xr-readback.py --unity /path/to/Editor/Unity
+python3 scripts/check-xr-readback.py --unity /path/to/Editor/Unity --reject-normalized-bug
+```
+
+The runner compiles the actual production `SrpAlphaProbe.cs` into a temporary
+Editor project with unrelated loader/lifecycle services stubbed. It exercises
+the production viewport conversion and completion summaries with real GPU
+readbacks of known per-view/per-pixel alpha values: 2D and 2D-array targets,
+UNorm/sRGB storage, and 1x/4x MSAA. The positive run passed 32,842 checks on
+Vulkan/Intel RPL-P; no Windows D3D11, 8x-MSAA or headset result is implied.
+The negative control restores the old pixel assumption and must fail the
+full-viewport assertion, rather than merely failing to compile. Temporary
+outputs remain under `.build`; no game code or images are used or exported.
+
 A separate Windows Unity 2021.3 player loaded the exact shipped D3D11 bundle
 under Wine 9/wined3d and passed the single-sample stereo/depth/RGB comparisons.
 Its 4x MSAA readback fixture returned zero RGB and alpha even before the repair,

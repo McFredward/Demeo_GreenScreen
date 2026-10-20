@@ -19,6 +19,7 @@ namespace GreenScreen
         private static Func<object, object> _camera, _texture, _alphaOutput;
         private static Camera _owner;
         private static int _frame = -1, _remaining = 24, _epoch;
+        private static int _failures;
         private static bool _attempted, _alpha;
         private static float _next;
         private static string _sourceInfo;
@@ -114,14 +115,20 @@ namespace GreenScreen
                     {
                         if (views == 2) throw new NotSupportedException("More than two XR views.");
                         pass.GetRenderParameter(camera, parameterIndex, out XRDisplaySubsystem.XRRenderParameter parameter);
-                        Rect viewport = parameter.viewport;
+                        // XRRenderParameter.viewport is normalized. Match the
+                        // game's XRSystem.BuildView before using pixel bounds.
+                        Rect normalized = parameter.viewport;
+                        Rect viewport = PixelViewport(normalized, descriptor.width, descriptor.height);
                         int left = (int)Math.Ceiling(viewport.x), bottom = (int)Math.Ceiling(viewport.y);
                         int right = (int)Math.Floor(viewport.x + viewport.width), top = (int)Math.Floor(viewport.y + viewport.height);
                         int slice = parameter.textureArraySlice;
                         if (left < 0 || bottom < 0 || right > descriptor.width || top > descriptor.height
                             || right - left < Width || top - bottom < Width || top - bottom > 16384
                             || slice < 0 || slice >= descriptor.volumeDepth)
-                            throw new NotSupportedException("XR viewport or array slice is outside its target.");
+                            throw new NotSupportedException("XR view outside target: pass=" + passIndex + "; view=" + parameterIndex
+                                + "; normalized=" + normalized.x + "," + normalized.y + "," + normalized.width + "," + normalized.height
+                                + "; pixels=" + left + "," + bottom + "," + right + "," + top
+                                + "; slice=" + slice + "; target=" + descriptor.width + "x" + descriptor.height + "x" + descriptor.volumeDepth + ".");
                         batch.Targets[views] = target; batch.Slices[views] = slice;
                         batch.X[views] = left + (right - left - Width) / 2; batch.Y[views] = bottom;
                         batch.Heights[views] = top - bottom;
@@ -153,6 +160,13 @@ namespace GreenScreen
                 }
             }
             catch (Exception error) { ReportFailure(error); }
+        }
+
+        internal static Rect PixelViewport(Rect viewport, int width, int height)
+        {
+            viewport.x *= width; viewport.width *= width;
+            viewport.y *= height; viewport.height *= height;
+            return viewport;
         }
 
         private static void Complete(Batch batch, int view, AsyncGPUReadbackRequest request)
@@ -199,13 +213,15 @@ namespace GreenScreen
 
         private static void ReportFailure(Exception error)
         {
-            _remaining = 0;
-            Utils.LogInfo("XR output alpha measurement stopped: " + error.GetType().Name + ": " + error.Message);
+            _frame = -1; _next = Time.unscaledTime + 2f;
+            if (++_failures >= 4) _remaining = 0;
+            Utils.LogInfo("XR output alpha measurement " + (_remaining == 0 ? "stopped" : "deferred")
+                + " (" + _failures + "/4): " + error.GetType().Name + ": " + error.Message);
         }
 
         internal static void Shutdown()
         {
-            _epoch++; _remaining = 24; _owner = null; _frame = -1; _next = 0;
+            _epoch++; _remaining = 24; _failures = 0; _owner = null; _frame = -1; _next = 0;
             // Keep in-flight native callback delegates rooted until both replies
             // arrive, including after unload/reload. Old replies never log.
             _patch?.Unpatch(_target, typeof(SrpAlphaProbe).GetMethod(nameof(AfterBlit), BindingFlags.Static | BindingFlags.NonPublic));

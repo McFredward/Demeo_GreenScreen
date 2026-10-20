@@ -342,7 +342,7 @@ namespace UnityEngine.XR
             public int GetRenderParameterCount() => renderTargetDesc.volumeDepth==2 ? 2 : 1;
             public void GetRenderParameter(UnityEngine.Camera camera,int index,out XRRenderParameter parameter)
                 => parameter=new XRRenderParameter { textureArraySlice=ReverseSlices ? 1-index : index,
-                    viewport=Viewport ?? new UnityEngine.Rect { width=renderTargetDesc.width,height=renderTargetDesc.height } };
+                    viewport=Viewport ?? new UnityEngine.Rect { width=1,height=1 } };
         }
         public int GetRenderPassCount() => XRSettings.eyeTextureDesc.volumeDepth==2 ? 1 : 2;
         public void GetRenderPass(int index,out XRRenderPass pass) => pass=new XRRenderPass { renderTargetDesc=XRSettings.eyeTextureDesc };

@@ -207,7 +207,7 @@ internal static class IntegrationChecks
             var originalXr=XRSettings.eyeTextureDesc;
             XRSettings.eyeTextureDesc.volumeDepth=2; XRSettings.eyeTextureDesc.dimension=TextureDimension.Tex2DArray;
             XRDisplaySubsystem.ReverseSlices=true;
-            XRDisplaySubsystem.Viewport=new Rect { x=100,y=200,width=1600,height=1500 };
+            XRDisplaySubsystem.Viewport=new Rect { x=.05f,y=.1f,width=.8f,height=.75f };
             Time.unscaledTime+=2.1f; Tick();
             FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData(),new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
             RenderPipelineManager.End(camera);
@@ -264,12 +264,29 @@ internal static class IntegrationChecks
             pipeline.m_AllowPostProcessAlphaOutput=true;
             NativePassthrough.Initialize(); EnableNative();
             int beforeInvalidView=AsyncGPUReadback.Requests;
-            XRDisplaySubsystem.Viewport=new Rect { x=50000,width=100,height=100 };
+            XRDisplaySubsystem.Viewport=new Rect { x=1.1f,width=.5f,height=.5f };
             FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData(),new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
             RenderPipelineManager.End(camera);
             Check(AsyncGPUReadback.Requests==beforeInvalidView && SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
-                "an invalid diagnostic viewport disables only the probe, without issuing an unsafe GPU request or revoking native output");
-            XRDisplaySubsystem.Viewport=null; NativePassthrough.Shutdown();
+                "an invalid diagnostic viewport never issues an unsafe GPU request or revokes native output");
+            XRDisplaySubsystem.Viewport=null; Time.unscaledTime+=2.1f; Tick();
+            FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData(),new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
+            RenderPipelineManager.End(camera);
+            Check(AsyncGPUReadback.Requests==beforeInvalidView+2,"a transient invalid XR viewport does not permanently suppress every later measurement");
+            XRDisplaySubsystem.Viewport=new Rect { x=2,width=1,height=1 };
+            for(int failure=0;failure<3;failure++)
+            {
+                Time.unscaledTime+=2.1f; Tick();
+                FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData(),new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
+                RenderPipelineManager.End(camera);
+            }
+            XRDisplaySubsystem.Viewport=null; Time.unscaledTime+=2.1f; Tick();
+            FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData(),new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
+            RenderPipelineManager.End(camera);
+            Check(AsyncGPUReadback.Requests==beforeInvalidView+2 && SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba
+                && TestLog.Messages.Exists(message=>message.Contains("measurement stopped (4/4)")),
+                "four preflight failures bound diagnostics without disabling native passthrough or retrying indefinitely");
+            NativePassthrough.Shutdown();
             Check(pipeline.m_AllowPostProcessAlphaOutput,"pre-existing alpha processing survives teardown");
             var renderer=(UniversalRenderer)((UniversalAdditionalCameraData)camera.Extra).scriptableRenderer;
             renderer.renderingModeActual=UniversalRenderer.RenderingMode.Deferred;
