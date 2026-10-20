@@ -25,6 +25,7 @@ struct Image { UnityXRRenderTextureDesc desc; ID3D11Texture2D* texture; };
 std::map<UnityXRRenderTextureId, Image> images;
 Com<ID3D11Device> device; Com<ID3D11DeviceContext> context;
 UnityXRRenderTextureId serial = 0;
+bool fixtureSrgbStorage = false;
 IUnityGraphics graphics{};
 IUnityXRDisplayInterface display{};
 void* registeredProvider = nullptr;
@@ -48,7 +49,11 @@ UnitySubsystemErrorCode UNITY_INTERFACE_API create(UnitySubsystemHandle h, const
     check(h == Handle, "native create uses the current display handle");
     D3D11_TEXTURE2D_DESC d{}; d.Width = requested->width; d.Height = requested->height;
     d.ArraySize = requested->textureArrayLength ? requested->textureArrayLength : 1; d.MipLevels = d.SampleDesc.Count = 1;
-    d.Format = (requested->flags & kUnityXRRenderTextureFlagsSRGB) ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
+    // The owned Unity boundary deliberately supplies an sRGB-format native
+    // source for the production test, independently of the old SDK's flags.
+    // This exercises the actual SRGB -> UNORM GPU copy, not two UNORM images.
+    d.Format = fixtureSrgbStorage || (requested->flags & kUnityXRRenderTextureFlagsSRGB)
+        ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
     d.Usage = D3D11_USAGE_DEFAULT; d.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
     ID3D11Texture2D* texture = nullptr; check(SUCCEEDED(device.p->CreateTexture2D(&d, nullptr, &texture)), "actual native-requested D3D11 texture created");
     auto desc = *requested; desc.color.nativePtr = texture; desc.depth.nativePtr = nullptr;
@@ -69,11 +74,14 @@ std::array<unsigned, 2> slices{};
 unsigned indexedCalls = 0;
 unsigned capturedFlags = 0;
 int capturedType = -1;
+int capturedColourSpace = -1;
+std::array<unsigned, 2> capturedEyeFlags{};
 HANDLE submitEntered = nullptr, submitContinue = nullptr;
 bool blockSubmit = false;
 int capture(int eye, const Texture* texture, const void*, unsigned flags) {
     check(eye == 0 || eye == 1, "native eye selector");
-    capturedFlags = flags; capturedType = texture->type;
+    capturedFlags = flags; capturedEyeFlags[eye] = flags;
+    capturedType = texture->type; capturedColourSpace = texture->colourSpace;
     submitted[eye] = static_cast<ID3D11Texture2D*>(texture->handle);
     if (blockSubmit && eye == 0) {
         SetEvent(submitEntered);
@@ -129,9 +137,10 @@ DWORD WINAPI graphicsThread(void* opaque) {
     return 0;
 }
 }
-extern "C" __declspec(dllexport) int RunProviderChecks(const wchar_t* path, void (*enable)(), void (*disable)()) {
+extern "C" __declspec(dllexport) int RunProviderChecks(const wchar_t* path, void (*enable)(), void (*disable)(), void (*originChanged)()) {
     try {
         check(path != nullptr, "private provider path provided");
+        fixtureSrgbStorage = enable != nullptr;
         D3D_FEATURE_LEVEL level{};
         auto status = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, device.out(), &level, context.out());
         if (FAILED(status)) status = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, device.out(), &level, context.out());
@@ -183,6 +192,7 @@ extern "C" __declspec(dllexport) int RunProviderChecks(const wchar_t* path, void
         check(frame.renderPassesCount == 1 && frame.renderPasses[0].renderParamsCount == 2, "baseline is one native pass containing both eye slices");
         submitted = {}; check(submit(provider, 0, 0) && submit(provider, 1, 0), "original single-pass D3D11 submission executes");
         D3D11_TEXTURE2D_DESC originalShape{}; submitted[0]->GetDesc(&originalShape);
+        if (enable) check(originalShape.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, "owned Unity boundary provides actual sRGB-storage source arrays");
         check(submitted[0] == submitted[1] && originalShape.ArraySize == 2,
             "negative control: original SDK submits the same two-slice D3D11 array for both eyes without an array selector");
         std::puts("Original single-pass boundary confirmed: identical D3D11 array handle for both eyes; Submit_Default; no slice selector.");
@@ -198,14 +208,23 @@ extern "C" __declspec(dllexport) int RunProviderChecks(const wchar_t* path, void
                 for (auto& image : images) for (unsigned eye = 0; eye < 2; ++eye) fill(image.second, eye, update, eye);
                 for (int stage = 0; stage < 2; ++stage) {
                     submitted = {};
-                    check(submit(provider, 0, stage) && submit(provider, 1, stage), "actual SDK enters the production 2D managed callback for both eye submits");
+                    check(submit(provider, 0, stage), "actual SDK enters the production 2D left-eye callback");
+                    // A real notification between two eyes must not split this
+                    // pair's flags. It applies to the next two complete pairs.
+                    if (update == 0 && stage == 1) originChanged();
+                    check(submit(provider, 1, stage), "actual SDK enters the production 2D right-eye callback");
                     check(submitted[0] != submitted[1], "completed eyes have distinct native 2D submit resources");
                     for (unsigned eye = 0; eye < 2; ++eye) {
                         if (update == 0) eyeTargets[stage][eye] = submitted[eye];
                         check(submitted[eye] == eyeTargets[stage][eye], "each provider stage retains its own stable eye target");
+                        D3D11_TEXTURE2D_DESC canonical{}; submitted[eye]->GetDesc(&canonical);
+                        check(canonical.Format == DXGI_FORMAT_R8G8B8A8_UNORM, "submitted storage is canonical RGBA8 independent of the source sRGB tag");
                         verify(submitted[eye], eye, update);
                     }
-                    check(capturedFlags == 0 && capturedType == 0, "original D3D11 submit convention retained");
+                    const unsigned expectedFlags = update == 1 ? 0x20 : 0;
+                    check(capturedEyeFlags[0] == expectedFlags && capturedEyeFlags[1] == expectedFlags,
+                        "origin discontinuity is paired, bounded to two frames and absent during ordinary rendering");
+                    check(capturedType == 0 && capturedColourSpace == 1, "same encoded SDR bytes declare Gamma in the ordinary D3D11 submission");
                 }
             } }, {}};
             HANDLE graphics = CreateThread(nullptr, 0, graphicsThread, &work, 0, nullptr);
@@ -226,12 +245,15 @@ extern "C" __declspec(dllexport) int RunProviderChecks(const wchar_t* path, void
             Texture foreign{nullptr, 0, 0};
             check(boundary(object, 0, &foreign, nullptr, 0) == 0 && indexedCalls == 0 && submitted[0] == nullptr,
                 "unknown resources retain ordinary submission even with a live source grant");
-            Texture known{submitted[1], 0, 0};
+            Texture known{images.begin()->second.texture, 0, 0};
             check(boundary(object, 1, &known, nullptr, 0x10) == 0 && indexedCalls == 0 && capturedFlags == 0x10,
                 "non-default submit flags are forwarded without coercion");
             known.type = 2;
             check(boundary(object, 1, &known, nullptr, 0) == 0 && indexedCalls == 0 && capturedType == 2,
                 "non-D3D11 submit kinds are forwarded without reinterpretation");
+            known.type = 0; known.colourSpace = 2;
+            check(boundary(object, 1, &known, nullptr, 0) == 0 && submitted[1] == known.handle && capturedColourSpace == 2,
+                "an unexpected explicit Linear declaration is forwarded without relabeling");
             disable(); // Revoke the live source snapshot while callback stays attached.
             check(submit(provider, 0, 0) && submit(provider, 1, 0) && indexedCalls == 0,
                 "live source revocation immediately restores ordinary submission inside the callback");
@@ -295,6 +317,6 @@ extern "C" __declspec(dllexport) int RunProviderChecks(const wchar_t* path, void
 }
 #ifndef MANAGED_FIXTURE
 int wmain(int argc, wchar_t** argv) {
-    return argc == 2 ? RunProviderChecks(argv[1], nullptr, nullptr) : 2;
+    return argc == 2 ? RunProviderChecks(argv[1], nullptr, nullptr, nullptr) : 2;
 }
 #endif

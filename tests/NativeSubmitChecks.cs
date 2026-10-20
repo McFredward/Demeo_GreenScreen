@@ -10,7 +10,7 @@ internal static class NativeSubmitChecks
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void Configure();
     [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
-    private delegate int RunChecks([MarshalAs(UnmanagedType.LPWStr)] string provider, Configure enable, Configure disable);
+    private delegate int RunChecks([MarshalAs(UnmanagedType.LPWStr)] string provider, Configure enable, Configure disable, Configure originChanged);
     internal static void Run(string provider)
     {
 #if !MELONLOADER
@@ -46,8 +46,9 @@ internal static class NativeSubmitChecks
             }
             SteamLinkCoverageBridge.Reset(); if (++disables >= 2) OpenVrSubmission.Reset();
         };
-        int result = run(provider, enable, disable);
-        GC.KeepAlive(enable); GC.KeepAlive(disable);
+        Configure originChanged = OpenVrOrigin.Mark;
+        int result = run(provider, enable, disable, originChanged);
+        GC.KeepAlive(enable); GC.KeepAlive(disable); GC.KeepAlive(originChanged);
         if (failure != null) throw failure;
         if (result != 0) throw new Exception("Actual SDK / production 2D submit checks failed: " + result);
         Console.WriteLine("Production C# 2D OpenVR boundary passed with the actual SDK and D3D11 eye arrays. No SteamVR/headset test.");

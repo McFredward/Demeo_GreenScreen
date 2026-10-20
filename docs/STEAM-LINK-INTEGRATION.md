@@ -112,31 +112,66 @@ GloomhavenVR in both eyes, confirmed in this conversation. Therefore a generic
 companion failure is not established, and changing the camera layout again is
 not justified by these logs.
 
-Version 1.4.8 keeps the original Unity/URP array and adapts the completed native
-submission to **separate 2D eye resources**. `OpenVrNativeSettings` reads the
-supplied loaded SDK (377,856 bytes, SHA-256
-`0ebad5a4ca7f4aa9b94b5f0128dcbc7bb3139fee317b91a0ec2636b448b4d702`).
-It validates its exported getters, current provider and both existing stage
-resources. Each source must be resolved two-slice RGBA on the same D3D11 device.
-No provider settings, scene/culling policy or input subsystem are changed.
+The maintainer's 1.4.8 hardware test confirms that the separate 2D images fixed
+the difference between eyes. Solid assets are now transparent in both eyes.
+The matching session is Demeo PID 24488, 2026-10-20 22:10:19–22:11:46 local PC
+time. The actual-submit probes repeatedly read alpha 255 in all three regions
+of both eyes; no probe readback or Submit error is reported. On the Frame,
+between 22:10:26 and 22:11:41, exactly 6,403 new decoded masks are classified
+fully transparent, with no new mixed/opaque masks. These are content readings,
+not just successful handshake counters. They localize the discrepancy after
+the sampled game Submit input and before/at native mask extraction; sparse
+regions still do not prove the entire image or identify a private SteamVR
+instruction. Forcing game-object alpha globally would not address this evidence.
 
-`OpenVrEyeTextures` prepares one left/right 2D pair for each of the SDK's two
-stages. At the real SDK Submit callback, D3D11 `CopySubresourceRegion` copies
-only the matching current slice into that stage's eye target. The original
-Submit receives this 2D resource with the same eye, bounds, flags and colour
-space. There is no extra render, shader, resolve, CPU colour readback, UV
-mapping, binding change or timing call. Resolution and original RGBA bytes
-are retained. Four full-size resolved images add GPU memory and copy bandwidth
-(for 4040-square RGBA, approximately 249 MiB in total). Stage reuse follows the
-provider's original cadence. No previous frame or other eye substitutes for the
-submitted source. This removes array submission from this game's SteamVR input;
-a correct hardware result remains to be verified.
+Version 1.4.9 keeps the original Unity/URP array and separate 2D targets, but
+canonicalizes the exchange **storage and declaration**, not the pixel values.
+`OpenVrNativeSettings` reads the supplied loaded SDK (377,856 bytes, SHA-256
+`0ebad5a4ca7f4aa9b94b5f0128dcbc7bb3139fee317b91a0ec2636b448b4d702`).
+It validates its exported getters, current provider and both existing stages.
+Each source must be resolved two-slice RGBA on the same D3D11 device. Unity's
+Linear-project eye view has already encoded SDR RGB for sRGB display. Copying
+those bytes into compatible `R8G8B8A8_UNORM` storage and declaring OpenVR
+`ColorSpace_Gamma` makes that contract explicit, as in GloomhavenVR's working
+Gamma/UNorm image path. Demeo's project lighting stays Linear. D3D11 permits
+copies within the same compatible format family without conversion; every RGB
+and alpha byte is verified in the actual GPU test. No alpha threshold or RGB
+premultiplication is added. Unknown explicit color-space declarations forward
+unchanged rather than being relabeled.
+
+`OpenVrEyeTextures` prepares one left/right 2D pair for each SDK stage. At the
+real SDK Submit callback, `CopySubresourceRegion` copies the matching current
+slice into that stage's eye target. Original Submit receives the same eye,
+bounds and ordinary D3D11 texture kind. Four full-size resolved images add GPU
+memory/copy bandwidth (about 249 MiB for 4040-square RGBA). There is no extra
+render, shader, resolve, CPU color export, UV mapping or render-target rebind.
+Stage reuse follows the provider cadence; no older frame/other eye is used.
+
+The logs also record 248 `StandingZeroPoseReset (bResetManually)` messages
+while Demeo is connected, often in rapid bursts. Their caller and exact visual
+consequence are not established. `OpenVrOrigin` subscribes to the public
+`XRInputSubsystem.trackingOriginUpdated` event in Demeo. A real notification
+under a live Frame/OpenVR grant increments an atomic revision. On the graphics
+thread, a new revision sets public `Submit_FrameDiscontinuity` for two complete
+native eye pairs, then stops. A notification between eyes applies to the next
+pair so flags stay coherent. Source-grant changes establish a fresh baseline.
+This is the API's motion-smoothing discontinuity signal; no pose, origin,
+recenter request, callback event queue or frame timing is replaced. Subscription
+maintenance runs cold once per second, unsubscribes on stop/opt-out/unload, and
+records at most 12 notifications. IL2CPP input callbacks remain unchanged until
+their runtime delivery is validated. This cannot fix packet loss or prove that
+all compositor origin resets arrive as Unity input notifications.
+
+References: [Microsoft D3D11 CopySubresourceRegion](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-copysubresourceregion),
+[Valve OpenVR texture/color-space and submit flags](https://github.com/ValveSoftware/openvr/blob/f51d87ecf8f7903e859b0aa4d617ff1e5f33db5a/headers/openvr.h).
+A hardware test must still establish whether the canonical handoff restores
+nonzero masks and whether discontinuity signaling reduces the table glitches.
 
 `OpenVrEyeSubmission` leases the old compositor interface object's vptr with
 an atomic compare/exchange. Its private table retains the MSVC RTTI locator and
 all 51 public methods; only Submit redirects. No executable instructions or
-global method tables are modified. Only registered sources, D3D11/default flags,
-valid eyes and the identical live source grant redirect. Unknown inputs forward
+global method tables are modified. Only registered sources, D3D11/default input
+flags, auto color space, valid eyes and the identical live source grant redirect. Unknown inputs forward
 unchanged. Revocation immediately stops copying. Source replacement prepares new
 resources on the Unity Update path after old users leave; it never waits on a
 graphics callback. Detached in-flight callbacks retain their resources until
@@ -149,8 +184,9 @@ two seconds, polls once with `DONOTFLUSH`, and maps once with `DO_NOT_WAIT` only
 after its query completes. No diagnostic Flush or blocking wait is added.
 Only alpha summaries leave the graphics callback; no image/RGB capture is
 exported. Counters and min/mean/max/zero/partial values appear in the bounded
-`OpenVR separate 2D eye submission` log. This measures the actual Submit input,
-after all Unity camera work, rather than the earlier URP-camera-end snapshot.
+`OpenVR separate 2D eye submission` log: six early reports five seconds apart,
+then 14 reports 30 seconds apart, covering a long intro and the later menu.
+This measures the actual Submit input after all Unity camera work, rather than the earlier URP-camera-end snapshot.
 Probe setup/readback failure cannot authorize a source and does not alter eye
 copying. The native companion's session/frame/eye/encoder proof remains required.
 No Frame files or configuration are changed.
@@ -159,8 +195,10 @@ The matching 1.4.7 Frame session also records 72 substantive FEC retries, one
 submission without metadata and two late-metadata errors. These can account
 for transport disturbance, but no timed visual observation proves that they
 caused the reported table glitches. A mod-only build does not establish a
-network fix. The new handoff addresses the game's remaining array/2D difference;
+network fix. The remaining handoff work addresses the source texture contract;
 source-alpha and transport evidence must stay distinct in hardware validation.
+The 1.4.8 session also has 78 substantive FEC retries between 22:10:19 and
+22:11:40; no camera/texture change is evidence of a network repair.
 
 `m_AllowPostProcessAlphaOutput` requests alpha preservation. The adapter also
 temporarily disables `renderPostProcessing` on active game cameras: URP can
@@ -373,7 +411,7 @@ does not reproduce that presentation contract. In particular, the previously
 rejected split-pass workaround cannot be reintroduced over a one-pass provider.
 At that 1.4.5 checkpoint the next unmeasured boundary was the actual per-eye
 OpenVR/SteamVR input before native coverage extraction. Those logs alone did
-not establish a new eye fix. Version 1.4.8 addresses that handoff through per-eye native 2D submission;
+not establish a new eye fix. Version 1.4.9 addresses that handoff through per-eye native 2D submission;
 its actual managed/native boundary test is described below.
 
 The submission adapter has an additional private-input test:
@@ -391,7 +429,10 @@ A Windows .NET host then executes the **production C# adapter** against that
 SDK. Two stages and three updates have distinct per-eye RGB and all alpha values;
 the production boundary runs on a native graphics worker and must copy the
 correct slice to a distinct 2D target for every stage and preserve every byte.
-Source arrays must also remain byte-identical. The same-submit diagnostic must
+Source arrays must also remain byte-identical. The new UNorm targets must
+preserve every sRGB-source byte and declare Gamma. A notification injected
+between native eye callbacks must mark only the next two complete pairs with
+`Submit_FrameDiscontinuity`, retaining ordinary flags before/after. The same-submit diagnostic must
 complete actual GPU queries/readbacks for both eyes. The optional licensed-Editor path runs
 the same production callback in Unity 2021.3.5's actual Windows Mono runtime,
 covering Mono reverse-P/Invoke independently of the .NET host. This is runtime

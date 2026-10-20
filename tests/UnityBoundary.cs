@@ -61,6 +61,11 @@ namespace Il2CppSystem
 }
 namespace UnityEngine
 {
+    public static class SubsystemManager
+    {
+        public static readonly List<XR.XRInputSubsystem> Inputs = new List<XR.XRInputSubsystem>();
+        public static void GetSubsystems(List<XR.XRInputSubsystem> output) { output.Clear(); output.AddRange(Inputs); }
+    }
     public class Object : Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase
     { public string name; public static void Destroy(Object value) { } }
     public class Component : Object
@@ -306,6 +311,13 @@ namespace UnityEngine.Rendering.Universal
 }
 namespace UnityEngine.XR
 {
+    public class XRInputSubsystem
+    {
+        public bool running = true;
+        public event Action<XRInputSubsystem> trackingOriginUpdated;
+        public int Listeners => trackingOriginUpdated?.GetInvocationList().Length ?? 0;
+        public void NotifyOrigin() => trackingOriginUpdated?.Invoke(this);
+    }
     public enum XRNode { Head }
     [Flags] public enum InputDeviceCharacteristics { None=0, HeadMounted=1, Controller=2 }
     public struct InputDevice

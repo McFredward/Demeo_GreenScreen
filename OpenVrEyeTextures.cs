@@ -90,6 +90,12 @@ namespace GreenScreen
             _map = Method<Map>(_context, 14); _unmap = Method<Unmap>(_context, 15);
             var create = Method<CreateTexture>(_device, 5);
             Shape target = _shape;
+            // Unity's Linear project already encoded these SDR bytes for its
+            // sRGB eye view. Publish the same bytes as ordinary RGBA8/Gamma,
+            // without asking OpenVR to infer semantics from a typeless/sRGB
+            // resource. CopySubresourceRegion permits this format family;
+            // it performs no colour conversion, including on alpha.
+            target.Format = 28;
             target.Slices = 1; target.Usage = 0; target.Bind = 0x28; target.Cpu = target.Misc = 0;
             for (int i = 0; i < _targets.Length; i++)
             {
@@ -179,7 +185,7 @@ namespace GreenScreen
         {
             get
             {
-                string text = "; exact-submit alpha samples left/right=" + Interlocked.Read(ref _samples[0]) + "/" + Interlocked.Read(ref _samples[1])
+                string text = "; input DXGI format=" + _shape.Format + "; submit=RGBA8_UNORM/Gamma; exact-submit alpha samples left/right=" + Interlocked.Read(ref _samples[0]) + "/" + Interlocked.Read(ref _samples[1])
                     + "; readback-hr=0x" + Volatile.Read(ref _readbackError).ToString("x8");
                 for (int eye = 0; eye < 2; eye++) for (int region = 0; region < 3; region++)
                 {

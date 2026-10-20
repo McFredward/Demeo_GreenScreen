@@ -13,8 +13,8 @@
     <OutputPath>bin/Integration/$(LoaderBackend)/$(Game)/</OutputPath>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../ModEntryPoints.cs;../ModConfiguration.cs;../NativePassthrough.cs;../OpaqueCoverage.cs;../SrpOutput.cs;../SrpOpaqueCoverage.cs;../SrpAlphaProbe.cs;../SteamLinkConnectionLifecycle.cs;../OpenVrSubmission.cs;../OpenVrEyeSubmission.cs;../OpenVrEyeTextures.cs;../OpenVrNativeSettings.cs" />
-    <Compile Include="UnityBoundary.cs;IntegrationChecks.cs;OpenVrSubmissionChecks.cs;NativeSubmitChecks.cs" />
+    <Compile Include="../ModEntryPoints.cs;../ModConfiguration.cs;../NativePassthrough.cs;../OpaqueCoverage.cs;../SrpOutput.cs;../SrpOpaqueCoverage.cs;../SrpAlphaProbe.cs;../SteamLinkConnectionLifecycle.cs;../OpenVrSubmission.cs;../OpenVrEyeSubmission.cs;../OpenVrEyeTextures.cs;../OpenVrNativeSettings.cs;../OpenVrOrigin.cs" />
+    <Compile Include="UnityBoundary.cs;IntegrationChecks.cs;OpenVrSubmissionChecks.cs;NativeSubmitChecks.cs;OpenVrOriginChecks.cs" />
     <EmbeddedResource Include="../assets/nativecoverage.bundle" LogicalName="GreenScreen.NativeCoverage" />
   </ItemGroup>
 </Project>

@@ -51,10 +51,12 @@ namespace GreenScreen
                     throw new NotSupportedException("OpenVR single-pass output must contain two eye slices.");
                 _backend ??= BackendFactory();
                 if (!_backend.Refresh()) { reason = "Waiting for OpenVR's current eye textures."; return false; }
-                if (_reports < 12 && Time.unscaledTime >= _nextReport)
+                if (_reports < 20 && Time.unscaledTime >= _nextReport)
                 {
                     Utils.LogInfo(_backend.Statistics);
-                    _reports++; _nextReport = Time.unscaledTime + 5f;
+                    // Cover a long intro and the later menu without a
+                    // permanent per-frame/per-second diagnostic stream.
+                    _reports++; _nextReport = Time.unscaledTime + (_reports < 6 ? 5f : 30f);
                 }
                 reason = null; return true;
             }

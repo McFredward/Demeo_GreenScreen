@@ -24,6 +24,10 @@ namespace GreenScreen
         private int _inflight, _retiring;
         private SteamLinkCoverageBridge.Snapshot _grant;
         private long _left, _right;
+        private SteamLinkCoverageBridge.Snapshot _pairGrant;
+        private long _originRevision, _discontinuousPairs;
+        private int _discontinuousRemaining;
+        private uint _pairFlags;
         private int _lastError, _fault;
         // Native callers may have fetched an owned vptr/callback before detach.
         // Retain this tiny table and delegate until process exit; never free a
@@ -126,15 +130,34 @@ namespace GreenScreen
             var grant = Volatile.Read(ref _grant);
             var eyes = Volatile.Read(ref _eyes);
             if (grant == null || !grant.CanAcceptOrdinaryRgba || !ReferenceEquals(grant, SteamLinkCoverageBridge.Current)
-                || Volatile.Read(ref _fault) != 0 || self != _object || eye < 0 || eye > 1 || texture.Type != 0 || flags != 0
+                || Volatile.Read(ref _fault) != 0 || self != _object || eye < 0 || eye > 1 || texture.Type != 0
+                || texture.ColourSpace != 0 || flags != 0
                 || eyes == null || !eyes.Contains(texture.Handle))
                 return _original(self, eye, ref texture, bounds, flags);
             // GPU copies preserve all RGBA bytes in the current eye and stage.
             // Original Submit receives a resolved 2D image, never the array.
-            // No binding, camera, timing, bounds or colour-space changes.
+            // No binding, camera, timing, bounds or pixel-value changes.
             Texture separate = texture;
             separate.Handle = eyes.Copy(texture.Handle, eye);
-            int result = _original(self, eye, ref separate, bounds, flags);
+            separate.ColourSpace = 1; // Gamma: these are Unity's already encoded SDR bytes.
+            if (eye == 0)
+            {
+                long revision = OpenVrOrigin.Revision;
+                if (!ReferenceEquals(_pairGrant, grant))
+                {
+                    _pairGrant = grant; _originRevision = revision; _discontinuousRemaining = 0;
+                }
+                else if (_originRevision != revision)
+                { _originRevision = revision; _discontinuousRemaining = 2; }
+                // Public Submit_FrameDiscontinuity. Both eyes of this native
+                // pair retain the same flag, including a notification between
+                // their callbacks. No timing call or pose is replaced.
+                _pairFlags = _discontinuousRemaining > 0 ? 0x20u : 0;
+            }
+            uint submitFlags = ReferenceEquals(_pairGrant, grant) ? _pairFlags : 0;
+            int result = _original(self, eye, ref separate, bounds, submitFlags);
+            if (eye == 1 && submitFlags != 0)
+            { _discontinuousRemaining--; Interlocked.Increment(ref _discontinuousPairs); }
             Volatile.Write(ref _lastError, result);
             if (result == 0)
             {
@@ -155,6 +178,7 @@ namespace GreenScreen
         }
         public string Statistics => "OpenVR separate 2D eye submission: left=" + Interlocked.Read(ref _left)
             + "; right=" + Interlocked.Read(ref _right) + "; last-error=" + Volatile.Read(ref _lastError)
+            + "; origin notifications=" + OpenVrOrigin.Revision + "; discontinuous pairs=" + Interlocked.Read(ref _discontinuousPairs)
             + ". Unity single-pass targets, cameras and timing are retained." + (_eyes?.Statistics ?? "");
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetModuleHandleW")]

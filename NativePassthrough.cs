@@ -71,6 +71,7 @@ namespace GreenScreen
         internal static void Tick()
         {
             OpenVrEyeSubmission.CollectRetired();
+            OpenVrOrigin.Tick(_started && OpenVrSubmission.Owned);
             if (!_started) return;
             try { TickCore(); }
             catch (Exception error)
@@ -363,6 +364,7 @@ namespace GreenScreen
 
         internal static void Shutdown()
         {
+            OpenVrOrigin.Reset();
             if (!_started) return;
             _started = false;
             SteamLinkConnectionLifecycle.Reset();

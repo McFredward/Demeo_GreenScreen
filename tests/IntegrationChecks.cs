@@ -370,6 +370,7 @@ internal static class IntegrationChecks
             Check(camera.backgroundColor==Color.clear && OpaqueCoverage.Failure==null,"a new mod lifetime retries loading and recovers from a prior bundle error");
             NativePassthrough.Shutdown();
             OpenVrSubmissionChecks.Run(Check);
+            OpenVrOriginChecks.Run(Check);
             Console.WriteLine($"Configuration and render lifecycle checks passed: {_checks}");
         }
         finally
