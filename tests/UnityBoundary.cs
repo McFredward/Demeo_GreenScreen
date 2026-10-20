@@ -184,6 +184,7 @@ namespace UnityEngine
 }
 namespace UnityEngine.Experimental.Rendering
 {
+    public class XRPass { public int multipassId { get; set; }=1; }
     public enum GraphicsFormat { R8G8B8A8_UNorm, B8G8R8A8_UNorm, Other, R8G8B8A8_SRGB, B8G8R8A8_SRGB }
     public static class XRSystem
     {
@@ -293,6 +294,7 @@ namespace UnityEngine.Rendering.Universal
     public class UniversalCameraData
     {
         public UnityEngine.Camera camera { get; set; }
+        public UnityEngine.Experimental.Rendering.XRPass xr { get; set; }=new UnityEngine.Experimental.Rendering.XRPass();
     }
     public class UniversalRenderPipelineAsset : UnityEngine.Rendering.RenderPipelineAsset
     {
@@ -333,6 +335,11 @@ namespace UnityEngine.XR
     }
     public class XRDisplaySubsystem
     {
+        public bool running { get; private set; }=true;
+        public int Stops,Starts;
+        public Action Started;
+        public void Stop() { running=false; Stops++; }
+        public void Start() { Starts++; Started?.Invoke(); running=true; }
         public static bool ReverseSlices;
         public static UnityEngine.Rect? Viewport;
         public struct XRRenderParameter { public UnityEngine.Rect viewport; public int textureArraySlice; }

@@ -9,6 +9,13 @@ using UnityEngine.Rendering.Universal.Internal;
 
 internal static class IntegrationChecks
 {
+    private sealed class ProviderSettings : OpenVrStereoLayout.ISettings
+    {
+        public bool Current => true;
+        public ushort Mode => 0;
+        public bool ProviderSinglePass => false;
+        public void Rebuild(ushort expected,ushort mode) => throw new Exception("Already MultiPass: no rebuild allowed.");
+    }
     private static int _checks;
     private static readonly string ConfigPath=Path.Combine(Path.GetDirectoryName(typeof(ConfigurationStore).Assembly.Location), "greenscreen.ini");
     private static void Check(bool value,string name) { if (!value) throw new Exception(name); _checks++; }
@@ -60,8 +67,18 @@ internal static class IntegrationChecks
         Time.unscaledTime+=1.1f; Time.frameCount++; update();
         Check(camera.backgroundColor==original,"remaining driver callbacks stay inactive after unload");
     }
-    public static void Main()
+    public static void Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--provider-pin")
+        {
+            byte[] provider = File.ReadAllBytes(args[1]);
+            Check(OpenVrNativeSettings.Pin(provider), "the actual supplied provider matches the production pin");
+            provider[provider.Length-1] ^= 1;
+            Check(!OpenVrNativeSettings.Pin(provider), "a changed actual provider is refused");
+            Console.WriteLine("Actual OpenVR provider pin checks passed: " + _checks);
+            return;
+        }
+        OpenVrStereoLayout.SettingsFactory=()=>new ProviderSettings();
 #if !MELONLOADER
         BepInExPlugin.Log=new BepInEx.Logging.ManualLogSource();
 #endif
@@ -191,6 +208,11 @@ internal static class IntegrationChecks
                 "the first executed opaque repair is observable in game logs");
             var source=new RenderTexture(); var sourceDescription=source.descriptor;
             sourceDescription.volumeDepth=2; sourceDescription.dimension=TextureDimension.Tex2DArray; sourceDescription.msaaSamples=8; source.descriptor=sourceDescription;
+            int beforeLeft=AsyncGPUReadback.Requests;
+            var leftData=new UniversalCameraData { camera=camera, xr=new UnityEngine.Experimental.Rendering.XRPass { multipassId=0 } };
+            FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData { enableAlphaOutput=true },new RTHandle { rt=source },new RTHandle(),leftData);
+            RenderPipelineManager.End(camera);
+            Check(AsyncGPUReadback.Requests==beforeLeft,"a MultiPass left-eye callback cannot read the previous frame's right eye");
             FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData { enableAlphaOutput=true },
                 new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
             RenderPipelineManager.End(camera);
@@ -204,6 +226,10 @@ internal static class IntegrationChecks
             RenderPipelineManager.End(camera);
             Check(AsyncGPUReadback.Requests==reads && SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
                 "alpha measurements are rate limited and do not change source permission");
+            // Array-view diagnostics remain supported for SteamVR/OpenXR. The
+            // OpenVR provider path now deliberately requires real native 2D eyes.
+            UnityEngine.XR.Management.XRGeneralSettings.Instance.Manager.activeLoader=new UnityEngine.XR.OpenXR.OpenXRLoader();
+            Time.unscaledTime+=1.1f; Tick();
             var originalXr=XRSettings.eyeTextureDesc;
             XRSettings.eyeTextureDesc.volumeDepth=2; XRSettings.eyeTextureDesc.dimension=TextureDimension.Tex2DArray;
             XRDisplaySubsystem.ReverseSlices=true;
@@ -350,6 +376,7 @@ internal static class IntegrationChecks
             NativePassthrough.Initialize(); EnableNative();
             Check(camera.backgroundColor==Color.clear && OpaqueCoverage.Failure==null,"a new mod lifetime retries loading and recovers from a prior bundle error");
             NativePassthrough.Shutdown();
+            OpenVrStereoChecks.Run(Check);
             Console.WriteLine($"Configuration and render lifecycle checks passed: {_checks}");
         }
         finally

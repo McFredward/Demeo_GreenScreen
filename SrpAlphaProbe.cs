@@ -16,7 +16,7 @@ namespace GreenScreen
     {
         private static HarmonyLib.Harmony _patch;
         private static MethodInfo _target;
-        private static Func<object, object> _camera, _texture, _alphaOutput;
+        private static Func<object, object> _camera, _texture, _alphaOutput, _xr, _nativePass;
         private static Camera _owner;
         private static int _frame = -1, _remaining = 24, _epoch;
         private static int _failures;
@@ -60,6 +60,8 @@ namespace GreenScreen
                 _camera = SrpOpaqueCoverage.Reader(parameters[4].ParameterType, "camera", out _);
                 _texture = SrpOpaqueCoverage.Reader(parameters[2].ParameterType, "rt", out _);
                 _alphaOutput = SrpOpaqueCoverage.Reader(parameters[1].ParameterType, "enableAlphaOutput", out _);
+                _xr = SrpOpaqueCoverage.Reader(parameters[4].ParameterType, "xr", out Type xrType);
+                _nativePass = SrpOpaqueCoverage.Reader(xrType, "multipassId", out _);
                 _patch = new HarmonyLib.Harmony("McFredward.DemeoGreenScreen.AlphaProbe");
                 _patch.Patch(_target, postfix: new HarmonyMethod(typeof(SrpAlphaProbe).GetMethod(nameof(AfterBlit), BindingFlags.Static | BindingFlags.NonPublic)));
             }
@@ -73,6 +75,12 @@ namespace GreenScreen
             {
                 Camera camera = _camera(__4) as Camera;
                 if (!NativePassthrough.OwnsSrpSource(camera)) return;
+                // endCameraRendering runs once for EACH native MultiPass eye.
+                // Wait for the last pass before reading a current-frame pair;
+                // after the first pass the other target still holds an old eye.
+                var display = SrpOutput.ActiveDisplay;
+                if (display == null || display.GetRenderPassCount() == 2
+                    && Convert.ToInt32(_nativePass(_xr(__4))) != 1) return;
                 var source = _texture(__2) as RenderTexture;
                 _sourceInfo = source == null ? "; blit-input=external" : "; blit-input=" + source.width + "x" + source.height
                     + "/" + source.graphicsFormat + "; input-MSAA=" + source.antiAliasing;

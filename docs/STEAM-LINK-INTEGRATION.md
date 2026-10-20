@@ -83,8 +83,9 @@ RGBA/BGRA UNorm and their sRGB views. The game's lighting space is not changed,
 and RGB is not multiplied by alpha again. HDR headset output is refused; HDR
 intermediates use the alpha-capable 64-bit precision while this source is owned.
 
-URP retains the game's original stereo layout. It may render two views in a
-single two-slice XR pass. The companion independently requires its actual
+URP follows the actual native provider layout. OpenXR may render two views in a
+single two-slice XR pass; the OpenVR path now supplies genuine native MultiPass
+as described below. The companion independently requires its actual
 single-slice source shape after the game's normal submission/resolve path;
 the internal array never authorizes an array resource in the companion.
 URP's legacy XRSettings flag is not used as proof of the active SRP layout.
@@ -98,6 +99,37 @@ pass therefore need not correspond to an existing native render-pass index.
 Preserving the native layout avoids this invalid reconfiguration without
 copying a left eye, changing resolution, or accepting a previous eye image.
 This is a source-proven correction; headset verification is still required.
+
+Version 1.4.6 takes ownership of the supplied OpenVR provider's stereo setting
+on a positively confirmed Frame / Steam Link session. It changes the provider
+itself to MultiPass, rather than splitting an existing URP two-view pass.
+`OpenVrNativeSettings` accepts only the loaded Demeo/Battles SDK with 377,856
+bytes and SHA-256
+`0ebad5a4ca7f4aa9b94b5f0128dcbc7bb3139fee317b91a0ec2636b448b4d702`.
+The file pin, exported getter/destroy addresses, readable/writable mapped
+regions, current context/provider/handle and getter/storage agreement are
+checked before changing its existing 16-bit stereo setting. The adapter ships
+only ABI metadata and its own code, without a copied SDK or code patch.
+
+Before switching, the source grant, coverage commands and pending diagnostic
+epoch are withdrawn. Unity's public API stops only the XR display. The original
+SDK destroy method retires its cached array textures, then the setting becomes
+MultiPass and the display resumes. Native Stop alone retains those textures;
+changing only a managed flag or restarting without retirement is insufficient.
+Transparency waits until the actual SDK cache and two native render passes
+agree: one view and a single-slice 2D target per pass. A five-second startup
+failure rolls back and latches a useful refusal instead of repeatedly restarting.
+The input subsystem and normal intro/camera/fade/UI flow continue unchanged.
+Original resolution, MSAA, FOV, colour space and URP pass policy are retained.
+MultiPass can increase rendering cost because each eye has its own render pass.
+
+The lease survives camera changes and temporary identity/peer gaps. Explicit
+opt-out, a confirmed other headset/runtime or unload restores the original mode
+and rebuilds the original targets only while still owned. A failed new Start
+attempts to resume the original layout; cleanup does not restart a display
+stopped externally. Unknown SDK builds and foreign context/setting changes
+refuse native source permission. Battlemarked's OpenXR path retains its native
+layout. No Frame files or configuration are changed.
 
 `m_AllowPostProcessAlphaOutput` requests alpha preservation. The adapter also
 temporarily disables `renderPostProcessing` on active game cameras: URP can
@@ -308,10 +340,38 @@ built-in Forward, Gamma SDR and MultiPass; Demeo uses Unity 6 URP with a native
 two-view array. Cloning a Camera or disabling URP single-pass rendering alone
 does not reproduce that presentation contract. In particular, the previously
 rejected split-pass workaround cannot be reintroduced over a one-pass provider.
-The next unmeasured boundary is the actual per-eye OpenVR/SteamVR input before
-native coverage extraction. Establish its alpha and the corresponding converted
-mask before attributing this run to camera ownership or shipping another render
-workaround. No new eye fix is established by these logs.
+At that 1.4.5 checkpoint the next unmeasured boundary was the actual per-eye
+OpenVR/SteamVR input before native coverage extraction. Those logs alone did
+not establish a new eye fix. The 1.4.6 provider transition above replaces that
+array handoff with separate native 2D eye submissions, validated below.
+
+The provider transition has an additional private-input test:
+
+```sh
+python3 scripts/check-openvr-provider.py --provider /path/to/the/games/XRSDKOpenVR.dll
+```
+
+It checks the actual production C# file pin and rejects a changed copy. Then
+the real pinned SDK runs under Wine with owned, offline Unity/OpenVR boundaries
+and actual D3D11 textures. Its real lifecycle publishes the provider/context,
+Start caches the mode, CreateEyeTextures allocates its requested storage,
+SetupRenderPass produces native IDs, and SubmitToCompositor delivers those
+exact eye textures. Negative controls establish that SinglePass is one native
+two-view pass and that Stop retains its old arrays. Rebuilding to MultiPass
+produces two distinct 2D images and two single-view passes. Three image updates
+preserve every RGB and alpha byte per eye through the actual SDK submit; the
+original array mode also restores successfully. This passed 153,720 checks on
+Wine/wined3d. No SteamVR server, encoder, Frame output or headset was tested.
+Only public interface headers are downloaded; private SDK copies and the owned
+Wine prefix are removed after the run. Small receipts/logs remain in `.build`.
+
+Portable lifecycle checks exercise deferred readiness, one-time restart,
+permission withdrawal before native mutation, timeout rollback, failed Start
+recovery, foreign ownership, external stops and the already-MultiPass case for
+all six game/loader builds. The alpha probe waits for the final native pass in
+MultiPass; the first eye's camera-end callback must not read a previous-frame
+right eye. This is a rendering change with actual-SDK/D3D11 evidence, not only
+another diagnostic build. A successful headset run is still outstanding.
 
 Additional native API validation is available with a licensed Unity 2021.3
 Editor and a Vulkan graphics device on Linux:

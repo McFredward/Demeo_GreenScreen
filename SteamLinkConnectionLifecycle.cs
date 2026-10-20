@@ -15,6 +15,8 @@ namespace GreenScreen
         private static float _nextRuntimeCheck;
         private static bool _steamVrRuntime;
         private static bool _runtimeKnown;
+        private static bool _openVrRuntime;
+        internal static bool UsesOpenVr => _runtimeKnown && _openVrRuntime;
         internal static bool LegacyTransport => _runtimeKnown && !_steamVrRuntime;
         private static Type _generalSettings;
         private static string _runtimeStatus;
@@ -26,7 +28,7 @@ namespace GreenScreen
         internal static void Tick(bool requested)
         {
             bool running = GraphicsRunning();
-            if (!running) { _runtimeKnown = false; _steamVrRuntime = false; _nextRuntimeCheck = 0; }
+            if (!running) { _runtimeKnown = false; _steamVrRuntime = _openVrRuntime = false; _nextRuntimeCheck = 0; }
             bool eligible = requested && running && Application.platform == RuntimePlatform.WindowsPlayer
                 && SteamVrRuntime();
             if (!eligible) { Reset(); return; }
@@ -58,6 +60,7 @@ namespace GreenScreen
             if (Time.unscaledTime < _nextRuntimeCheck) return _steamVrRuntime;
             _nextRuntimeCheck = Time.unscaledTime + 1f;
             _steamVrRuntime = false;
+            _openVrRuntime = false;
             try
             {
                 _generalSettings ??= FindType("UnityEngine.XR.Management.XRGeneralSettings");
@@ -66,7 +69,10 @@ namespace GreenScreen
                 var loader = manager?.GetType().GetProperty("activeLoader")?.GetValue(manager) as UnityEngine.Object;
                 if (loader == null) return RuntimeResult("no active XR loader", false, false);
                 if (NativePassthrough.RuntimeObject(loader, "Unity.XR.OpenVR.OpenVRLoader") != null)
+                {
+                    _openVrRuntime = true;
                     return RuntimeResult("OpenVR", true);
+                }
                 if (NativePassthrough.RuntimeObject(loader, "UnityEngine.XR.OpenXR.OpenXRLoader") == null)
                     return RuntimeResult("unsupported loader " + loader.GetType().FullName, false);
                 object name = FindType("UnityEngine.XR.OpenXR.OpenXRRuntime")?.GetProperty("name")?.GetValue(null);
