@@ -149,6 +149,7 @@ namespace GreenScreen
 
         private static string Profile(Camera camera)
         {
+            if (OpaqueCoverage.Failure != null) return "Steam Link native passthrough unavailable: " + OpaqueCoverage.Failure;
             if (Application.platform != RuntimePlatform.WindowsPlayer || IntPtr.Size != 8)
                 return "The companion requires a Windows x64 game process.";
             bool srp = GraphicsSettings.currentRenderPipeline != null;
@@ -221,7 +222,7 @@ namespace GreenScreen
                 if (!SrpOpaqueCoverage.Prepare(out reason)) { LeaveNative(); return false; }
                 _coverage = OpaqueCoverage.TryCreate(head.Camera, true);
                 if (_coverage == null)
-                { reason = "The bundled stereo opaque-coverage shader could not be prepared."; LeaveNative(); return false; }
+                { reason = OpaqueCoverage.Failure ?? "The bundled stereo opaque-coverage shader could not be prepared."; LeaveNative(); return false; }
             }
             else
             {
@@ -232,7 +233,7 @@ namespace GreenScreen
                 head.ForceIntermediate();
                 _coverage = OpaqueCoverage.TryCreate(head.Camera);
                 if (_coverage == null)
-                { reason = "The bundled opaque-coverage shader could not be prepared."; LeaveNative(); return false; }
+                { reason = OpaqueCoverage.Failure ?? "The bundled opaque-coverage shader could not be prepared."; LeaveNative(); return false; }
             }
             reason = null;
             return true;

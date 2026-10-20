@@ -28,6 +28,15 @@ jobs:
           dotnet-version: 8.0.x
       - name: Verify metadata-only references
         run: python3 scripts/check-refasm.py
+      - name: Verify embedded coverage bundle and reject the broken 1.4.1 fixture
+        run: |
+          python3 -m venv .build/coverage-checks
+          .build/coverage-checks/bin/pip install --disable-pip-version-check -q -r scripts/coverage-requirements.txt
+          .build/coverage-checks/bin/python scripts/check-coverage.py
+          if .build/coverage-checks/bin/python scripts/check-coverage.py tests/fixtures/coverage-missing-container.bundle; then
+            echo 'Bundle gate accepted missing AssetBundle container' >&2
+            exit 1
+          fi
       - name: Check protocol and connection lifetime
         run: dotnet run --project tests/ProtocolChecks.csproj
       - name: Check Frame and Steam Link identity admission
@@ -43,8 +52,8 @@ jobs:
       - name: Download pinned public build dependencies
         run: python3 scripts/fetch-build-deps.py
       - name: Build and package all three games
-        run: python3 scripts/package.py
-      - name: Verify identity resources in all six produced mods
+        run: .build/coverage-checks/bin/python scripts/package.py
+      - name: Verify embedded resources in all six produced mods
         run: dotnet run --project tests/IdentityChecks.csproj -- --artifacts
       - name: Ensure full assemblies are rejected by the reference gate
         run: |

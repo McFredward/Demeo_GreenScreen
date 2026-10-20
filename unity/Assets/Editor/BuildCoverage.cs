@@ -27,6 +27,24 @@ public static class BuildCoverage
             BuildAssetBundleOptions.ForceRebuildAssetBundle | BuildAssetBundleOptions.ChunkBasedCompression,
             BuildTarget.StandaloneWindows64) == null)
             throw new System.Exception("Coverage bundle build failed.");
+        VerifyBundle(Path.Combine(output, "nativecoverage.bundle"));
+    }
+
+    public static void VerifyBundle(string filename)
+    {
+        var bundle = AssetBundle.LoadFromMemory(File.ReadAllBytes(filename));
+        if (bundle == null) throw new BuildFailedException("Coverage bundle has no loadable AssetBundle container.");
+        try
+        {
+            string[] names = bundle.GetAllAssetNames();
+            if (names.Length != 1 || names[0] != "assets/nativecoverage.shader")
+                throw new BuildFailedException("Coverage bundle asset directory is invalid.");
+            var shader = bundle.LoadAsset<Shader>(names[0]);
+            if (shader == null || shader.name != "Hidden/Demeo/NativeCoverage")
+                throw new BuildFailedException("Coverage bundle does not load its actual Shader asset.");
+            Debug.Log("Coverage bundle native load verified: " + filename);
+        }
+        finally { bundle.Unload(true); }
     }
 }
 

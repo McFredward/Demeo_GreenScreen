@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import sys
 import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -16,6 +17,7 @@ GAMES = {
 
 def main():
     subprocess.run(["python3", str(ROOT / "scripts/check-refasm.py")], check=True)
+    subprocess.run([sys.executable, str(ROOT / "scripts/check-coverage.py")], check=True)
     destination = ROOT / "dist"
     destination.mkdir(exist_ok=True)
     archives = []

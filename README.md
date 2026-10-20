@@ -118,13 +118,15 @@ dotnet build GreenScreen.csproj -c DEMEOBATTLES -p:GameDirectory="C:/Games/Demeo
 dotnet build GreenScreen.csproj -c DEMEOBATTLEMARKED -p:GameDirectory="C:/Games/Battlemarked"
 ```
 
-Use `-p:LoaderBackend=BepInEx` or `-p:LoaderBackend=MelonLoader` to select a loader explicitly. `UnityAssemblyDirectory` and `LoaderDirectory` can override the reference locations independently. Loader and game assemblies are not copied into the output. The coverage shader is embedded in the mod DLL; rebuilding it requires Unity 2021.3 with Windows build support (see `unity/Assets/Editor/BuildCoverage.cs`).
+Use `-p:LoaderBackend=BepInEx` or `-p:LoaderBackend=MelonLoader` to select a loader explicitly. `UnityAssemblyDirectory` and `LoaderDirectory` can override the reference locations independently. Loader and game assemblies are not copied into the output. The coverage shader is embedded in the mod DLL; rebuilding it requires Unity 2021.3 with Windows build support and the project's enabled AssetBundle module (see `unity/Assets/Editor/BuildCoverage.cs`). The build verifies native loading of the resulting bundle and its Shader asset.
 
 ### CI builds without an installed game
 
 Development happens on `dev`. CI checks `dev`/`main` pushes and pull requests. Every push to `main` builds `Demeo.zip`, `DemeoBattles.zip` and `DemeoBattlemarked.zip`, available together with checksums in the workflow's **Demeo-mods** artifact. The workflow does not push commits or create releases.
 
 CI uses committed [metadata-only references](libs/RefAsm/README.md). Every method body is removed, and CI verifies that all MethodDef RVAs are zero. Public loader dependencies are downloaded from SHA-256-pinned archives. CI compiles and checks both loader variants for each game; the three ZIPs retain their documented defaults (BepInEx for Demeo/Battles, MelonLoader for Battlemarked). The local installer builds the variant detected on your PC. ZIP packaging allows only the mod DLL, active `greenscreen.ini`, README and licences. The mod embeds a small owned identity reader and Valve's pinned public OpenVR SDK loader; game assemblies and mod loader assemblies are excluded.
+
+CI also validates the coverage bundle's asset directory, its shader reference, D3D11 programs and named passes. It rejects the malformed 1.4.1 bundle as a regression fixture and checks that all six DLLs embed the exact validated bytes. Packaging requires the Python dependencies pinned in `scripts/coverage-requirements.txt`; these build tools are excluded from the ZIPs.
 
 Run the same package build locally without a game installation:
 

@@ -249,6 +249,20 @@ internal static class IntegrationChecks
             Check(camera.backgroundColor==Color.clear,"confirmed Frame is admitted through the game's SteamVR OpenXR loader");
             NativePassthrough.Shutdown();
             Check(pipeline.m_HDRColorBufferPrecision==UniversalRenderPipelineAsset.HdrPrecision.Bits32,"HDR intermediate precision restored");
+            AssetBundle.Reject=true; int attempts=AssetBundle.LoadAttempts;
+            NativePassthrough.Initialize(); EnableNative();
+            Check(camera.backgroundColor==Color.black && OpaqueCoverage.Failure.Contains("LoadFromMemory"),
+                "a rejected bundle stays opaque and identifies the actual native load failure");
+            Check(AssetBundle.LoadAttempts==attempts+1,"the immutable embedded bundle is attempted only once per mod lifetime");
+            int reports=TestLog.Messages.Count;
+            for(int i=0;i<4;i++) { SteamLinkCoverageBridge.Grant(); Tick(); }
+            Check(!SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba && AssetBundle.LoadAttempts==attempts+1,
+                "a permanent bundle error prevents source re-admission and reconnect churn");
+            Check(TestLog.Messages.Count==reports,"a permanent bundle error does not flood the game log");
+            NativePassthrough.Shutdown(); AssetBundle.Reject=false;
+            NativePassthrough.Initialize(); EnableNative();
+            Check(camera.backgroundColor==Color.clear && OpaqueCoverage.Failure==null,"a new mod lifetime retries loading and recovers from a prior bundle error");
+            NativePassthrough.Shutdown();
             Console.WriteLine($"Configuration and render lifecycle checks passed: {_checks}");
         }
         finally

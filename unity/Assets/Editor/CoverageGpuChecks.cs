@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -15,6 +17,17 @@ public static class CoverageGpuChecks
     }
     public static void Run()
     {
+        // Source compilation alone cannot detect a malformed packaged bundle.
+        BuildCoverage.VerifyBundle(Path.GetFullPath(Path.Combine(Application.dataPath, "../../assets/nativecoverage.bundle")));
+        string rejectedBundle = Environment.GetEnvironmentVariable("DEMEO_COVERAGE_REJECT");
+        if (!string.IsNullOrEmpty(rejectedBundle))
+        {
+            bool refused = false;
+            try { BuildCoverage.VerifyBundle(rejectedBundle); }
+            catch (BuildFailedException) { refused = true; }
+            Check(refused, "Native Unity must reject the broken 1.4.1 bundle.");
+            Debug.Log("Coverage bundle negative control passed: broken 1.4.1 bundle rejected by native Unity.");
+        }
         Check(SystemInfo.supports2DArrayTextures && SystemInfo.supportsAsyncGPUReadback, "Array/readback support is required.");
         var shader = AssetDatabase.LoadAssetAtPath<Shader>("Assets/NativeCoverage.shader");
         var fixtureShader = AssetDatabase.LoadAssetAtPath<Shader>("Assets/Editor/CoverageFixture.shader");

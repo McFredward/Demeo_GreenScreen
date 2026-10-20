@@ -139,7 +139,9 @@ namespace UnityEngine
     public class Shader : Object { public bool isSupported=true; }
     public class AssetBundle : Object
     {
-        public static AssetBundle LoadFromMemory(byte[] data) => new AssetBundle();
+        public static bool Reject;
+        public static int LoadAttempts;
+        public static AssetBundle LoadFromMemory(byte[] data) { LoadAttempts++; return Reject ? null : new AssetBundle(); }
         public T LoadAsset<T>(string name) where T : Object => (T)LoadAsset(name,typeof(T));
         public Object LoadAsset(string name, Type type) => new Shader { name="Hidden/Demeo/NativeCoverage" };
         public void Unload(bool all) { }

@@ -89,7 +89,8 @@ asset field cannot restore stripped programs. This first integration bypasses
 those effects rather than claiming that an unverified post-processing path
 preserves coverage. Original camera settings are restored on exit.
 
-Version 1.4.1 also repairs opaque coverage in URP Forward/Forward+. Version 1.4.0
+The opaque-coverage path added in 1.4.1 repairs alpha in URP Forward/Forward+;
+1.4.2 supplies the corrected loadable bundle described below. Version 1.4.0
 relied on native opaque-shader alpha in URP; the maintainer reported continuous
 slight transparency through solid objects in the left eye. Such alpha is not
 a reliable opaque-coverage contract. The new postfix on
@@ -108,6 +109,27 @@ The bundle was built with Unity 2021.3.5f1 for D3D11. Its build enables VR/stere
 compilation and checks that both ordinary and stereo-instanced variants reach
 the shader compiler. Unity otherwise strips VR variants when VR support is
 disabled ([Unity shader stripping documentation](https://unity.com/blog/engine-platform/stripping-scriptable-shader-variants)).
+
+The maintainer's 1.4.1 run stopped at `The bundled stereo opaque-coverage shader
+could not be prepared`. The build project had omitted
+`com.unity.modules.assetbundle`. Unity still returned a build manifest and wrote
+shader data, but warned that the AssetBundle module was disabled. The shipped
+file contained a Shader object without the AssetBundle container or asset
+directory; native `AssetBundle.LoadFromMemory` rejects that exact file. The
+previous source-shader GPU checks never attempted to load the shipped bundle.
+
+Version 1.4.2 enables the built-in module and requires a native load of the
+produced file, its exact asset directory and Shader asset after building. CI
+independently parses the bundle, validates the directory's shader reference and
+compiled profile, and rejects the original 1.4.1 file retained as a regression
+fixture. The produced-DLL checks compare the embedded bundle bytes against that
+validated file. No game objects or code are included in this bundle.
+
+Runtime failures now identify the missing resource, native bundle rejection,
+missing Shader, wrong name or unsupported graphics API. A permanent embedded
+resource failure prevents renewed source negotiation for that mod lifetime;
+restart/reload clears it. This avoids the 1.4.1 reconnect/log loop while keeping
+the background opaque when preparation fails.
 
 All modified camera and pipeline settings retain an original value and restore
 only a value still owned by this mod. Native permission loss releases them.
@@ -140,15 +162,21 @@ native encoder/receiver chain.
 coverage shader on an Intel RPL-P Vulkan GPU. Different opaque triangles in
 the two eye slices start with incorrect alpha. The single-pass repair matches
 independent per-eye depth repairs at every pixel, preserves RGB and retains
-fractional 4x MSAA edges. The 1x and 4x runs passed 8,208 checks. Run without
+fractional 4x MSAA edges. The 1x and 4x runs plus the original broken-bundle
+negative control passed 8,209 checks. Run without
 `-nographics` using `-executeMethod CoverageGpuChecks.Run`. This exercises the
-shader source on Vulkan, not the Windows D3D11 bundle or a headset stream.
+shader source on Vulkan. The same run natively loads the actual Windows bundle
+and its Shader asset and rejects the broken 1.4.1 bundle; it does not execute
+the Windows D3D11 shader programs or a headset stream.
+Set `DEMEO_COVERAGE_REJECT` to the absolute path of
+`tests/fixtures/coverage-missing-container.bundle` to include that negative control.
 
 The latest Frame logs were read over SSH without changing device files or
-settings. The PC provider packaged 3,293 coverage masks during the reported
-run, with no readback errors. These logs have no current per-eye opacity
-measurement. They establish sender activity, not the visual root cause or a headset
-result for this repair.
+settings. In the 2026-10-20 run, the PC mod repeatedly failed coverage-shader
+preparation. The provider logged only 11 packaged masks;
+the Frame received mostly metadata without coverage and recorded one guarded
+submit by the end of that session. This agrees with the preparation/reconnect
+loop and the reported black background. It is not a headset result for 1.4.2.
 
 All three variants have also been compiled against the supplied actual
 Unity/interop assemblies, using BepInEx 5.4.22.0 (Mono), BepInEx 6 BE 789
@@ -169,7 +197,7 @@ Reference source checkpoints:
 * GloomhavenVR source-client/coverage example: `2b9ef4009ddd5240f20db8af139923778d23d1b9`.
 * Supplied Demeo Assembly-CSharp SHA-256: `726ab6a4aaf502a4bcce0c13e288cea3a899b8d4c27241c8aa11676ebcb74e1e`.
 * Supplied Demeo URP runtime SHA-256: `5bc1a4c2d8d461ab6ab8be3a5933b2f14e96f76b04ac12f0ce8b731d8b1825c7`.
-* Coverage bundle SHA-256: `5de4c0ecdc042c91908611ec3debde764996a91cfab08774997d7816c893109b`.
+* Coverage bundle SHA-256: `084a7608526982ac5736929d39723671b16502e1c1fd58691a8d16499034a600`.
 
 ## Reading runtime logs
 
@@ -180,7 +208,8 @@ the Frame / Steam Link identity is unconfirmed. New installs default to `true`. 
 startup also reports when no INI was found. Configs in the loader root remain
 available even when the game's working directory is elsewhere.
 
-In version 1.4.1, `URP opaque depth coverage is active` confirms that the first
+In version 1.4.2, `Opaque coverage shader loaded from the embedded AssetBundle`
+confirms successful resource loading. `URP opaque depth coverage is active` confirms that the first
 opaque repair actually recorded commands, beyond merely preparing its hook.
 
 A SteamVR provider log with `no-declaration` for the game's PID and

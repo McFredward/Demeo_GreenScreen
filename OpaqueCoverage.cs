@@ -14,6 +14,7 @@ namespace GreenScreen
         private static AssetBundle _bundle;
         private static Shader _shader;
         private static bool _attempted;
+        internal static string Failure { get; private set; }
         private readonly Camera _camera;
         private readonly Material _material;
         private readonly CommandBuffer _commands;
@@ -46,6 +47,7 @@ namespace GreenScreen
 
         internal static OpaqueCoverage TryCreate(Camera camera, bool srp = false)
         {
+            if (Failure != null) return null;
             try
             {
                 if (_shader == null)
@@ -54,26 +56,29 @@ namespace GreenScreen
                     _attempted = true;
                     using (Stream resource = typeof(OpaqueCoverage).Assembly.GetManifestResourceStream("GreenScreen.NativeCoverage"))
                     {
-                        if (resource == null) return null;
+                        if (resource == null) throw new InvalidDataException("The embedded coverage resource is missing.");
                         using (var data = new MemoryStream())
                         {
                             resource.CopyTo(data);
                             _bundle = AssetBundle.LoadFromMemory(data.ToArray());
                         }
                     }
-                    if (_bundle == null) return null;
+                    if (_bundle == null) throw new InvalidDataException("AssetBundle.LoadFromMemory rejected the embedded coverage bundle.");
 #if DEMEO
-                    _shader = _bundle.LoadAsset<Shader>("Assets/NativeCoverage.shader");
+                    _shader = _bundle.LoadAsset<Shader>("assets/nativecoverage.shader");
 #else
-                    _shader = _bundle.LoadAsset("Assets/NativeCoverage.shader", Il2CppInterop.Runtime.Il2CppType.Of<Shader>())?.Cast<Shader>();
+                    _shader = _bundle.LoadAsset("assets/nativecoverage.shader", Il2CppInterop.Runtime.Il2CppType.Of<Shader>())?.Cast<Shader>();
 #endif
+                    if (_shader == null) throw new InvalidDataException("The coverage bundle does not contain its Shader asset.");
+                    if (_shader.name != "Hidden/Demeo/NativeCoverage") throw new InvalidDataException("The coverage Shader has an unexpected name: " + _shader.name);
+                    if (!_shader.isSupported) throw new NotSupportedException("The coverage Shader is unsupported on " + SystemInfo.graphicsDeviceType + ".");
+                    Utils.LogInfo("Opaque coverage shader loaded from the embedded AssetBundle.");
                 }
-                if (_shader == null || !_shader.isSupported || _shader.name != "Hidden/Demeo/NativeCoverage") return null;
                 return new OpaqueCoverage(camera, _shader, srp);
             }
             catch (Exception error)
             {
-                Utils.LogInfo("Could not prepare opaque coverage: " + error.Message);
+                Failure = "The bundled opaque-coverage shader is unavailable: " + error.GetType().Name + ": " + error.Message;
                 return null;
             }
         }
@@ -94,6 +99,7 @@ namespace GreenScreen
         {
             _shader = null;
             _attempted = false;
+            Failure = null;
             if (_bundle != null) _bundle.Unload(true);
             _bundle = null;
         }
