@@ -29,14 +29,24 @@ namespace GreenScreen
         private static bool _started, _rescan = true;
         private static string _status;
 #if DEMEO
+        private static Camera[] _cameraBuffer = new Camera[16];
+#else
+        private static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Camera> _cameraBuffer =
+            new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Camera>(16);
+#endif
+#if DEMEO
         private static readonly Camera.CameraCallback PreCullCallback = BeforeCamera;
         private static readonly Action<ScriptableRenderContext, Camera> SrpCallback = BeforeSrpCamera;
+        private static readonly Action<ScriptableRenderContext, Camera> SrpEndCallback = AfterSrpCamera;
 #else
         private static readonly Camera.CameraCallback PreCullCallback =
             Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Camera.CameraCallback>((Action<Camera>)BeforeCamera);
         private static readonly Il2CppSystem.Action<ScriptableRenderContext, Camera> SrpCallback =
             Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action<ScriptableRenderContext, Camera>>(
                 (Action<ScriptableRenderContext, Camera>)BeforeSrpCamera);
+        private static readonly Il2CppSystem.Action<ScriptableRenderContext, Camera> SrpEndCallback =
+            Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action<ScriptableRenderContext, Camera>>(
+                (Action<ScriptableRenderContext, Camera>)AfterSrpCamera);
 #endif
 
         internal static void Initialize()
@@ -47,9 +57,11 @@ namespace GreenScreen
 #if DEMEO
             Camera.onPreCull += PreCullCallback;
             RenderPipelineManager.beginCameraRendering += SrpCallback;
+            RenderPipelineManager.endCameraRendering += SrpEndCallback;
 #else
             Camera.onPreCull = Il2CppSystem.Delegate.Combine(Camera.onPreCull, PreCullCallback)?.Cast<Camera.CameraCallback>();
             RenderPipelineManager.add_beginCameraRendering(SrpCallback);
+            RenderPipelineManager.add_endCameraRendering(SrpEndCallback);
 #endif
             _rescan = true;
         }
@@ -77,16 +89,26 @@ namespace GreenScreen
                 bool changed = ConfigurationStore.Refresh();
                 if (changed) { SteamLinkCoverageBridge.Reset(); LeaveNative(); RestoreCameras(); }
                 SrpOutput.Discover();
-                ScanCameras();
             }
+            // Active-camera discovery must follow scene changes in this frame,
+            // including the intro's switch to the lobby. The reusable engine
+            // buffer avoids the old one-second stale-camera window and sorting.
+            ScanCameras();
             ModConfiguration settings = ConfigurationStore.Current;
             SteamLinkConnectionLifecycle.Tick(settings.SteamLinkNativePassthrough);
             if (!settings.SteamLinkNativePassthrough || !SteamLinkConnection.Available)
             {
                 SteamLinkCoverageBridge.Tick(false, Time.unscaledTime);
                 LeaveNative();
-                foreach (CameraState state in Cameras) state.SetBackground(settings.BackgroundColor, false);
-                Report(settings.SteamLinkNativePassthrough
+                bool waiting = settings.SteamLinkNativePassthrough && !LegacyBackgroundConfirmed;
+                foreach (CameraState state in Cameras)
+                {
+                    if (waiting && state.Camera != null && state.Camera.targetTexture != null) continue;
+                    state.SetBackground(waiting ? Color.black : settings.BackgroundColor, waiting);
+                }
+                Report(waiting
+                    ? "Waiting for Frame/Steam Link identity; keeping the background opaque black without a green startup frame."
+                    : settings.SteamLinkNativePassthrough
                     ? "Native passthrough inactive: Frame through Steam Link is not confirmed (" + SteamLinkConnection.Current.State + "). Using the configured background colour."
                     : "Steam Link native passthrough disabled; using the configured Virtual Desktop background colour.");
                 return;
@@ -134,14 +156,31 @@ namespace GreenScreen
         private static void ScanCameras()
         {
             for (int i = Cameras.Count - 1; i >= 0; i--)
-                if (Cameras[i].Camera == null) { Cameras.RemoveAt(i); _cameraVersion++; }
-            foreach (Camera camera in GameObject.FindObjectsOfType<Camera>())
+                if (Cameras[i].Camera == null) { if (Cameras[i].NativeOutput) _cameraVersion++; Cameras.RemoveAt(i); }
+            int needed = Camera.allCamerasCount;
+            if (_cameraBuffer.Length < needed)
             {
-                bool known = false;
-                foreach (CameraState state in Cameras) if (state.Camera == camera) { known = true; break; }
-                if (!known) { Cameras.Add(new CameraState(camera)); _cameraVersion++; }
+#if DEMEO
+                _cameraBuffer = new Camera[Math.Max(needed, _cameraBuffer.Length * 2)];
+#else
+                _cameraBuffer = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Camera>(
+                    Math.Max(needed, _cameraBuffer.Length * 2));
+#endif
             }
+            int count = Camera.GetAllCameras(_cameraBuffer);
+            for (int i = 0; i < count; i++) { TrackCamera(_cameraBuffer[i]); _cameraBuffer[i] = null; }
         }
+
+        private static CameraState TrackCamera(Camera camera)
+        {
+            foreach (CameraState state in Cameras) if (state.Camera == camera) return state;
+            var added = new CameraState(camera); Cameras.Add(added); if (added.NativeOutput) _cameraVersion++; return added;
+        }
+
+        private static bool LegacyBackgroundConfirmed => Application.platform != RuntimePlatform.WindowsPlayer
+            || SteamLinkConnectionLifecycle.LegacyTransport
+            || SteamLinkConnection.Current.State == SteamLinkConnection.Reason.WrongHeadset
+            || SteamLinkConnection.Current.State == SteamLinkConnection.Reason.WrongTransport;
 
         private static bool StereoCamera(Camera camera) => camera != null && camera.isActiveAndEnabled
             && camera.cameraType == CameraType.Game && camera.stereoTargetEye == StereoTargetEyeMask.Both
@@ -212,7 +251,8 @@ namespace GreenScreen
                 // them. Bypass game post-processing while this source is owned.
                 foreach (CameraState state in Cameras)
                 {
-                    if (state.Camera == null || !state.Camera.isActiveAndEnabled || state.Camera.cameraType != CameraType.Game) continue;
+                    if (state.Camera == null || !state.Camera.isActiveAndEnabled || state.Camera.cameraType != CameraType.Game
+                        || state.Camera.targetTexture != null || state.Camera.stereoTargetEye != StereoTargetEyeMask.Both) continue;
                     object data = SrpOutput.CameraData(state.Camera);
                     if (data == null) continue; // URP's no-additional-data default has no post-processing.
                     if (!RenderSettingLease.TryAcquire(data, "renderPostProcessing", false, out RenderSettingLease lease))
@@ -220,6 +260,7 @@ namespace GreenScreen
                     PostProcessing.Add(lease);
                 }
                 if (!SrpOpaqueCoverage.Prepare(out reason)) { LeaveNative(); return false; }
+                SrpAlphaProbe.Prepare();
                 _coverage = OpaqueCoverage.TryCreate(head.Camera, true);
                 if (_coverage == null)
                 { reason = OpaqueCoverage.Failure ?? "The bundled stereo opaque-coverage shader could not be prepared."; LeaveNative(); return false; }
@@ -240,6 +281,11 @@ namespace GreenScreen
         }
 
         private static void BeforeSrpCamera(ScriptableRenderContext context, Camera camera) => BeforeCamera(camera);
+        private static void AfterSrpCamera(ScriptableRenderContext context, Camera camera) => SrpAlphaProbe.AfterCamera(camera);
+
+        internal static bool OwnsSrpSource(Camera camera) => _head != null && _head.Camera == camera
+            && _pipeline != null && _frame == Time.frameCount && _grant != null && _grant.CanAcceptOrdinaryRgba
+            && ReferenceEquals(_grant, SteamLinkCoverageBridge.Current) && SteamLinkConnection.Available;
 
         internal static void RecordSrpCoverage(Camera camera, object commands)
         {
@@ -257,6 +303,12 @@ namespace GreenScreen
 
         private static void BeforeCamera(Camera camera)
         {
+            // A newly created camera can render before its first mod Update.
+            // Identity still pending must never expose a previously green clear.
+            if (_started && camera != null && camera.cameraType == CameraType.Game
+                && camera.targetTexture == null && camera.stereoTargetEye == StereoTargetEyeMask.Both
+                && ConfigurationStore.Current.SteamLinkNativePassthrough && (_head == null || !SteamLinkConnection.Available)
+                && !LegacyBackgroundConfirmed) TrackCamera(camera).SetBackground(Color.black, true);
             if (_head == null || camera != _head.Camera) return;
             bool valid;
             try { valid = _frame == Time.frameCount && SteamLinkConnection.Available && StereoCamera(camera) && Profile(camera) == null
@@ -303,13 +355,16 @@ namespace GreenScreen
 #if DEMEO
             Camera.onPreCull -= PreCullCallback;
             RenderPipelineManager.beginCameraRendering -= SrpCallback;
+            RenderPipelineManager.endCameraRendering -= SrpEndCallback;
 #else
             Camera.onPreCull = Il2CppSystem.Delegate.Remove(Camera.onPreCull, PreCullCallback)?.Cast<Camera.CameraCallback>();
             RenderPipelineManager.remove_beginCameraRendering(SrpCallback);
+            RenderPipelineManager.remove_endCameraRendering(SrpEndCallback);
 #endif
             LeaveNative();
             RestoreCameras();
             SrpOpaqueCoverage.Shutdown();
+            SrpAlphaProbe.Shutdown();
             OpaqueCoverage.Unload();
         }
 
@@ -347,17 +402,24 @@ namespace GreenScreen
         private sealed class CameraState
         {
             internal readonly Camera Camera;
+            internal readonly bool NativeOutput;
             private readonly Color _background;
             private readonly CameraClearFlags _clear;
             private Color _written;
             private bool _changed, _changedClear, _intermediate, _originalIntermediate;
             internal CameraState(Camera camera)
-            { Camera = camera; _background = camera.backgroundColor; _clear = camera.clearFlags; }
+            {
+                Camera = camera; _background = camera.backgroundColor; _clear = camera.clearFlags;
+                NativeOutput = camera.cameraType == CameraType.Game && camera.targetTexture == null
+                    && camera.stereoTargetEye == StereoTargetEyeMask.Both;
+            }
             internal void SetBackground(Color color, bool solid)
             {
                 if (Camera == null) return;
                 Camera.backgroundColor = _written = color; _changed = true;
                 if (solid) { Camera.clearFlags = CameraClearFlags.SolidColor; _changedClear = true; }
+                else if (_changedClear && Camera.clearFlags == CameraClearFlags.SolidColor)
+                { Camera.clearFlags = _clear; _changedClear = false; }
             }
             internal void ForceIntermediate()
             {

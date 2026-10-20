@@ -67,7 +67,10 @@ namespace GreenScreen
         }
         internal static bool AllowsCamera(Camera camera)
         {
-            if (!Running) return false;
+            // XRLayout.AddCamera excludes explicit render targets. The legacy
+            // stereo eye mask and allowXRRendering flag alone also match
+            // offscreen cameras, which never submit an eye to this XR display.
+            if (!Running || camera.targetTexture != null) return false;
             object data = CameraData(camera);
             if (data == null) return true; // URP default: Base camera, XR allowed.
             Type type = data.GetType();

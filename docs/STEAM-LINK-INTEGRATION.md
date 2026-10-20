@@ -31,6 +31,23 @@ transports restore the regular background and renderer settings regardless of
 the INI value. Identity is cooperative public device metadata, independent of
 source negotiation and receiver/texture/frame proof. Both gates are required.
 
+Starting with 1.4.3, unknown/pending identity keeps an opaque black clear.
+Only a positive other-headset/other-transport result or a non-Windows platform
+selects the legacy colour while the native preference is enabled. Early camera
+callbacks apply this rule even before the first mod Update. Opting out still
+selects the configured legacy colour. These states do not authorize transparency.
+
+Active cameras are refreshed each Update using a reusable `Camera.GetAllCameras`
+buffer. The previous one-second discovery interval could retain the old camera
+across the intro/lobby transition and withdraw source permission. Discovery now
+sees the replacement in that Update without needing the game-startup patch.
+The intro and its fades are retained; no scene is skipped.
+The URP camera test now also follows `XRLayout.AddCamera`'s explicit-target
+exclusion. A camera rendering into a texture is not an XR-display owner even
+when tagged MainCamera with `allowXRRendering` and Both eyes. Such cameras no
+longer steal the source choice, have their post-processing changed, or trigger
+repeated native preparation merely by being created for offscreen work.
+
 ## Source contract
 
 The client implements the companion's [application source API v1](https://github.com/McFredward/steam-link-native-passthrough/blob/main/docs/protocols/application-source-v1.md):
@@ -191,6 +208,30 @@ shutdown require per-game headset verification. An alpha-capable target alone
 does not establish correct coverage for every custom material. Unknown effects
 can still emit incorrect alpha even when native source negotiation succeeds.
 
+The maintainer's subsequent 1.4.2 test confirms native shader loading and the
+opaque raster hook, but still reports left-eye transparency and a black right
+eye during the intro. Receiver counters show paired guarded draws, not the
+alpha values in either Unity eye image. The green startup and stale-camera
+paths above are source-proven fixes. The remaining stereo defect is unresolved;
+1.4.3 is a measurement checkpoint, not a certified correction for that defect.
+
+The 1.4.3 probe observes `FinalBlitPass.ExecutePass` and, after camera submission,
+asynchronously reads a 32-by-32 region at the centre of the actual source
+viewport in each source slice. It reports only alpha min/mean/max and the
+zero/partial/opaque counts, camera/frame, source format/MSAA/viewport and the
+final pass's alpha-output flag. There are at most 24 requests, two seconds
+apart, and one outstanding request. No RGB values or image files are exported.
+It does not change render settings, source permission or masks. This measures
+the Unity final-blit input; it does not measure submitted OpenVR textures,
+native conversion or Frame output. These values are needed to localize the
+remaining defect before changing that chain.
+
+A separate Windows Unity 2021.3 player loaded the exact shipped D3D11 bundle
+under Wine 9/wined3d and passed the single-sample stereo/depth/RGB comparisons.
+Its 4x MSAA readback fixture returned zero RGB and alpha even before the repair,
+so that part is not valid evidence for the game or an MSAA correction. The
+Vulkan shader/MSAA evidence above is unchanged. No headset output was captured.
+
 Reference source checkpoints:
 
 * Companion: `751dda4851f2c7ceaadcc60a945cb92771cd3098`.
@@ -203,8 +244,9 @@ Reference source checkpoints:
 
 Check the loader log for `GreenScreen configuration:` (absolute INI path and
 `NativePassthrough` value) and `GreenScreen Unity Update is active.`. The green
-Virtual Desktop background is expected with `NativePassthrough=false` or when
-the Frame / Steam Link identity is unconfirmed. New installs default to `true`. The installer prints the configuration path;
+Virtual Desktop background is expected with `NativePassthrough=false` or a
+confirmed legacy headset/transport. Pending identity stays black in 1.4.3.
+New installs default to `true`. The installer prints the configuration path;
 startup also reports when no INI was found. Configs in the loader root remain
 available even when the game's working directory is elsewhere.
 

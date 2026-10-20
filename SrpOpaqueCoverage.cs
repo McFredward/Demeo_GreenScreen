@@ -59,7 +59,7 @@ namespace GreenScreen
         }
 
         // Mono exposes fields; the generated IL2CPP assemblies expose properties.
-        private static Func<object, object> Reader(Type type, string name, out Type valueType)
+        internal static Func<object, object> Reader(Type type, string name, out Type valueType)
         {
             FieldInfo field = type.GetField(name, Members);
             if (field != null) { valueType = field.FieldType; return field.GetValue; }

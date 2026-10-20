@@ -23,6 +23,16 @@ namespace Il2CppInterop.Runtime
         }
     }
 }
+namespace Il2CppInterop.Runtime.InteropTypes.Arrays
+{
+    public class Il2CppReferenceArray<T>
+    {
+        private readonly T[] values;
+        public Il2CppReferenceArray(long count) { values=new T[count]; }
+        public int Length => values.Length;
+        public T this[int index] { get=>values[index]; set=>values[index]=value; }
+    }
+}
 namespace Il2CppSystem
 {
     public class Delegate : Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase
@@ -77,6 +87,9 @@ namespace UnityEngine
     public enum ColorSpace { Gamma, Linear }
     public enum HideFlags { HideAndDontSave }
     public enum MeshTopology { Triangles }
+    public enum TextureFormat { RGBA32 }
+    public struct Color32 { public byte r,g,b,a; }
+    public struct Vector2Int { public int x,y; }
     public struct Color : IEquatable<Color>
     {
         public float r, g, b, a;
@@ -91,6 +104,13 @@ namespace UnityEngine
     }
     public class Camera : Component
     {
+        public static int allCamerasCount { get { int n=0; foreach(var c in GameObject.Scene) if(c.isActiveAndEnabled) n++; return n; } }
+#if DEMEO
+        public static int GetAllCameras(Camera[] buffer)
+#else
+        public static int GetAllCameras(Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Camera> buffer)
+#endif
+        { int n=0; foreach(var c in GameObject.Scene) if(c.isActiveAndEnabled) buffer[n++]=c; return n; }
         public Camera() { Extra=new Rendering.Universal.UniversalAdditionalCameraData(); }
         public static Camera main;
 #if DEMEO
@@ -119,7 +139,15 @@ namespace UnityEngine
         public void RemoveCommandBuffer(Rendering.CameraEvent at, Rendering.CommandBuffer commands) { Commands--; }
     }
     public class RenderTexture : Object
-    { public RenderTextureDescriptor descriptor=XR.XRSettings.eyeTextureDesc; public bool IsCreated() => true; }
+    {
+        public RenderTextureDescriptor descriptor=XR.XRSettings.eyeTextureDesc;
+        public int width=>descriptor.width;
+        public int height=>descriptor.height;
+        public int volumeDepth=>descriptor.volumeDepth;
+        public int antiAliasing=>descriptor.msaaSamples;
+        public Experimental.Rendering.GraphicsFormat graphicsFormat=>descriptor.graphicsFormat;
+        public bool IsCreated() => true;
+    }
     public struct RenderTextureDescriptor
     {
         public int width,height,volumeDepth,msaaSamples;
@@ -149,7 +177,7 @@ namespace UnityEngine
     public static class Time { public static float unscaledTime; public static int frameCount; }
     public static class Application { public static RuntimePlatform platform=RuntimePlatform.WindowsPlayer; }
     public static class QualitySettings { public static ColorSpace activeColorSpace=ColorSpace.Gamma; }
-    public static class SystemInfo { public static Rendering.GraphicsDeviceType graphicsDeviceType=Rendering.GraphicsDeviceType.Direct3D11; }
+    public static class SystemInfo { public static Rendering.GraphicsDeviceType graphicsDeviceType=Rendering.GraphicsDeviceType.Direct3D11; public static bool supportsAsyncGPUReadback=true; }
     public static class Debug { public static void Log(string text) { } }
 }
 namespace UnityEngine.Experimental.Rendering
@@ -176,14 +204,21 @@ namespace UnityEngine.Rendering
     {
 #if DEMEO
         public static event Action<ScriptableRenderContext,UnityEngine.Camera> beginCameraRendering;
+        public static event Action<ScriptableRenderContext,UnityEngine.Camera> endCameraRendering;
 #else
         public static Il2CppSystem.Action<ScriptableRenderContext,UnityEngine.Camera> beginCameraRendering;
+        public static Il2CppSystem.Action<ScriptableRenderContext,UnityEngine.Camera> endCameraRendering;
         public static void add_beginCameraRendering(Il2CppSystem.Action<ScriptableRenderContext,UnityEngine.Camera> callback)
             => beginCameraRendering=Il2CppSystem.Delegate.Combine(beginCameraRendering,callback).Cast<Il2CppSystem.Action<ScriptableRenderContext,UnityEngine.Camera>>();
         public static void remove_beginCameraRendering(Il2CppSystem.Action<ScriptableRenderContext,UnityEngine.Camera> callback)
             => beginCameraRendering=Il2CppSystem.Delegate.Remove(beginCameraRendering,callback)?.Cast<Il2CppSystem.Action<ScriptableRenderContext,UnityEngine.Camera>>();
+        public static void add_endCameraRendering(Il2CppSystem.Action<ScriptableRenderContext,UnityEngine.Camera> callback)
+            => endCameraRendering=Il2CppSystem.Delegate.Combine(endCameraRendering,callback).Cast<Il2CppSystem.Action<ScriptableRenderContext,UnityEngine.Camera>>();
+        public static void remove_endCameraRendering(Il2CppSystem.Action<ScriptableRenderContext,UnityEngine.Camera> callback)
+            => endCameraRendering=Il2CppSystem.Delegate.Remove(endCameraRendering,callback)?.Cast<Il2CppSystem.Action<ScriptableRenderContext,UnityEngine.Camera>>();
 #endif
         public static void Render(UnityEngine.Camera camera) => beginCameraRendering?.Invoke(default,camera);
+        public static void End(UnityEngine.Camera camera) => endCameraRendering?.Invoke(default,camera);
     }
     public class CommandBuffer
     {
@@ -196,6 +231,31 @@ namespace UnityEngine.Rendering
         public readonly List<int> Passes=new List<int>();
         public void DrawProcedural(UnityEngine.Matrix4x4 matrix, UnityEngine.Material material, int pass, UnityEngine.MeshTopology topology, int count)
         { Passes.Add(pass); }
+    }
+    public struct RTHandleProperties { public UnityEngine.Vector2Int currentViewportSize; }
+    public class RTHandle
+    {
+        public UnityEngine.RenderTexture rt { get; set; }
+        public bool useScaling { get; set; }
+        public RTHandleProperties rtHandleProperties { get; set; }
+    }
+    public struct AsyncGPUReadbackRequest
+    {
+        public bool hasError;
+        public int layerCount;
+        public UnityEngine.Color32[] GetData<T>(int layer) => new[] { new UnityEngine.Color32 { a=layer==0 ? (byte)64 : (byte)255 } };
+    }
+    public static class AsyncGPUReadback
+    {
+        public static int Requests;
+        public static bool Deferred;
+        public static Action CompletePending;
+#if DEMEO
+        public static void Request(UnityEngine.RenderTexture target,int mip,int x,int width,int y,int height,int z,int depth,UnityEngine.TextureFormat format,Action<AsyncGPUReadbackRequest> callback)
+#else
+        public static void Request(UnityEngine.RenderTexture target,int mip,int x,int width,int y,int height,int z,int depth,UnityEngine.TextureFormat format,Il2CppSystem.Action<AsyncGPUReadbackRequest> callback)
+#endif
+        { Requests++; Action complete=()=>callback.Invoke(new AsyncGPUReadbackRequest { layerCount=depth }); if(Deferred) CompletePending=complete; else complete(); }
     }
 }
 namespace UnityEngine.Rendering.Universal
@@ -299,14 +359,21 @@ namespace HarmonyLib
     public class Harmony
     {
         public static MethodInfo OpaquePostfix;
+        public static MethodInfo FinalPostfix;
         public Harmony(string id) { }
         public static void CreateAndPatchAll(Assembly assembly) { }
-        public void Patch(MethodInfo target,HarmonyMethod postfix) { OpaquePostfix=postfix.Method; }
-        public void Unpatch(MethodInfo target,MethodInfo postfix) { if(OpaquePostfix==postfix) OpaquePostfix=null; }
+        public void Patch(MethodInfo target,HarmonyMethod postfix) { if(target.DeclaringType.Name=="FinalBlitPass") FinalPostfix=postfix.Method; else OpaquePostfix=postfix.Method; }
+        public void Unpatch(MethodInfo target,MethodInfo postfix) { if(OpaquePostfix==postfix) OpaquePostfix=null; if(FinalPostfix==postfix) FinalPostfix=null; }
     }
 }
 namespace UnityEngine.Rendering.Universal.Internal
 {
+    public class FinalBlitPass
+    {
+        public class PassData { public bool enableAlphaOutput; }
+        public static void ExecutePass(RasterCommandBuffer cmd,PassData data,RTHandle source,RTHandle destination,UniversalCameraData camera)
+            => HarmonyLib.Harmony.FinalPostfix?.Invoke(null,new object[]{data,source,camera});
+    }
     public class DrawObjectsPass
     {
         public class PassData

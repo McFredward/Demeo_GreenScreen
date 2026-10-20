@@ -114,11 +114,17 @@ internal static class IntegrationChecks
             CheckLoaderLifecycle(camera);
             Check(TestLog.Messages.Exists(message=>message.Contains("Unity Update is active")),"first Unity Update is observable in loader logs");
             NativePassthrough.Initialize(); Tick();
-            Check(camera.backgroundColor==new Color(0,1,0,1),"Virtual Desktop remains default");
-            Check(TestLog.Messages.Exists(message=>message.Contains("Frame through Steam Link is not confirmed")),"non-Frame fallback explicitly reports the hardware gate");
-            Check(camera.clearFlags==CameraClearFlags.Skybox && camera.Commands==0,"default leaves clear policy and render commands alone");
+            Check(camera.backgroundColor==Color.black,"unclassified startup never writes a green frame");
+            Check(TestLog.Messages.Exists(message=>message.Contains("without a green startup frame")),"pending identity reports the opaque startup state");
+            Check(camera.clearFlags==CameraClearFlags.SolidColor && camera.Commands==0,"pending identity keeps the background opaque without native commands");
             WriteConfig(true); Tick();
-            Check(camera.backgroundColor==new Color(0,1,0,1) && camera.Commands==0,"INI true cannot enable native mode on an unconfirmed headset");
+            Check(camera.backgroundColor==Color.black && camera.Commands==0,"INI true cannot expose green or native mode during identity detection");
+            SteamLinkConnection.Current=new SteamLinkConnection.Snapshot { State=SteamLinkConnection.Reason.WrongHeadset }; Tick();
+            Check(camera.backgroundColor==new Color(0,1,0,1) && camera.clearFlags==CameraClearFlags.Skybox,"a positively identified other headset restores legacy colour and clear policy");
+            SteamLinkConnection.Invalidate();
+            var earlyCamera=new Camera(); Camera.Render(earlyCamera);
+            Check(earlyCamera.backgroundColor==Color.black,"a new camera rendering before Update cannot flash green during pending identity");
+            earlyCamera.isActiveAndEnabled=false;
             SteamLinkConnection.Frame(); Tick();
             Check(camera.backgroundColor==Color.black && camera.Commands==0,"missing companion keeps opaque background");
             SteamLinkCoverageBridge.Grant(); Tick();
@@ -167,6 +173,12 @@ internal static class IntegrationChecks
             Check(camera.backgroundColor==Color.clear,"modern URP XR does not depend on the legacy camera stereo flag");
             Check(UnityEngine.Experimental.Rendering.XRSystem.singlePassAllowed,"URP retains its one-pass/two-eye layout so native pass indices remain valid");
             Check(!((UniversalAdditionalCameraData)camera.Extra).renderPostProcessing,"URP bypasses potentially stripped alpha post-processing variants");
+            var offscreen=new Camera { targetTexture=new RenderTexture() }; Color offscreenOriginal=offscreen.backgroundColor;
+            GameObject.Scene=new[]{camera,offscreen}; Camera.main=offscreen; Tick();
+            Check(camera.backgroundColor==Color.clear && offscreen.backgroundColor==offscreenOriginal
+                && ((UniversalAdditionalCameraData)offscreen.Extra).renderPostProcessing,
+                "a tagged offscreen camera cannot replace the real XR owner or have its post-processing altered");
+            GameObject.Scene=new[]{camera}; Camera.main=camera;
             Check(camera.Commands==0 && !camera.forceIntoRenderTexture,"URP records inside its raster pass without legacy camera command buffers");
             RenderPipelineManager.Render(camera);
             Check(SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,"SRP render seam validates current source");
@@ -177,6 +189,24 @@ internal static class IntegrationChecks
                 "URP opaque postfix records alpha reset and same-depth stamp inside the raster pass");
             Check(TestLog.Messages.Exists(message=>message.Contains("URP opaque depth coverage is active")),
                 "the first executed opaque repair is observable in game logs");
+            var source=new RenderTexture(); var sourceDescription=source.descriptor;
+            sourceDescription.volumeDepth=2; sourceDescription.dimension=TextureDimension.Tex2DArray; source.descriptor=sourceDescription;
+            FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData { enableAlphaOutput=true },
+                new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
+            RenderPipelineManager.End(camera);
+            Check(TestLog.Messages.Exists(message=>message.Contains("slice 0 alpha min/mean/max=64/64/64") && message.Contains("slice 1 alpha min/mean/max=255/255/255")),
+                "the bounded asynchronous probe distinguishes both source-array alpha values without RGB output");
+            int reads=AsyncGPUReadback.Requests;
+            FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData(),new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
+            RenderPipelineManager.End(camera);
+            Check(AsyncGPUReadback.Requests==reads && SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
+                "alpha measurements are rate limited and do not change source permission");
+            var replacement=new Camera(); camera.isActiveAndEnabled=false;
+            GameObject.Scene=new[]{replacement}; Camera.main=replacement; Tick();
+            Check(replacement.backgroundColor==Color.clear && SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
+                "the intro-to-menu camera replacement is discovered this Update without a manual invalidation or a one-second wait");
+            replacement.isActiveAndEnabled=false; camera.isActiveAndEnabled=true;
+            GameObject.Scene=new[]{camera}; Camera.main=camera; Tick();
             opaqueData.isOpaque=false; DrawObjectsPass.ExecutePass(raster,opaqueData,0,0,false);
             Check(raster.Passes.Count==2,"transparent pass alpha is retained after the opaque repair");
             opaqueData.isOpaque=true; opaqueData.cameraData.camera=second;
@@ -191,7 +221,15 @@ internal static class IntegrationChecks
             Check(!SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba && camera.backgroundColor==Color.black,"foreign alpha processing change revokes output");
             SteamLinkCoverageBridge.Grant(); Tick();
             Check(pipeline.m_AllowPostProcessAlphaOutput,"URP can prepare again at next boundary");
+            Time.unscaledTime+=2.1f; Tick(); AsyncGPUReadback.Deferred=true;
+            FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData(),new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
+            RenderPipelineManager.End(camera);
+            Check(AsyncGPUReadback.CompletePending!=null,"the probe supports a real delayed GPU completion");
             NativePassthrough.Shutdown();
+            int afterShutdown=TestLog.Messages.Count;
+            AsyncGPUReadback.CompletePending(); AsyncGPUReadback.CompletePending=null; AsyncGPUReadback.Deferred=false;
+            Check(TestLog.Messages.Count==afterShutdown && !SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
+                "a late GPU reply from an unloaded mod epoch neither logs a new-session value nor grants source permission");
             DrawObjectsPass.ExecutePass(raster,opaqueData,0,0,false);
             Check(raster.Passes.Count==2 && HarmonyLib.Harmony.OpaquePostfix==null,"unload removes the owned URP patch");
             Check(!pipeline.m_AllowPostProcessAlphaOutput,"unload restores original pipeline setting");
@@ -236,8 +274,8 @@ internal static class IntegrationChecks
             Check(!SteamLinkConnection.Available && !SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba && camera.backgroundColor==Color.black,
                 "HMD disconnect revokes source authority before the next render");
             Tick();
-            Check(camera.backgroundColor==new Color(0,1,0,1) && !pipeline.m_AllowPostProcessAlphaOutput,
-                "unconfirmed HMD restores the regular background and URP settings regardless of INI");
+            Check(camera.backgroundColor==Color.black && !pipeline.m_AllowPostProcessAlphaOutput,
+                "unconfirmed HMD keeps opaque black and restores URP settings without a green transition");
             var manager=UnityEngine.XR.Management.XRGeneralSettings.Instance.Manager;
             manager.activeLoader=new UnityEngine.XR.OpenXR.OpenXRLoader();
             UnityEngine.XR.OpenXR.OpenXRRuntime.name="Virtual Desktop";

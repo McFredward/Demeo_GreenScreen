@@ -76,7 +76,7 @@ This integration is experimental and needs an in-headset test for each game. It 
 
 Changing `NativePassthrough` or `[COLOR]` in the INI takes effect within about one second. Set `NativePassthrough=false` to return to Virtual Desktop's colour-key mode. `custom_color.ini`, unsectioned RGB values, and a config in the loader's plugins/Mods root remain supported; `greenscreen.ini` beside the DLL takes priority.
 
-Native passthrough activates only when the running headset is identified as Steam Frame connected through Steam Link. Other headsets, Virtual Desktop, unknown identities and unsupported platforms use the colour-key background even with `NativePassthrough=true`. Detection uses the same isolated public OpenVR background reader as GloomhavenVR, with periodic rechecks and immediate invalidation on HMD device changes.
+Native passthrough activates only when the running headset is identified as Steam Frame connected through Steam Link. While identity is still being checked, the background stays opaque black so green cannot flash during startup. A confirmed other headset, Virtual Desktop or unsupported platform uses the colour-key background even with `NativePassthrough=true`. Detection uses the same isolated public OpenVR background reader as GloomhavenVR, with periodic rechecks and immediate invalidation on HMD device changes.
 
 After installation, the script prints the active INI path. New configs default to `NativePassthrough=true`; existing configs retain their setting. At game startup the mod logs the selected INI path, `NativePassthrough` value, and whether its Unity update callback is running. The loader's plugins/Mods root is resolved from the loader API rather than the process working directory.
 
