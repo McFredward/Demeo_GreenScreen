@@ -671,3 +671,42 @@ eligibility failed, or negotiation failed; correlate it with the mod log.
 native texture-synchronization failures. If they occur before the game's
 connection, a game-only render-setting change cannot explain their onset.
 These messages alone do not identify the responsible component.
+
+
+## Confirmed Demeo1.4.11 result and remaining continuity work
+
+The maintainer's October21 test confirms that1.4.11 removes unwanted asset
+translucency and makes both eyes agree. The matching11:20:42–11:22:19 capture
+has7,413 successful original submits per eye and14,826 scoped supersample-filter
+bypasses, with no Submit errors or actual cropped public submits. Native source
+samples now contain spatial alpha0/255 in both eyes. Preserve this correction;
+a switch to OpenXR/OpenComposite is not required to fix the demonstrated alpha
+loss. This does not establish Battles/Battlemarked headset results.
+
+The remaining isolated black flashes coincide with individual mask-free certified
+pictures during otherwise active MR. The PC has zero readback busy/errors
+and the Frame zero upload/guard refusals; this is distinct from the former
+uniformly-zero alpha. A source regression in the companion reproduces empty
+native client cleanup invalidating an unchanged in-flight game pair. The PC-only
+0.2.13 candidate changes epochs only for actual owned removals, still revoking
+before native destruction and retaining all exact frame/eye/source proofs.
+Bounded cleanup counters will distinguish observed causes in the next run.
+The old aggregate logs cannot attribute every short flash to that defect.
+
+A separate longer interruption starts with native Frame backtrack/FEC failure
+at11:21:29.666, followed by late packets, a decoder hard reset at11:21:30.712,
+PC encoder/control recovery and camera pauses/resumes through11:21:31.962.
+Origin reset events also occur. These are real recovery events; their initial
+packet/scheduling cause and the caller of every origin reset remain unresolved.
+The continuity candidate does not claim to fix the longer reset. No speculative
+bitrate, quality, tracking origin or native FEC changes are made.
+
+The working Gloomhaven path is a regression constraint. Its supplied OpenXR
+MultiPass capture reaches the same public compositor boundary as separate
+4040-square format27 shared eyes. The candidate exercises that shape for2,048
+successive exact pairs, preserving original per-eye pose, projection, bounds
+and handles, alongside common certification and opaque fallback checks. This
+is software boundary evidence, not an executed Gloomhaven or headset test.
+Demeo1.4.11, Frame0.2.12, game alpha/shaders and the authenticated wire format
+remain unchanged. Updating/testing the PC candidate is a separate user-run
+installer step; no Frame write or restart is performed during log collection.
