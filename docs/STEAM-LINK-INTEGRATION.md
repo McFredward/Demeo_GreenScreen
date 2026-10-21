@@ -211,7 +211,7 @@ include fully opaque regions and equal successful Submit counters.
 
 These samples narrow the investigation to the submitted/source coverage path,
 but do not establish a same-pixel alpha loss: native source size is 4040-square
-while its submitted UV range is only `(0,0)..(0.707178,0.707178)`, about
+while its later native shader UV range is only `(0,0)..(0.707178,0.707178)`, about
 2857-square. Both probes currently sample raw full-texture positions, so the
 last region lies outside that source crop and the capture times are not paired
 across processes. Do not call every source pixel zero or identify a private
@@ -227,7 +227,7 @@ Both are measured with the same PC companion 0.2.12 and Frame companion 0.2.12.
 Gloomhaven has 18 emitted reports containing seven distinct captured eye pairs.
 They include fully opaque 255 regions, zero background regions and genuine
 fractional regions, without readback errors. Its shared source is typeless
-RGBA format 27 with sRGB view 29 and full `(0,0)..(1,1)` submitted UVs.
+RGBA format 27 with sRGB view 29 and full `(0,0)..(1,1)` native shader UVs.
 Demeo's source is format 29/view 29 with `(0,0)..(0.707178,0.707178)` UVs.
 Both report native tint alpha 1, direct-foveated sampling enabled and sharpening
 zero. Source format alone is not a demonstrated cause.
@@ -240,7 +240,8 @@ This is stronger than successful negotiation and excludes an always-zero
 diagnostic or generally broken mask decoder. It does not prove which private
 OpenVR conversion, viewport or game render operation loses Demeo's coverage.
 
-Version 1.4.10 removes the cropped-texture handoff as a separate variable.
+Version 1.4.10 attempted to remove a cropped-texture handoff as a variable;
+the subsequent hardware run below disproves that interpretation for Demeo.
 `OpenVrViewport` accepts only ascending, finite normalized bounds whose edges
 recover integer pixels within 1/256 pixel of normalized-float rounding. An
 integer source box is copied to a matching own UNORM/Gamma 2D image, preserving
@@ -274,9 +275,62 @@ RGB/all alpha values, offset and changed crops, unknown bounds, immediate full-
 viewport recovery and a native Submit held across cold crop-pool replacement.
 It runs the production C# callback under Windows .NET and Unity Windows Mono.
 These software checks do not execute the proprietary SteamVR handoff or prove
-the final headset appearance. The next Demeo run needs only the 1.4.10 mod;
-the existing PC 0.2.12 measurements will show whether full-image submission
-restores nonzero downstream source alpha and mixed masks.
+the final headset appearance. The 1.4.10 hardware run is recorded below.
+
+### 1.4.10 hardware result and the 1.4.11 filter candidate
+
+The maintainer reports continuing both-eye transparency and more frequent table
+glitches. Demeo PID 45184 ran from 23:52:45.196 to 23:54:03.859 local PC time on
+2026-10-20. Logs were pulled read-only and frozen with the supplied PC logs in
+`.planning/debug/frame-1410-20261020-2356/`. The device is no longer needed for
+this offline analysis. The last mod report has 4,722 successful submits per eye,
+9,444 whole-image submits, **zero cropped/pending/unknown viewports**, alpha
+samples completed for both eyes, and no Submit/readback errors. Thus the earlier
+claim that Demeo's public Submit passes a 2857-square crop was wrong. The native
+`app-uv` diagnostic describes a later SteamVR/Steam Link boundary, not the app's
+public Submit bounds. Retain that distinction when interpreting previous logs.
+
+The sender has 16 reports/eight distinct captured pairs. The first right-eye
+report includes 255 regions with full native UVs; the other reports have zero
+regions and approximately 0.707178 native UV extents. Source alpha is therefore
+not universally unavailable to OpenVR. The latest Frame counters add 5,329
+fully-zero and one mixed mask after the Gloomhaven comparison, with no rejected
+mask uploads. Sparse samples remain neither a whole-image nor synchronized
+same-pixel/frame proof. The game records nine dropped presents out of 6,922;
+the Frame has 80 substantive retry messages/5,189 retry packets in the game
+interval. Those counters do not establish the visual cause of table glitches.
+
+Private offline inspection of the locally retained SteamVR client identifies
+an optional supersample-filter decision in its shared-image copy path. This
+uses public `IVRSettings_003.GetBool("steamvr", "allowSupersampleFiltering")`.
+An offline Windows-runtime probe also executes the actual private client's
+factory and interface lookup, without Init or a running SteamVR server, and
+confirms that the copy path's settings lookup returns the same public interface
+object. No runtime binary, shader or disassembly is shipped. This establishes
+an addressable decision, not the exact alpha-loss instruction or a headset fix.
+
+`OpenVrSubmitSettings` leases only this settings object's vptr, preserving the
+RTTI locator and all 11 public methods except a scoped GetBool wrapper. The
+wrapper returns false/VRSettingsError_None only for the exact section and key
+inside the same thread's eligible original eye Submit, and only while the
+identical live source grant remains valid. Other settings, other sections,
+prefix/suffix keys, outside-Submit reads, other threads, unknown eye inputs and
+revocation forward to the original getter. No Set*, file write, persistent/global
+SteamVR setting, reserved submit flag, shader replacement or additional render
+is involved. Detachment uses compare/exchange and retains the small table and
+callback for fetched native callers; a foreign interface owner is preserved.
+A native counter reports actual scoped filter queries, so a zero count cannot
+be mistaken for a successfully exercised bypass.
+
+The actual provider/D3D11 fixture now checks the native bool/error ABI, exact key
+matching, two eyes/stages, outside-scope reads, another thread while a native
+Submit is held, source revocation, settings detachment/reattachment and foreign
+ownership, alongside per-pixel RGBA and resource-lifetime regressions. These
+checks execute the production callback under Windows .NET and Unity Windows
+Mono. They do not run a complete SteamVR copy/filter/encoder pipeline or prove
+the final headset appearance. The next Demeo test needs mod 1.4.11 and the
+existing PC/Frame 0.2.12 components. Table glitches remain unresolved; no tracking
+or motion-smoothing behavior is changed in this candidate.
 
 References: [Valve OpenVR Submit bounds](https://github.com/ValveSoftware/openvr/wiki/IVRCompositor%3A%3ASubmit),
 [Khronos OpenXR layer blending](https://registry.khronos.org/OpenXR/specs/1.1-khr/html/xrspec.html#composition-layer-blending).

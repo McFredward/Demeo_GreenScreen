@@ -137,6 +137,7 @@ def main():
                        "production_eye_textures_sha256": hashlib.sha256((ROOT / "OpenVrEyeTextures.cs").read_bytes()).hexdigest(),
                        "production_origin_sha256": hashlib.sha256((ROOT / "OpenVrOrigin.cs").read_bytes()).hexdigest(),
                        "production_viewport_sha256": hashlib.sha256((ROOT / "OpenVrViewport.cs").read_bytes()).hexdigest(),
+                       "production_submit_settings_sha256": hashlib.sha256((ROOT / "OpenVrSubmitSettings.cs").read_bytes()).hexdigest(),
                        "SteamVR_or_headset_test": False}
             (ROOT / ".build/openvr-provider-native-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
         finally:

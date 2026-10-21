@@ -21,6 +21,7 @@ namespace GreenScreen
         private readonly IntPtr _object, _originalTable, _table;
         private readonly Submit _original, _callback;
         private readonly OpenVrNativeSettings _provider;
+        private readonly OpenVrSubmitSettings _settings;
         private OpenVrEyeTextures _eyes;
         private int _inflight, _retiring;
         private SteamLinkCoverageBridge.Snapshot _grant;
@@ -37,9 +38,9 @@ namespace GreenScreen
         // callback that an in-flight graphics call can still enter.
         private static OpenVrEyeSubmission _lifetime;
 
-        private OpenVrEyeSubmission(OpenVrNativeSettings provider, IntPtr instance)
+        private OpenVrEyeSubmission(OpenVrNativeSettings provider, IntPtr instance, OpenVrSubmitSettings settings)
         {
-            _provider = provider; _object = instance;
+            _provider = provider; _object = instance; _settings = settings;
             if (!OpenVrNativeSettings.Region(instance, 8, IntPtr.Zero, true))
                 throw new NotSupportedException("The OpenVR interface object is not writable.");
             _originalTable = Marshal.ReadIntPtr(instance);
@@ -67,13 +68,18 @@ namespace GreenScreen
             var get = Marshal.GetDelegateForFunctionPointer<GetInterface>(getter);
             IntPtr instance = get("IVRCompositor_026", out int error);
             if (instance == IntPtr.Zero || error != 0) throw new NotSupportedException("IVRCompositor_026 is unavailable.");
+            IntPtr settingsObject = get("IVRSettings_003", out error);
+            if (settingsObject == IntPtr.Zero || error != 0) throw new NotSupportedException("IVRSettings_003 is unavailable.");
+            var settings = OpenVrSubmitSettings.Open(settingsObject);
             if (_lifetime == null)
-                _lifetime = new OpenVrEyeSubmission(provider, instance);
+                _lifetime = new OpenVrEyeSubmission(provider, instance, settings);
             else if (_lifetime._object != instance || !_lifetime._provider.Current)
                 throw new InvalidOperationException("The initialized OpenVR interface was replaced.");
             _lifetime.Collect();
             if (_lifetime._retiring != 0) throw new InvalidOperationException("The previous eye submit is still completing.");
-            _lifetime.Attach();
+            settings.Attach();
+            try { _lifetime.Attach(); }
+            catch { settings.Detach(); throw; }
             return _lifetime;
         }
 
@@ -87,7 +93,7 @@ namespace GreenScreen
         public bool Refresh()
         {
             if (Volatile.Read(ref _fault) != 0) throw new InvalidOperationException("2D Submit rejected an eye texture (error " + _lastError + ").");
-            if (!_provider.Current || Marshal.ReadIntPtr(_object) != _table)
+            if (!_provider.Current || Marshal.ReadIntPtr(_object) != _table || !_settings.Current)
                 throw new InvalidOperationException("OpenVR provider/interface ownership changed.");
             if (!_provider.Sources(out IntPtr first, out IntPtr second)) return false;
             if (_eyes == null || !_eyes.Matches(first, second))
@@ -172,7 +178,10 @@ namespace GreenScreen
                 _pairFlags = _discontinuousRemaining > 0 ? 0x20u : 0;
             }
             uint submitFlags = ReferenceEquals(_pairGrant, grant) ? _pairFlags : 0;
-            int result = _original(self, eye, ref separate, canonical ? IntPtr.Zero : bounds, submitFlags);
+            var previous = _settings.Enter(grant);
+            int result;
+            try { result = _original(self, eye, ref separate, canonical ? IntPtr.Zero : bounds, submitFlags); }
+            finally { _settings.Exit(previous); }
             if (canonical)
             {
                 Interlocked.Increment(ref _wholeSubmits);
@@ -196,6 +205,7 @@ namespace GreenScreen
             Deactivate();
             if (OpenVrNativeSettings.Region(_object, 8, IntPtr.Zero, true))
                 Interlocked.CompareExchange(ref *(IntPtr*)_object, _originalTable, _table);
+            _settings.Detach();
             Volatile.Write(ref _retiring, 1); Collect();
         }
         public string Statistics => "OpenVR separate 2D eye submission: left=" + Interlocked.Read(ref _left)
@@ -203,6 +213,7 @@ namespace GreenScreen
             + "; origin notifications=" + OpenVrOrigin.Revision + "; discontinuous pairs=" + Interlocked.Read(ref _discontinuousPairs)
             + "; whole-texture/cropped=" + Interlocked.Read(ref _wholeSubmits) + "/" + Interlocked.Read(ref _cropSubmits)
             + "; viewport pending/unknown=" + Interlocked.Read(ref _cropPending) + "/" + Interlocked.Read(ref _unknownViewport)
+            + _settings.Statistics
             + ". Unity single-pass targets, cameras and timing are retained." + (_eyes?.Statistics ?? "");
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetModuleHandleW")]

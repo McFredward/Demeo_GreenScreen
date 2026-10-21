@@ -18,8 +18,10 @@ Indexed captureIndexed = nullptr;
 void* functionTable[80]{};
 void* systemTable[80]{};
 void* compositorTable[80]{};
-Object vrSystem{systemTable}, compositor{compositorTable};
+void* settingsTable[11]{};
+Object vrSystem{systemTable}, compositor{compositorTable}, settings{settingsTable};
 void unexpected() { std::abort(); }
+bool getBool(Object*, const char*, const char*, int* error) { if (error) *error = 77; return true; }
 void size(Object*, std::uint32_t* width, std::uint32_t* height) { *width = 128; *height = 64; }
 Matrix44* projection(Object*, Matrix44* out, int, float, float) {
     std::memset(out, 0, sizeof *out); for (int i = 0; i != 4; ++i) out->value[i][i] = 1; return out;
@@ -40,6 +42,8 @@ void initialize() {
     static bool initialized = false; if (initialized) return; initialized = true;
     for (auto& slot : systemTable) slot = reinterpret_cast<void*>(&unexpected);
     for (auto& slot : compositorTable) slot = reinterpret_cast<void*>(&unexpected);
+    for (auto& slot : settingsTable) slot = reinterpret_cast<void*>(&unexpected);
+    settingsTable[5] = reinterpret_cast<void*>(&getBool);
     systemTable[0] = reinterpret_cast<void*>(&size); systemTable[1] = reinterpret_cast<void*>(&projection);
     systemTable[2] = reinterpret_cast<void*>(&raw); systemTable[4] = reinterpret_cast<void*>(&pose);
     // IVRSystem_022's mesh slot; the fixture accepts only that exact interface.
@@ -55,6 +59,7 @@ __declspec(dllexport) void* VR_GetGenericInterface(const char* name, int* error)
     initialize(); if (error) *error = 0;
     if (!std::strcmp(name, "IVRSystem_022")) return &vrSystem;
     if (!std::strcmp(name, "IVRCompositor_026")) return &compositor;
+    if (!std::strcmp(name, "IVRSettings_003")) return &settings;
     if (!std::strcmp(name, "FnTable:IVRCompositor_028")) return functionTable;
     if (error) *error = 105;
     return nullptr;

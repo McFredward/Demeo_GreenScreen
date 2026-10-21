@@ -82,10 +82,28 @@ std::array<unsigned, 2> capturedEyeFlags{};
 HANDLE submitEntered = nullptr, submitContinue = nullptr;
 bool blockSubmit = false;
 unsigned blockedWidth = 160;
+bool capturedFilter = true;
+void* settingsObject = nullptr;
+using GetSetting = bool (*)(void*, const char*, const char*, int*);
+bool filterSetting(const char* section = "steamvr", const char* key = "allowSupersampleFiltering", int* error = nullptr) {
+    auto table = *static_cast<void***>(settingsObject);
+    return reinterpret_cast<GetSetting>(table[5])(settingsObject, section, key, error);
+}
 int capture(int eye, const Texture* texture, const void* bounds, unsigned flags) {
     check(eye == 0 || eye == 1, "native eye selector");
     capturedFlags = flags; capturedEyeFlags[eye] = flags;
     capturedType = texture->type; capturedColourSpace = texture->colourSpace;
+    if (settingsObject) {
+        int error = -1;
+        capturedFilter = filterSetting("steamvr", "allowSupersampleFiltering", &error);
+        check(error == (capturedFilter ? 77 : 0), "scoped settings preserve the public bool ABI and native error outputs");
+        check(filterSetting("steamvr", "someOtherSetting", &error) && error == 77,
+            "other settings preserve the exact native result/error inside Submit");
+        check(filterSetting("otherSection", "allowSupersampleFiltering", &error) && error == 77,
+            "same key in a foreign section remains native inside Submit");
+        check(filterSetting("steamvr", "allowSupersampleFilteringSuffix", &error) && error == 77,
+            "filter query requires an exact complete key");
+    }
     if (!providerBounds && bounds) providerBounds = const_cast<Bounds*>(static_cast<const Bounds*>(bounds));
     capturedWhole[eye] = bounds == nullptr;
     submitted[eye] = static_cast<ID3D11Texture2D*>(texture->handle);
@@ -206,8 +224,12 @@ extern "C" __declspec(dllexport) int RunProviderChecks(const wchar_t* path, void
         if (enable) {
             auto get = symbol<void* (*)(const char*, int*)>(GetModuleHandleW(L"openvr_api.dll"), "VR_GetGenericInterface");
             int error = 0; auto object = get("IVRCompositor_026", &error);
+            settingsObject = get("IVRSettings_003", &error);
+            check(settingsObject && !error && filterSetting(), "native filter setting starts unchanged");
+            auto* originalSettings = *static_cast<void***>(settingsObject);
             auto* nativeTable = *static_cast<void***>(object);
             enable();
+            check(filterSetting(), "cold activation does not change queries outside Submit");
             std::array<std::array<ID3D11Texture2D*, 2>, 2> eyeTargets{};
             GraphicsWork work{[&] { for (unsigned update = 0; update < 3; ++update) {
                 // Both provider stages retain their native array shape and
@@ -232,6 +254,7 @@ extern "C" __declspec(dllexport) int RunProviderChecks(const wchar_t* path, void
                     check(capturedEyeFlags[0] == expectedFlags && capturedEyeFlags[1] == expectedFlags,
                         "origin discontinuity is paired, bounded to two frames and absent during ordinary rendering");
                     check(capturedType == 0 && capturedColourSpace == 1, "same encoded SDR bytes declare Gamma in the ordinary D3D11 submission");
+                    check(!capturedFilter, "the admitted original Submit bypasses native supersample filtering");
                 }
             } }, {}};
             HANDLE graphics = CreateThread(nullptr, 0, graphicsThread, &work, 0, nullptr);
@@ -303,6 +326,7 @@ extern "C" __declspec(dllexport) int RunProviderChecks(const wchar_t* path, void
             Texture foreign{nullptr, 0, 0};
             check(boundary(object, 0, &foreign, nullptr, 0) == 0 && indexedCalls == 0 && submitted[0] == nullptr,
                 "unknown resources retain ordinary submission even with a live source grant");
+            check(capturedFilter, "unknown resources do not override native image filtering");
             Texture known{images.begin()->second.texture, 0, 0};
             check(boundary(object, 1, &known, nullptr, 0x10) == 0 && indexedCalls == 0 && capturedFlags == 0x10,
                 "non-default submit flags are forwarded without coercion");
@@ -315,20 +339,32 @@ extern "C" __declspec(dllexport) int RunProviderChecks(const wchar_t* path, void
             disable(); // Revoke the live source snapshot while callback stays attached.
             check(submit(provider, 0, 0) && submit(provider, 1, 0) && indexedCalls == 0,
                 "live source revocation immediately restores ordinary submission inside the callback");
+            check(capturedFilter, "revocation immediately restores native filter queries");
             enable();
             submitEntered = CreateEventW(nullptr, TRUE, FALSE, nullptr);
             submitContinue = CreateEventW(nullptr, TRUE, FALSE, nullptr); blockSubmit = true;
             GraphicsWork retiring{[&] { check(submit(provider, 0, 0), "in-flight native submit completes during opt-out"); }, {}};
             HANDLE retiringThread = CreateThread(nullptr, 0, graphicsThread, &retiring, 0, nullptr);
             check(WaitForSingleObject(submitEntered, 30000) == WAIT_OBJECT_0, "native callback reaches the held original Submit");
+            check(filterSetting(), "another thread retains native filtering during an active graphics Submit");
             disable();
             check(*static_cast<void***>(object) == nativeTable, "normal detach restores the exact original interface vptr");
+            check(*static_cast<void***>(settingsObject) == originalSettings, "opt-out restores the original settings interface vptr");
             SetEvent(submitContinue);
             check(WaitForSingleObject(retiringThread, 30000) == WAIT_OBJECT_0, "opt-out does not wait for or deadlock the graphics callback");
             CloseHandle(retiringThread); CloseHandle(submitEntered); CloseHandle(submitContinue); blockSubmit = false;
             if (retiring.error) std::rethrow_exception(retiring.error);
             enable();
             check(*static_cast<void***>(object) == originalTable, "same owned interface can reattach after an opt-out");
+            std::array<void*, 11> foreignSettings{};
+            auto* settingsTable = *static_cast<void***>(settingsObject);
+            for (unsigned i = 0; i < foreignSettings.size(); ++i) foreignSettings[i] = settingsTable[i];
+            *static_cast<void***>(settingsObject) = foreignSettings.data();
+            disable();
+            check(*static_cast<void***>(settingsObject) == foreignSettings.data(), "settings cleanup preserves a foreign interface owner");
+            check(filterSetting(), "a retained old settings callback forwards outside a scope after detach");
+            *static_cast<void***>(settingsObject) = originalSettings;
+            enable();
             // An external interface owner replacing the vptr must survive our
             // cleanup. Its table intentionally forwards unchanged entries.
             std::array<void*, 51> foreignTable{};
