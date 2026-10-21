@@ -9,6 +9,7 @@ namespace GreenScreen
         internal Color BackgroundColor = new Color(0f, 1f, 0f, 1f);
         internal bool DisableTable = true;
         internal bool SteamLinkNativePassthrough = true;
+        internal bool SteamLinkAccountMaskBandwidth = true;
 
         internal static ModConfiguration Parse(string[] lines)
         {
@@ -39,6 +40,8 @@ namespace GreenScreen
                 {
                     if (TryBoolean(value, out bool disable)) settings.DisableTable = disable;
                 }
+                if (section == "STEAMLINK" && key == "ACCOUNTMASKBANDWIDTH")
+                    settings.SteamLinkAccountMaskBandwidth = TryBoolean(value, out bool budget) && budget;
                 if (section == "STEAMLINK" && key == "NATIVEPASSTHROUGH")
                     settings.SteamLinkNativePassthrough = TryBoolean(value, out bool native) && native;
             }

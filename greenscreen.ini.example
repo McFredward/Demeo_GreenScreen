@@ -10,3 +10,6 @@ Disable=true
 ; Effective only on a detected Steam Frame connected through Steam Link.
 ; Other headsets/transports automatically use the colour-key background.
 NativePassthrough=true
+# Include lossless mask traffic in the sender video budget (PC patch 0.2.15+).
+# May increase video compression under load; resolution/FPS and mask precision stay unchanged.
+AccountMaskBandwidth=true

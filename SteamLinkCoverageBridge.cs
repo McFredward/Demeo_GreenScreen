@@ -29,13 +29,15 @@ internal static class SteamLinkCoverageBridge
     private static readonly Monitor State = new(ReadWindowsAsync);
     private static int _reports;
     private static bool _lastAccept, _lastOperational;
+    private static volatile bool _budgetPolicy = true;
 
     internal static bool CanAcceptOrdinaryRgba => State.Current.CanAcceptOrdinaryRgba;
     internal static bool CoverageOperational => State.Current.CoverageOperational;
     internal static Snapshot Current => State.Current;
 
-    internal static void Tick(bool requested, double nowSeconds)
+    internal static void Tick(bool requested, double nowSeconds, bool accountMaskBandwidth = true)
     {
+        if (_budgetPolicy != accountMaskBandwidth) { _budgetPolicy = accountMaskBandwidth; Reset(); }
         State.Tick(requested, nowSeconds);
         Snapshot current = State.Current;
         if (!requested) { _reports = 0; _lastAccept = _lastOperational = false; return; }
@@ -45,6 +47,7 @@ internal static class SteamLinkCoverageBridge
             _reports++;
             Utils.LogInfo("Steam Link coverage bridge: ordinary RGBA source="
                 + current.CanAcceptOrdinaryRgba + "; native coverage operational=" + current.CoverageOperational
+                + "; metadata wire budget=" + current.MetadataBudget
                 + ". Without a compatible paired companion the normal game image remains visible. "
                 + "Source negotiation alone does not prove a displayed image.");
         }
@@ -58,9 +61,10 @@ internal static class SteamLinkCoverageBridge
         internal Snapshot(ulong generation, uint server, bool accept, bool operational)
         { EncoderGeneration = generation; ServerPid = server; CanAcceptOrdinaryRgba = accept; CoverageOperational = accept && operational; }
         internal string Binding { get; set; } = "";
+        internal bool MetadataBudget { get; set; }
         internal bool SameGrant(Snapshot other) => CanAcceptOrdinaryRgba && other.CanAcceptOrdinaryRgba
             && EncoderGeneration == other.EncoderGeneration && ServerPid == other.ServerPid
-            && Binding == other.Binding;
+            && Binding == other.Binding && MetadataBudget == other.MetadataBudget;
         internal ulong EncoderGeneration { get; }
         internal uint ServerPid { get; }
         internal bool CanAcceptOrdinaryRgba { get; }
@@ -172,33 +176,34 @@ internal static class SteamLinkCoverageBridge
         }
     }
 
-    internal static byte[] Request(uint appPid, byte[] nonce)
+    internal static byte[] Request(uint appPid, byte[] nonce, bool metadataBudget = false)
     {
         if (appPid == 0 || nonce == null || nonce.Length != 16 || nonce.All(value => value == 0))
             throw new ArgumentException("A process and fresh nonzero client nonce are required.");
         var packet = new byte[PacketBytes];
         packet[0] = (byte)'S'; packet[1] = (byte)'B'; packet[2] = (byte)'N'; packet[3] = (byte)'1';
-        Put16(packet, 4, 1); Put16(packet, 6, 1); Put16(packet, 8, PacketBytes);
+        Put16(packet, 4, 1); Put16(packet, 6, metadataBudget ? 2 : 1); Put16(packet, 8, PacketBytes);
         Put32(packet, 12, 1); Put32(packet, 16, appPid);
         Array.Copy(nonce, 0, packet, 24, 16);
         return packet;
     }
 
-    internal static Snapshot Reply(byte[] packet, uint appPid, uint serverPid, byte[] nonce)
+    internal static Snapshot Reply(byte[] packet, uint appPid, uint serverPid, byte[] nonce, bool metadataBudget = false)
     {
         if (packet == null || packet.Length != PacketBytes || appPid == 0 || serverPid == 0
             || nonce == null || nonce.Length != 16 || nonce.All(value => value == 0)
             || packet[0] != 'S' || packet[1] != 'B' || packet[2] != 'N' || packet[3] != '1'
-            || Read16(packet, 4) != 2 || Read16(packet, 6) != 1 || Read16(packet, 8) != PacketBytes
+            || Read16(packet, 4) != 2 || Read16(packet, 6) != (metadataBudget ? 2 : 1) || Read16(packet, 8) != PacketBytes
             || Read32(packet, 12) != 1 || Read32(packet, 16) != appPid || Read32(packet, 20) != serverPid
             || !System.Linq.Enumerable.SequenceEqual(packet.Skip(24).Take(16), nonce)
             || packet.Skip(64).Any(value => value != 0)) return null;
         int flags = Read16(packet, 10);
         ulong generation = Read64(packet, 56);
-        if ((flags & ~3) != 0 || (flags & 2) != 0 && (flags & 1) == 0
+        if ((flags & ~(metadataBudget ? 7 : 3)) != 0 || (flags & 4) != 0 && (flags & 1) == 0
+            || metadataBudget && (flags & 1) != 0 && (flags & 4) == 0 || (flags & 2) != 0 && (flags & 1) == 0
             || flags != 0 && (generation == 0 || packet.Skip(40).Take(16).All(value => value == 0))) return null;
         return new Snapshot(generation, serverPid, (flags & 1) != 0, (flags & 2) != 0)
-            { Binding = Convert.ToBase64String(packet, 40, 16) };
+            { Binding = Convert.ToBase64String(packet, 40, 16), MetadataBudget = (flags & 4) != 0 };
     }
     private static void Put16(byte[] p, int at, int value) { p[at] = (byte)value; p[at + 1] = (byte)(value >> 8); }
     private static void Put32(byte[] p, int at, uint value) { for (int i = 0; i < 4; i++) p[at + i] = (byte)(value >> (i * 8)); }
@@ -305,15 +310,27 @@ internal static class SteamLinkCoverageBridge
             foreach (Process server in servers)
             {
                 cancellation.ThrowIfCancellationRequested();
-                try { if (await ReadServerAsync(server, publish, cancellation).ConfigureAwait(false)) return; }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception) { /* Try another exact registered runtime owner. */ }
+                if (await ObserveCompatibleAsync(version => ReadServerAsync(server, publish, cancellation, version), _budgetPolicy).ConfigureAwait(false)) return;
             }
         }
         finally { foreach (Process server in servers) server.Dispose(); }
     }
 
-    private static async Task<bool> ReadServerAsync(Process server, Action<Snapshot> publish, CancellationToken cancellation)
+    // A rejected old endpoint may close with EOF or IOException. Neither can
+    // grant permission; both must still allow a fresh v1 connection. Once a
+    // valid session was observed, its later EOF stays a real withdrawal.
+    internal static async Task<bool> ObserveCompatibleAsync(Func<bool, Task<bool>> observe, bool requestBudget = true)
+    {
+        foreach (bool budget in requestBudget ? new[] { true, false } : new[] { false })
+        {
+            try { if (await observe(budget).ConfigureAwait(false)) return true; }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception) { }
+        }
+        return false;
+    }
+
+    private static async Task<bool> ReadServerAsync(Process server, Action<Snapshot> publish, CancellationToken cancellation, bool metadataBudget)
     {
         if (server.HasExited) return false;
         using Process app = Process.GetCurrentProcess();
@@ -328,7 +345,7 @@ internal static class SteamLinkCoverageBridge
                 || server.HasExited || server.StartTime != start) return false;
             byte[] nonce = new byte[16];
             using (RandomNumberGenerator random = RandomNumberGenerator.Create()) random.GetBytes(nonce);
-            byte[] request = Request(appPid, nonce);
+            byte[] request = Request(appPid, nonce, metadataBudget);
             await pipe.WriteAsync(request, 0, request.Length, cancellation).ConfigureAwait(false);
             await pipe.FlushAsync(cancellation).ConfigureAwait(false);
             byte[] packet = new byte[PacketBytes];
@@ -345,7 +362,7 @@ internal static class SteamLinkCoverageBridge
                         used += count;
                     }
                     if (server.HasExited || server.StartTime != start) return observed;
-                    Snapshot value = Reply(packet, appPid, serverPid, nonce);
+                    Snapshot value = Reply(packet, appPid, serverPid, nonce, metadataBudget);
                     if (value == null) return observed;
                     observed = true;
                     publish(value);

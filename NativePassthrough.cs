@@ -138,7 +138,7 @@ namespace GreenScreen
             }
             else if (!SteamLinkConnectionLifecycle.UsesOpenVr || GraphicsSettings.currentRenderPipeline == null)
                 OpenVrSubmission.Reset();
-            SteamLinkCoverageBridge.Tick(eligible, Time.unscaledTime);
+            SteamLinkCoverageBridge.Tick(eligible, Time.unscaledTime, settings.SteamLinkAccountMaskBandwidth);
             var grant = SteamLinkCoverageBridge.Current;
             if (!eligible || !grant.CanAcceptOrdinaryRgba)
             {

@@ -81,6 +81,9 @@ internal static class IntegrationChecks
         Environment.CurrentDirectory=temp;
         try
         {
+            Check(ModConfiguration.Parse(Array.Empty<string>()).SteamLinkAccountMaskBandwidth,"mask bandwidth accounting defaults on for Demeo producers");
+            Check(!ModConfiguration.Parse(new[]{"[STEAMLINK]","AccountMaskBandwidth=false"}).SteamLinkAccountMaskBandwidth,"bandwidth accounting can be opted out independently of passthrough");
+            Check(!ModConfiguration.Parse(new[]{"[STEAMLINK]","AccountMaskBandwidth=invalid"}).SteamLinkAccountMaskBandwidth,"malformed bandwidth policy cannot opt into rate changes");
             Check(ModConfiguration.Parse(Array.Empty<string>()).SteamLinkNativePassthrough,"native preference defaults on, with hardware admission required");
             Check(ModConfiguration.Parse(new[] { "[steamlink]", "nativepassthrough=TrUe" }).SteamLinkNativePassthrough,"case insensitive option");
             Check(ModConfiguration.Parse(new[] { "[STEAMLINK]", "NativePassthrough=1" }).SteamLinkNativePassthrough,"numeric true");

@@ -535,7 +535,7 @@ namespace GreenScreen
     {
         internal sealed class Snapshot { internal bool CanAcceptOrdinaryRgba; }
         internal static Snapshot Current=new Snapshot();
-        internal static void Tick(bool wanted,double now) { if (!wanted) Reset(); }
+        internal static void Tick(bool wanted,double now,bool accountMaskBandwidth=true) { if (!wanted) Reset(); }
         internal static void Reset() => Current=new Snapshot();
         internal static void Grant() => Current=new Snapshot { CanAcceptOrdinaryRgba=true };
     }

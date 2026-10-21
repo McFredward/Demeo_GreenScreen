@@ -29,6 +29,30 @@ internal static class ProtocolChecks
         byte[] request = SteamLinkCoverageBridge.Request(42, Nonce);
         Check(request.Length == 128 && request[4] == 1 && request[10] == 0, "request framing");
         Check(request.Skip(40).All(b => b == 0), "request reserved fields");
+        var budgetRequest = SteamLinkCoverageBridge.Request(42, Nonce, true);
+        Check(budgetRequest[6] == 2 && budgetRequest[10] == 0 && budgetRequest.Skip(40).All(b => b == 0), "v2 requests metadata accounting without reusing reserved flags or source authority");
+        var budgetGrant = Grant(); budgetGrant[6] = 2; budgetGrant[10] = 5;
+        Check(SteamLinkCoverageBridge.Reply(budgetGrant,42,84,Nonce,true)?.MetadataBudget == true, "explicit v2 budget acknowledgment");
+        Check(Parse(budgetGrant) == null && SteamLinkCoverageBridge.Reply(Grant(),42,84,Nonce,true) == null, "versions cannot silently borrow another contract's acknowledgment");
+        budgetGrant[10] = 4;
+        Check(SteamLinkCoverageBridge.Reply(budgetGrant,42,84,Nonce,true) == null, "rate policy alone cannot grant ordinary RGBA source permission");
+        budgetGrant[10] = 1;
+        Check(SteamLinkCoverageBridge.Reply(budgetGrant,42,84,Nonce,true) == null, "positive v2 reply must acknowledge its policy");
+        int negotiations = 0;
+        Check(await SteamLinkCoverageBridge.ObserveCompatibleAsync(budget => { negotiations++; return Task.FromResult(!budget); }) && negotiations == 2,
+            "an older endpoint's EOF retries v1 on a fresh connection");
+        negotiations = 0;
+        Check(await SteamLinkCoverageBridge.ObserveCompatibleAsync(budget => { negotiations++; if(budget) throw new IOException("old endpoint closed"); return Task.FromResult(true); }) && negotiations == 2,
+            "older endpoint broken-pipe errors also reach v1 fallback");
+        negotiations = 0;
+        Check(await SteamLinkCoverageBridge.ObserveCompatibleAsync(budget => { negotiations++; return Task.FromResult(true); }) && negotiations == 1,
+            "an observed v2 session never starts an overlapping legacy observer");
+        negotiations = 0;
+        Check(await SteamLinkCoverageBridge.ObserveCompatibleAsync(budget => { negotiations++; Check(!budget,"bandwidth opt-out only requests the unchanged v1 protocol"); return Task.FromResult(true); }, false) && negotiations == 1,
+            "opt-out does not probe or enable v2 policy");
+        bool cancelled = false;
+        try { await SteamLinkCoverageBridge.ObserveCompatibleAsync(budget => throw new OperationCanceledException()); } catch(OperationCanceledException) { cancelled = true; }
+        Check(cancelled, "cancellation never starts a fallback connection");
         Check(Parse(Grant())?.CanAcceptOrdinaryRgba == true, "ordinary RGBA format grant bootstraps without coverage");
         foreach (int offset in new[] { 0, 4, 6, 8, 12, 16, 20, 24, 64, 127 })
         {

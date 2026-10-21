@@ -20,7 +20,7 @@ using MelonLoader;
 
 namespace GreenScreen
 {
-    internal static class ModInfo { internal const string Version = "1.4.20"; }
+    internal static class ModInfo { internal const string Version = "1.4.21"; }
 
 #if MELONLOADER
     public sealed class GreenScreenMod : MelonMod
