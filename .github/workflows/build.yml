@@ -47,6 +47,8 @@ jobs:
           /tmp/demeo-identity-checks
       - name: Check loader and rendering lifecycles
         run: python3 scripts/check-integration.py
+      - name: Check automatic recenter suppression and preserve manual recenter
+        run: python3 scripts/check-recenter.py
       - name: Check Steam discovery and installation
         shell: pwsh
         run: ./tests/InstallerChecks.ps1

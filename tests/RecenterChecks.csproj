@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework Condition="'$(TestTargetFramework)' == ''">net8.0</TargetFramework>
+    <TargetFramework Condition="'$(TestTargetFramework)' != ''">$(TestTargetFramework)</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <NuGetLockFilePath Condition="'$(TestTargetFramework)' != 'net472'">RecenterChecks.packages.lock.json</NuGetLockFilePath>
+    <NuGetLockFilePath Condition="'$(TestTargetFramework)' == 'net472'">RecenterChecks.mono.packages.lock.json</NuGetLockFilePath>
+    <LoaderBackend Condition="'$(LoaderBackend)' == ''">BepInEx</LoaderBackend>
+    <DefineConstants>$(DefineConstants);DEMEO</DefineConstants>
+    <AssemblyName>Assembly-CSharp</AssemblyName>
+    <OutputPath>bin/Recenter/$(LoaderBackend)/</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../DemeoAutomaticRecenter.cs;../SteamLinkConnection.cs;RecenterChecks.cs" />
+    <PackageReference Include="Lib.Harmony" Version="[2.4.2]" Condition="'$(TestTargetFramework)' != 'net472'" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TestTargetFramework)' == 'net472'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net472" Version="[1.0.3]" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="0Harmony" HintPath="../.build/loaders/$(LoaderBackend)/DEMEO/0Harmony.dll" />
+    <None Include="../.build/loaders/$(LoaderBackend)/DEMEO/*.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

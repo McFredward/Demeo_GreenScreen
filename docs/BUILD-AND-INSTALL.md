@@ -77,6 +77,7 @@ remain explicit opt-outs.
 dotnet run --project tests/ProtocolChecks.csproj
 dotnet run --project tests/IdentityChecks.csproj
 python3 scripts/check-integration.py
+python3 scripts/check-recenter.py
 pwsh -NoProfile -File tests/InstallerChecks.ps1
 python3 scripts/fetch-build-deps.py
 python3 scripts/package.py
@@ -120,3 +121,19 @@ unsupported shader retain original game fades and report a bounded reason.
 Headset validation remains separate, starting with Demeo and then the two
 IL2CPP games. Native PC0.2.14/Frame0.2.12 components require no update for this
 mod-only change.
+
+## Checking the Demeo automatic recenter guard
+
+`python3 scripts/check-recenter.py` executes the production constructor rewrite
+and identity classifier against owned OpenVR/game ports with real Harmony
+dispatch. CI runs this modern CLR variant. With a local Mono runtime and pinned
+loader dependencies from `fetch-build-deps.py`, also run:
+
+```sh
+python3 scripts/check-recenter.py --mono /path/to/MonoBleedingEdge/bin/mono
+```
+
+That adds both shipped Demeo loader Harmony versions on Mono, using locked
+framework reference packages. These test dependencies and owned fixtures are
+never shipped. No device connection is required; a successful test does not
+prove the cause or disappearance of every recenter in the actual game.

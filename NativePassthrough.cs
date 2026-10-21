@@ -54,6 +54,7 @@ namespace GreenScreen
             if (_started) return;
             _started = true;
             ConfigurationStore.Refresh();
+            DemeoAutomaticRecenter.Initialize();
             PassthroughFade.Initialize();
 #if DEMEO
             Camera.onPreCull += PreCullCallback;
@@ -85,6 +86,7 @@ namespace GreenScreen
 
         private static void TickCore()
         {
+            DemeoAutomaticRecenter.Tick(Time.unscaledTime);
             PassthroughFade.Tick(Time.unscaledTime);
             if (_rescan || Time.unscaledTime >= _nextScan)
             {
@@ -375,6 +377,7 @@ namespace GreenScreen
             OpenVrOrigin.Reset();
             if (!_started) return;
             _started = false;
+            DemeoAutomaticRecenter.Shutdown();
             SteamLinkConnectionLifecycle.Reset();
             SteamLinkCoverageBridge.Reset();
 #if DEMEO

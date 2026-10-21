@@ -12,6 +12,50 @@ The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
 
+## Demeo automatic recenter guard (1.4.13)
+
+The October21 15:15–15:21 capture contains PC Standing-origin resets at
+15:15:01.070 and 15:15:25.532. The Frame separately records the maintainer's
+intentional `Recenter action triggered` at15:21:04.465. The two early resets
+have no matching decoder restart. The supplied Demeo `SteamVRInput` constructor
+unconditionally calls Standing `ResetZeroPose` whenever its XR check succeeds;
+the game's common input initialization constructs this object. This is a
+concrete automatic reset path, but the old logs do not record its caller stack
+at either event. `bResetManually` also describes software resets and does not
+establish a user gesture.
+
+Version1.4.13 rewrites only that constructor's single verified Standing call.
+All field initializers, XR checks, other statements and scene callbacks still
+run. The shared OpenVR API, Frame recenter action and game's manual reset paths
+are not patched. Suppression requires the active INI's `NativePassthrough=true`,
+Windows x64 and a current connected HMD0/class1 matching the existing Frame/
+Steam Link classifier. Startup can precede the isolated background reader's
+first answer, so the guard uses the already initialized game OpenVR interface
+for two bounded property snapshots at this one call site. It performs no
+`VR_Init`, SDK load, filesystem/process/network operation, polling or wait.
+This read does not grant camera/source permission or replace normal identity
+monitoring. Unavailable/unstable properties, other devices, opt-out and unknown
+constructor/API layouts retain the original game behavior.
+
+Startup logs `Demeo automatic recenter guard ready`; each actual suppressed
+call logs `Suppressed Demeo automatic Standing recenter` with a counter.
+These distinguish the candidate cause from any remaining origin writer.
+Owned game/OpenVR ports exercise actual Harmony constructor dispatch and the
+production identity classifier, including startup before cached identity,
+manual Standing/Seated resets, other devices/transports, malformed/changing
+properties, opt-out, forwarding exceptions, another owner's observer, unload
+and reload. The same checks run locally under Unity's Mono runtime with each
+shipped Demeo loader's actual Harmony dependencies, as well as the locked
+modern CLR test dependency used in CI. A private probe accepts and unpatches
+the supplied real constructor and OpenVR API signatures without executing the
+game constructor/native methods. This is not an executed game/headset result;
+confirmation that both observed shifts are eliminated remains pending.
+
+Battles/Battlemarked input, all rendering/coverage/fade shaders and the
+PC0.2.14/Frame0.2.12 companion binaries are unchanged. This update needs only
+the Demeo mod; it does not modify or restart the Frame and does not change
+Gloomhaven's shared patches.
+
 ## October21 confirmed PC continuity and native game fades (1.4.12)
 
 The maintainer confirms that Demeo1.4.11 with PC0.2.14 and Frame0.2.12 removes

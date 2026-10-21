@@ -480,6 +480,14 @@ namespace MelonLoader.Utils
 }
 namespace GreenScreen
 {
+    // Constructor rewriting and early live identity reads have a separate real
+    // Harmony executable (RecenterChecks); these ports cover the Unity lifecycle.
+    internal static class DemeoAutomaticRecenter
+    {
+        internal static void Initialize() { }
+        internal static void Tick(float now) { }
+        internal static void Shutdown() { }
+    }
     internal static class SteamLinkConnection
     {
         internal enum Reason { NoSession,Pending,Ready,WrongHeadset,WrongTransport }
