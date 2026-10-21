@@ -176,6 +176,36 @@ internal static class IntegrationChecks
             Check(camera.backgroundColor==original,"unload restores original game camera");
 
             var pipeline=new UniversalRenderPipelineAsset(); GraphicsSettings.currentRenderPipeline=pipeline;
+            // The supplied Battles Intro camera has no URP additional-data
+            // component. Match URP's default-asset renderer selection exactly.
+            var intro=new Camera { Extra=null }; Camera.main=intro; GameObject.Scene=new[]{intro};
+            NativePassthrough.Initialize(); EnableNative();
+            Check(SrpOutput.AllowsCamera(intro) && SrpOutput.IsForward(intro) && intro.Extra==null
+                && intro.backgroundColor==Color.clear && SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
+                "an Intro camera without additional data uses URP's existing default Forward renderer without adding a component");
+            var introCommands=new RasterCommandBuffer();
+            DrawObjectsPass.ExecutePass(introCommands,new DrawObjectsPass.PassData { isOpaque=true,
+                cameraData=new UniversalCameraData { camera=intro } },0,0,false);
+            Check(introCommands.Passes.Count==2 && TestLog.Messages.Exists(message=>message.Contains("active asset's default Forward renderer")),
+                "the default-renderer Intro camera records the same stereo depth repair and reports its actual renderer");
+            var defaultRenderer=(UniversalRenderer)pipeline.scriptableRenderer;
+            defaultRenderer.renderingModeActual=UniversalRenderer.RenderingMode.Deferred;
+            Tick();
+            Check(intro.backgroundColor==Color.black && !SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
+                "default Deferred rendering stays refused even without additional camera data");
+            NativePassthrough.Shutdown(); defaultRenderer.renderingModeActual=UniversalRenderer.RenderingMode.Forward;
+            var cameraData=(UniversalAdditionalCameraData)camera.Extra;
+            var cameraRenderer=cameraData.scriptableRenderer;
+            cameraData.scriptableRenderer=null;
+            Check(SrpOutput.IsForward(camera),"a null per-camera renderer uses URP's real default renderer");
+            cameraData.scriptableRenderer=cameraRenderer;
+            ((UniversalRenderer)cameraRenderer).renderingModeActual=UniversalRenderer.RenderingMode.Deferred;
+            Check(!SrpOutput.IsForward(camera),"an explicit per-camera Deferred renderer cannot be replaced by a Forward asset default");
+            ((UniversalRenderer)cameraRenderer).renderingModeActual=UniversalRenderer.RenderingMode.Forward;
+            pipeline.scriptableRenderer=null;
+            Check(!SrpOutput.IsForward(intro),"an unavailable asset renderer is refused rather than guessed");
+            pipeline.scriptableRenderer=defaultRenderer;
+            intro.isActiveAndEnabled=false; Camera.main=camera;
             GameObject.Scene=new[] { camera };
             NativePassthrough.Initialize(); EnableNative();
             Check(pipeline.m_AllowPostProcessAlphaOutput && camera.backgroundColor==Color.clear,"URP preserves post-processing alpha");
@@ -201,6 +231,7 @@ internal static class IntegrationChecks
                 "the first executed opaque repair is observable in game logs");
             var source=new RenderTexture(); var sourceDescription=source.descriptor;
             sourceDescription.volumeDepth=2; sourceDescription.dimension=TextureDimension.Tex2DArray; sourceDescription.msaaSamples=8; source.descriptor=sourceDescription;
+#if DEMEO
             int beforeLeft=AsyncGPUReadback.Requests;
             var leftData=new UniversalCameraData { camera=camera, xr=new UnityEngine.Experimental.Rendering.XRPass { multipassId=0 } };
             FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData { enableAlphaOutput=true },new RTHandle { rt=source },new RTHandle(),leftData);
@@ -245,6 +276,27 @@ internal static class IntegrationChecks
                 "out-of-order GPU replies retain the exact requested view and slice");
             AsyncGPUReadback.CompletePending=null; AsyncGPUReadback.Deferred=false;
             XRDisplaySubsystem.ReverseSlices=false; XRDisplaySubsystem.Viewport=null; XRSettings.eyeTextureDesc=originalXr;
+#else
+            int beforeProbe=AsyncGPUReadback.Requests, beforeQueries=XRDisplaySubsystem.ParameterQueries;
+            Check(HarmonyLib.Harmony.FinalPostfix==null,"IL2CPP never installs the unsafe optional final-blit diagnostic hook");
+            for(int diagnosticFrame=0;diagnosticFrame<10;diagnosticFrame++)
+            {
+                Tick();
+                FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData { enableAlphaOutput=true },
+                    new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
+                RenderPipelineManager.End(camera);
+            }
+            Check(XRDisplaySubsystem.ParameterQueries==beforeQueries && AsyncGPUReadback.Requests==beforeProbe,
+                "IL2CPP rendering never enters the unsafe XR parameter wrapper or diagnostic GPU request");
+            Check(SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba && raster.Passes.Count==2 && camera.backgroundColor==Color.clear,
+                "omitting the IL2CPP GPU probe retains the admitted source and opaque depth repair");
+            int probeReports=TestLog.Messages.Count;
+            SrpAlphaProbe.Prepare(); SrpAlphaProbe.Prepare();
+            Check(TestLog.Messages.Count==probeReports && TestLog.Messages.Exists(message=>message.Contains("unsafe generated XRRenderParameter")),
+                "the IL2CPP diagnostic restriction is reported once per lifetime");
+            UnityEngine.XR.Management.XRGeneralSettings.Instance.Manager.activeLoader=new UnityEngine.XR.OpenXR.OpenXRLoader();
+            Time.unscaledTime+=1.1f; Tick();
+#endif
             var replacement=new Camera(); camera.isActiveAndEnabled=false;
             GameObject.Scene=new[]{replacement}; Camera.main=replacement; Tick();
             Check(replacement.backgroundColor==Color.clear && SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
@@ -265,6 +317,7 @@ internal static class IntegrationChecks
             Check(!SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba && camera.backgroundColor==Color.black,"foreign alpha processing change revokes output");
             SteamLinkCoverageBridge.Grant(); Tick();
             Check(pipeline.m_AllowPostProcessAlphaOutput,"URP can prepare again at next boundary");
+#if DEMEO
             Time.unscaledTime+=2.1f; Tick(); AsyncGPUReadback.Deferred=true;
             FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData(),new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
             RenderPipelineManager.End(camera);
@@ -274,6 +327,11 @@ internal static class IntegrationChecks
             AsyncGPUReadback.CompletePending(); AsyncGPUReadback.CompletePending=null; AsyncGPUReadback.Deferred=false;
             Check(TestLog.Messages.Count==afterShutdown && !SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
                 "a late GPU reply from an unloaded mod epoch neither logs a new-session value nor grants source permission");
+#else
+            NativePassthrough.Shutdown();
+            Check(XRDisplaySubsystem.ParameterQueries==beforeQueries && !SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
+                "IL2CPP probe teardown never queries native XR parameters and releases source permission");
+#endif
             DrawObjectsPass.ExecutePass(raster,opaqueData,0,0,false);
             Check(raster.Passes.Count==2 && HarmonyLib.Harmony.OpaquePostfix==null,"unload removes the owned URP patch");
             Check(!pipeline.m_AllowPostProcessAlphaOutput,"unload restores original pipeline setting");
@@ -282,6 +340,7 @@ internal static class IntegrationChecks
             Check(camera.backgroundColor==original,"URP unload restores original camera background");
             pipeline.m_AllowPostProcessAlphaOutput=true;
             NativePassthrough.Initialize(); EnableNative();
+#if DEMEO
             int beforeInvalidView=AsyncGPUReadback.Requests;
             XRDisplaySubsystem.Viewport=new Rect { x=1.1f,width=.5f,height=.5f };
             FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData(),new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
@@ -305,6 +364,13 @@ internal static class IntegrationChecks
             Check(AsyncGPUReadback.Requests==beforeInvalidView+2 && SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba
                 && TestLog.Messages.Exists(message=>message.Contains("measurement stopped (4/4)")),
                 "four preflight failures bound diagnostics without disabling native passthrough or retrying indefinitely");
+#else
+            FinalBlitPass.ExecutePass(raster,new FinalBlitPass.PassData(),new RTHandle { rt=source },new RTHandle(),new UniversalCameraData { camera=camera });
+            RenderPipelineManager.End(camera);
+            Check(HarmonyLib.Harmony.FinalPostfix==null && XRDisplaySubsystem.ParameterQueries==beforeQueries
+                && AsyncGPUReadback.Requests==beforeProbe && SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
+                "IL2CPP unload/reload never re-enables unsafe XR diagnostics or prevents passthrough");
+#endif
             NativePassthrough.Shutdown();
             Check(pipeline.m_AllowPostProcessAlphaOutput,"pre-existing alpha processing survives teardown");
             var renderer=(UniversalRenderer)((UniversalAdditionalCameraData)camera.Extra).scriptableRenderer;

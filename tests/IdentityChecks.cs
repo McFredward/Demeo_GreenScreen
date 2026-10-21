@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Threading.Tasks;
 using GreenScreen;
 
@@ -20,6 +23,20 @@ internal static class IdentityChecks
                     string name=game=="DEMEO" ? "Demeo" : game=="DEMEOBATTLES" ? "DemeoBattles" : "DemeoBattlemarked";
                     string framework=game=="DEMEO" ? "netstandard2.1" : "net6.0";
                     string path=Path.GetFullPath(Path.Combine("bin",loader,game,framework,name+"_GreenScreen.dll"));
+                    using (var executable=new PEReader(File.OpenRead(path)))
+                    {
+                        var metadata=executable.GetMetadataReader();
+                        bool Calls(string type,string method) => metadata.MemberReferences.Any(handle=>
+                        {
+                            var member=metadata.GetMemberReference(handle);
+                            return metadata.GetString(member.Name)==method && member.Parent.Kind==HandleKind.TypeReference
+                                && metadata.GetString(metadata.GetTypeReference((TypeReferenceHandle)member.Parent).Name)==type;
+                        });
+                        Check(Calls("XRRenderPass","GetRenderParameter")== (game=="DEMEO"),
+                            "produced IL2CPP mods contain no unsafe XR parameter wrapper call; Mono probe retained: "+loader+"/"+game);
+                        Check(Calls("AsyncGPUReadback","Request")== (game=="DEMEO"),
+                            "produced IL2CPP mods cannot issue optional Unity XR GPU readbacks; Mono probe retained: "+loader+"/"+game);
+                    }
                     var assembly=System.Reflection.Assembly.LoadFile(path);
                     foreach (bool dll in new[] { false,true })
                     {
@@ -43,7 +60,7 @@ internal static class IdentityChecks
                     Check(bundledBytes.ToArray().AsSpan().SequenceEqual(File.ReadAllBytes("assets/nativecoverage.bundle")),
                         "produced mod embeds the exact validated bundle: "+loader+"/"+game);
                 }
-            Console.WriteLine("Produced mod identity and coverage resource checks passed: "+_checks);
+            Console.WriteLine("Produced mod resources and XR diagnostic boundary checks passed: "+_checks);
             return;
         }
         Check(Frame().Available,"observed Frame/Steam Link hardware profile");

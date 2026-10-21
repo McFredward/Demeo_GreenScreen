@@ -10,6 +10,7 @@ using UnityEngine.XR;
 
 namespace GreenScreen
 {
+#if DEMEO
     // Bounded alpha summaries of final XR targets; no image or RGB exports.
     // AsyncGPUReadback owns staging storage. Never read a pooled URP input.
     internal static class SrpAlphaProbe
@@ -236,4 +237,24 @@ namespace GreenScreen
             _patch = null; _attempted = false;
         }
     }
+#else
+    // The supplied Unity 6 IL2CPP generator emits XRRenderParameter as a
+    // reference wrapper, then passes only a pointer-sized out slot to Unity's
+    // value-type API. GetRenderParameter overwrites that slot/stack and can
+    // crash the process before a managed catch runs. This optional diagnostic
+    // must never call that wrapper. Coverage and native Submit samples do not
+    // depend on it. Keep Demeo's working Mono measurement above unchanged.
+    internal static class SrpAlphaProbe
+    {
+        private static bool _reported;
+        internal static void Prepare()
+        {
+            if (_reported) return;
+            _reported = true;
+            Utils.LogInfo("Optional XR GPU alpha probe disabled for IL2CPP: unsafe generated XRRenderParameter out binding. Native coverage and exact-submit alpha statistics remain active.");
+        }
+        internal static void AfterCamera(Camera camera) { }
+        internal static void Shutdown() => _reported = false;
+    }
+#endif
 }

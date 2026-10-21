@@ -12,6 +12,71 @@ The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
 
+## Battles crash and black Intro (1.4.18)
+
+The Battles1.4.17 test freezes PC and read-only Frame logs in the private hashed
+`frame-battles1417-20261021-183908` capture. The PC game is PID18940,
+18:34:35.304–18:34:48.400 on October21. Coverage/fade shader loading now succeeds,
+and the opaque-pass repair records commands. The fatal PC error is an
+`AccessViolationException` while the optional `SrpAlphaProbe` calls
+`XRRenderPass.GetRenderParameter`, with its native exception formatter also
+accessing corrupt memory. This is a mod diagnostic failure, not an INI or
+headset setup error.
+
+Both supplied IL2CPP assemblies represent `XRRenderParameter` as a CLR class
+wrapping a native value type. The generated out-call supplies a pointer-sized
+local instead of storage for that value. Unity's
+[XR contract](https://github.com/Unity-Technologies/UnityCsReference/blob/6000.0/Modules/XR/Subsystems/Display/XRDisplaySubsystem.bindings.cs)
+contains two matrices, viewport, mesh reference, slice, previous-view matrix and
+validity flag in the output. A native write into that undersized local can
+corrupt the call stack, including exception state; a managed catch cannot
+reliably recover it. Do not work around it by retrying, guessing a slice or
+installing a global interop patch. Version1.4.18 compiles this optional GPU probe
+out of **both IL2CPP profiles**, including its final-blit hook and parameter
+query. Demeo's original Mono probe remains unchanged. Opaque alpha repair,
+source admission, exact native eye submission and its D3D11 alpha samples do
+not depend on that probe and remain active.
+
+The black Intro has a separate eligibility defect. The supplied Battles
+`data.unity3d` level2 contains `IntroController` and its `Main Camera`, whose
+components include `CameraFadeView` and `TrackedPoseDriver`, with **no**
+`UniversalAdditionalCameraData`. The old `IsForward` accepted the camera as XR
+but then rejected it because only the per-camera renderer was inspected.
+[URP's own renderer selection](https://github.com/Unity-Technologies/Graphics/blob/6000.0/staging/Packages/com.unity.render-pipelines.universal/Runtime/UniversalRenderPipeline.cs)
+uses the active asset's `scriptableRenderer` when no additional data or no
+per-camera renderer is available. Version1.4.18 follows that selection, resolving
+the actual native asset and renderer types on IL2CPP. It still requires an
+actual Forward/ForwardPlus renderer and the existing XR/SDR/source checks;
+explicit per-camera Deferred renderers are never replaced. It neither adds a
+camera component nor changes renderer or stereo settings. A bounded log records
+the first admitted default-renderer camera.
+
+At the crash boundary the native source reports one sample with alpha0 left
+and alpha255 right; only10 masked pictures reach the receiver. That confirms
+the observed difference but does not establish a separate steady-state eye
+mapping defect. The Frame decoder reset at18:34:23 precedes the game connection
+by12 seconds. No decoder hard reset or unrecoverable FEC abort is logged inside
+the game window. There are packet retries during it. The crash stops further
+useful game samples; both eyes must be checked again after removing the unsafe
+call, rather than declaring stereo fixed from this capture.
+
+Portable integration checks cover a no-additional-data Intro camera, its actual
+opaque repair, absent/default/explicit/unsupported renderer selection, camera
+replacement and both loader lifecycles. IL2CPP diagnostic wrapper ports throw
+if reached; rendering, unload and reload must make zero parameter queries and
+zero optional GPU requests while preserving source permission. The produced
+DLL checks also inspect metadata: all four IL2CPP DLLs must have no member
+reference to `XRRenderPass.GetRenderParameter` or `AsyncGPUReadback.Request`,
+while both Mono DLLs retain them. These checks establish the removed call and
+software behavior, not execution of Battles' native Unity renderer or a headset
+result. Native shader-loader and fade lifecycle checks remain required.
+
+PC0.2.14/Frame0.2.12, Gloomhaven, shader bundles, provider callbacks, transport
+and recenter patches are unchanged. No Frame files/settings/services were
+changed during collection. Retest Battles from Intro into the menu and a match;
+Battlemarked inherits the safe diagnostic restriction and URP default fallback,
+but its own first hardware test is still outstanding.
+
 ## Battles black passthrough: Unity6 IL2CPP shader loading (1.4.17)
 
 The maintainer reports that Battles1.4.16 shows black where passthrough should

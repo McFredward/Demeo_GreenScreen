@@ -2,6 +2,7 @@
 using System;
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.XR;
 
 namespace GreenScreen
@@ -9,25 +10,36 @@ namespace GreenScreen
     internal static class SrpOutput
     {
         private static Type _system;
+        private static bool _defaultReported;
         private static Func<bool> _running, _hdr;
         private static Func<XRDisplaySubsystem> _display;
         private static MethodInfo _cameraData;
-        private static MethodInfo _rendererGetter, _rendererMode;
+        private static MethodInfo _rendererGetter, _rendererMode, _assetRendererGetter;
 #if !DEMEO
-        private static MethodInfo _rendererCast;
+        private static MethodInfo _rendererCast, _assetCast;
 #endif
 
         // Resolve only on the cold Update path. The IL2CPP wrappers and Mono
         // assemblies expose the same public XRSystem API in these Unity 6 games.
         internal static void Discover()
         {
-            if (_system != null && _cameraData != null && _rendererGetter != null && _rendererMode != null) return;
+            if (_system != null && _cameraData != null && _rendererGetter != null && _rendererMode != null && _assetRendererGetter != null) return;
             foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 Type data = assembly.GetType("UnityEngine.Rendering.Universal.UniversalAdditionalCameraData")
                     ?? assembly.GetType("Il2CppUnityEngine.Rendering.Universal.UniversalAdditionalCameraData");
                 if (data != null && _rendererGetter == null)
                     _rendererGetter = data.GetProperty("scriptableRenderer")?.GetGetMethod();
+                Type asset = assembly.GetType("UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset")
+                    ?? assembly.GetType("Il2CppUnityEngine.Rendering.Universal.UniversalRenderPipelineAsset");
+                if (asset != null && _assetRendererGetter == null)
+                {
+                    _assetRendererGetter = asset.GetProperty("scriptableRenderer")?.GetGetMethod();
+#if !DEMEO
+                    _assetCast = typeof(Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase).GetMethod("TryCast")
+                        .MakeGenericMethod(asset);
+#endif
+                }
                 Type renderer = assembly.GetType("UnityEngine.Rendering.Universal.UniversalRenderer")
                     ?? assembly.GetType("Il2CppUnityEngine.Rendering.Universal.UniversalRenderer");
                 if (renderer != null && _rendererMode == null)
@@ -84,6 +96,20 @@ namespace GreenScreen
         {
             object data = CameraData(camera);
             object renderer = data == null ? null : _rendererGetter?.Invoke(data, null);
+            bool usesDefault = renderer == null;
+            if (usesDefault)
+            {
+                // URP itself uses the active asset's default renderer when a
+                // camera has no additional data (Battles' serialized Intro
+                // camera), or when its renderer getter returns null. Absence
+                // of that component does not imply an unsupported renderer.
+                object asset = GraphicsSettings.currentRenderPipeline;
+#if !DEMEO
+                if (asset is Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase nativeAsset)
+                    asset = _assetCast?.Invoke(nativeAsset, null);
+#endif
+                renderer = asset == null ? null : _assetRendererGetter?.Invoke(asset, null);
+            }
             // UniversalRenderer is not a UnityEngine.Object in Unity 6. Cast
             // IL2CPP base wrappers through their actual generated native type.
 #if !DEMEO
@@ -91,7 +117,14 @@ namespace GreenScreen
                 renderer = _rendererCast?.Invoke(nativeRenderer, null);
 #endif
             object mode = renderer == null ? null : _rendererMode?.Invoke(renderer, null);
-            return mode != null && (mode.ToString() == "Forward" || mode.ToString() == "ForwardPlus");
+            bool supported = mode != null && (mode.ToString() == "Forward" || mode.ToString() == "ForwardPlus");
+            if (usesDefault && supported && !_defaultReported)
+            {
+                _defaultReported = true;
+                Utils.LogInfo("URP camera uses the active asset's default " + mode + " renderer: " + camera.name
+                    + ". No per-camera renderer override is required for native coverage.");
+            }
+            return supported;
         }
 
         internal static string ValidateTargets()

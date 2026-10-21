@@ -301,7 +301,7 @@ namespace UnityEngine.Rendering.Universal
         public bool renderPostProcessing { get; set; }=true;
         public bool allowXRRendering { get; set; }=true;
         public int renderType { get; set; }
-        public ScriptableRenderer scriptableRenderer { get; }=new UniversalRenderer();
+        public ScriptableRenderer scriptableRenderer { get; set; }=new UniversalRenderer();
     }
     public class ScriptableRenderer : Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase { }
     public class UniversalRenderer : ScriptableRenderer
@@ -316,6 +316,7 @@ namespace UnityEngine.Rendering.Universal
     }
     public class UniversalRenderPipelineAsset : UnityEngine.Rendering.RenderPipelineAsset
     {
+        public ScriptableRenderer scriptableRenderer { get; set; }=new UniversalRenderer();
         public bool m_AllowPostProcessAlphaOutput;
         public enum HdrPrecision { Bits32, Bits64 }
         public HdrPrecision m_HDRColorBufferPrecision;
@@ -379,6 +380,7 @@ namespace UnityEngine.XR
         public Action Started;
         public void Stop() { running=false; Stops++; }
         public void Start() { Starts++; Started?.Invoke(); running=true; }
+        public static int ParameterQueries;
         public static bool ReverseSlices;
         public static UnityEngine.Rect? Viewport;
         public struct XRRenderParameter { public UnityEngine.Rect viewport; public int textureArraySlice; }
@@ -387,8 +389,15 @@ namespace UnityEngine.XR
             public UnityEngine.RenderTextureDescriptor renderTargetDesc;
             public int GetRenderParameterCount() => renderTargetDesc.volumeDepth==2 ? 2 : 1;
             public void GetRenderParameter(UnityEngine.Camera camera,int index,out XRRenderParameter parameter)
-                => parameter=new XRRenderParameter { textureArraySlice=ReverseSlices ? 1-index : index,
+            {
+                ParameterQueries++;
+#if DEMEO
+                parameter=new XRRenderParameter { textureArraySlice=ReverseSlices ? 1-index : index,
                     viewport=Viewport ?? new UnityEngine.Rect { width=1,height=1 } };
+#else
+                throw new InvalidOperationException("Unsafe generated IL2CPP XRRenderParameter out binding reached.");
+#endif
+            }
         }
         public int GetRenderPassCount() => XRSettings.eyeTextureDesc.volumeDepth==2 ? 1 : 2;
         public void GetRenderPass(int index,out XRRenderPass pass) => pass=new XRRenderPass { renderTargetDesc=XRSettings.eyeTextureDesc };
