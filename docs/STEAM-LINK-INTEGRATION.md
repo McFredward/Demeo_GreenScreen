@@ -12,6 +12,53 @@ The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
 
+## October21 no-OVR control and PC0.2.14 continuity candidate
+
+The controlled Demeo1.4.11 run fully exits OVR Advanced Settings before the game:
+OVR PID41360 disconnects at13:06:07.170; Demeo PID45732 connects13:06:27.228.
+The maintainer still sees intro flashes but no menu jitter. Only two isolated
+standing-origin events remain, at13:06:27.922 and13:06:54.173, with no repeated
+menu bursts. This supports an OVR interaction for the position glitches; the
+logs still cannot prove the writer of each origin event. Keep tracking unchanged.
+
+The private read-only capture `frame-no-ovr-20261021-131307` freezes13 PC/Frame
+files with hashes and an audit. During Frame13:06:34–49 the compositor records
+28additional exact-picture draw misses and14additional opaque submits, without
+new signed-None, rejected-mask or ready-mask refusals. Both interruption counters
+remain unchanged through the next120seconds of menu. All14,523 certified PC
+masks reach the Frame metadata path, which does not count every video picture.
+The native decoder reset precedes game startup; there is no in-game hard reset.
+The video process's last intermediate milestone has16,384 waits,16,368 ready,
+17exact-unavailable and0emergency timeouts. This separates remaining intro
+availability gaps from the former stereo/alpha defect and menu origin bursts.
+
+PC0.2.14 repairs two independently reproduced missing-certificate schedules in
+its actual production NVENC boundary. Known bitrate/framerate adjustments no
+longer temporarily block an exact captured input or completed native output.
+A successful native output Lock can also associate its unique live output and
+input timestamp before the original Encode caller publishes its CPU return.
+The matching receipt retires only with its native Unlock; the late Encode
+return cannot resurrect it. Real reset/source changes, wrong or ambiguous
+frames, failed/busy output calls and missing peer authority remain refused.
+There is no latest-mask substitution or weakened frame/eye association.
+
+The complete production capture/encoder/certificate/compression fixture passes
+140/140 full1152×4608 R8 masks, with60concurrent copies,32outputs during native
+bitrate adjustment and16outputs before Encode returns. Restoring any of the
+three former barriers makes the corresponding exact-frame assertion fail. All
+25 local host suites, native Windows/Linux CI and ASan/UBSan pass. These use controlled driver callbacks,
+not the NVIDIA GPU encoder or headset; a new Demeo intro/menu headset test is
+required before claiming every black flash gone. Cold bounded counters expose
+these overlap schedules in the next PC log. See the
+[companion change and evidence](https://github.com/McFredward/steam-link-native-passthrough/blob/29c5c5d0b60a8627f8ece35d3d466c8dc9ad30a4/docs/development/FRAME-CONTINUITY.md#exact-output-during-native-encoder-calls-dev-pc0214).
+
+Only the PC patch changes. Demeo stays1.4.11, Frame stays0.2.12 and the installer
+stays0.2.14. The new archive preserves all Frame binaries, helper payloads and
+manifest pins byte-for-byte. Updating an already matching Frame uses the PC-only
+installer path without Frame writes, settings changes or service restart. The
+working Gloomhaven alpha/rendering path, shaders, source contract and native wire
+format are unchanged; existing shared-path regressions remain required.
+
 ## October21 follow-up: separate origin and picture continuity failures
 
 The maintainer's second October21 Demeo1.4.11 test still has short black flashes,
