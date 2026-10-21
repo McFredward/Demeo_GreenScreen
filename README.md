@@ -64,7 +64,7 @@ If you discover a color or configuration that, in your opinion, performs better 
 This integration is experimental and needs an in-headset test for each game. It sends the game's ordinary RGB image with independent alpha; green game objects are not removed by a colour key.
 
 1. Install the mod for your game as above. Demeo and Battles still need the basement environment disabled in the game settings.
-2. Install matching PC and Steam Frame companions using the [Steam Link Native Passthrough installer](https://github.com/McFredward/steam-link-native-passthrough#installation). Its supported hardware/runtime requirements apply.
+2. Install matching PC and Steam Frame companions using the [Steam Link Native Passthrough installer](https://github.com/McFredward/steam-link-native-passthrough#installation). Its README lists the required hardware and successfully tested runtime versions. Those test results are not version limits; an untested version can be tried after accepting the warning.
 3. Keep the included `greenscreen.ini` beside the mod DLL. Its shipped setting is:
 
    ```ini
