@@ -2,7 +2,7 @@
   <PropertyGroup>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Configurations>DEMEO;DEMEOBATTLES;DEMEOBATTLEMARKED</Configurations>
-    <Version>1.4.11</Version>
+    <Version>1.4.12</Version>
     <TargetFramework Condition="'$(Configuration)' == 'DEMEO'">netstandard2.1</TargetFramework>
     <TargetFramework Condition="'$(Configuration)' != 'DEMEO'">net6.0</TargetFramework>
     <LangVersion>latest</LangVersion>
@@ -50,6 +50,7 @@
   <ItemGroup>
     <Compile Remove="tests/**/*.cs;unity/**/*.cs;.planning/**/*.cs" />
     <EmbeddedResource Include="assets/nativecoverage.bundle" LogicalName="GreenScreen.NativeCoverage" />
+    <EmbeddedResource Include="assets/nativefade.bundle" LogicalName="GreenScreen.NativeFade" />
     <EmbeddedResource Include="assets/steamlink/connection-reader.exe" LogicalName="GreenScreen.SteamLink.connection-reader.exe" />
     <EmbeddedResource Include="assets/steamlink/openvr_api.bin" LogicalName="GreenScreen.SteamLink.openvr_api.dll" />
     <None Update="greenscreen.ini.example" TargetPath="greenscreen.ini" CopyToOutputDirectory="PreserveNewest" />

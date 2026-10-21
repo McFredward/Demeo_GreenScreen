@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <NuGetLockFilePath>FadeChecks.packages.lock.json</NuGetLockFilePath>
+    <Game Condition="'$(Game)' == ''">DEMEO</Game>
+    <DefineConstants>$(DefineConstants);$(Game)</DefineConstants>
+    <AssemblyName Condition="'$(Game)' != 'DEMEOBATTLEMARKED'">Assembly-CSharp</AssemblyName>
+    <AssemblyName Condition="'$(Game)' == 'DEMEOBATTLEMARKED'">GameView</AssemblyName>
+    <OutputPath>bin/Fade/$(Game)/</OutputPath>
+    <IntermediateOutputPath>obj/Fade/$(Game)/</IntermediateOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../PassthroughFade.cs;FadeChecks.cs" />
+    <EmbeddedResource Include="../assets/nativefade.bundle" LogicalName="GreenScreen.NativeFade" />
+    <PackageReference Include="Lib.Harmony" Version="[2.4.2]" />
+  </ItemGroup>
+</Project>

@@ -168,9 +168,14 @@ namespace UnityEngine
         public HideFlags hideFlags;
         public bool enableInstancing;
         public int passCount=2;
-        public Material(Shader shader) { }
-        public int FindPass(string name) => name=="RESET" ? 0 : 1;
+        public Shader shader;
+        public Color color; public int renderQueue;
+        public Material(Shader shader) { this.shader=shader; if(shader.name=="Hidden/Demeo/NativeFade") passCount=1; }
+        public bool HasProperty(string name) => true;
+        public void SetFloat(string name,float value) { }
+        public int FindPass(string name) => name=="RESET" || name=="ROOM_FADE" ? 0 : 1;
     }
+    public class MeshRenderer : Component { public Material sharedMaterial; public Material[] sharedMaterials => new[] { sharedMaterial }; }
     public class Shader : Object { public bool isSupported=true; }
     public class AssetBundle : Object
     {
@@ -178,7 +183,7 @@ namespace UnityEngine
         public static int LoadAttempts;
         public static AssetBundle LoadFromMemory(byte[] data) { LoadAttempts++; return Reject ? null : new AssetBundle(); }
         public T LoadAsset<T>(string name) where T : Object => (T)LoadAsset(name,typeof(T));
-        public Object LoadAsset(string name, Type type) => new Shader { name="Hidden/Demeo/NativeCoverage" };
+        public Object LoadAsset(string name, Type type) => new Shader { name=name=="assets/nativefade.shader" ? "Hidden/Demeo/NativeFade" : "Hidden/Demeo/NativeCoverage" };
         public void Unload(bool all) { }
     }
     public static class Time { public static float unscaledTime; public static int frameCount; }

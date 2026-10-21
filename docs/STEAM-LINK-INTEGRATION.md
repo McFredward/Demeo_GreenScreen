@@ -12,6 +12,66 @@ The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
 
+## October21 confirmed PC continuity and native game fades (1.4.12)
+
+The maintainer confirms that Demeo1.4.11 with PC0.2.14 and Frame0.2.12 removes
+unwanted asset translucency, eye differences, recurring flashes and noticed
+position glitches. The14:05–14:08 PC/Frame capture confirms29exact native outputs
+completed during known QoS calls,17,799exact output associations and0unmatched
+outputs. All14,629certified masks reach Frame metadata with no readback busy/error,
+mask rejection, upload refusal or guarded-submit refusal. Decoder exact-unavailable
+and emergency-timeout milestones remain0. Stable intro14:05:20–50 and menu
+14:06:00–14:07:00/14:07:30–14:08:00 have no new None/exact-miss/opaque counters.
+This differs from the prior repeatable intro failures. The single native hard
+reset precedes Demeo startup; only startup/lobby origin events remain.
+
+Short black transitions are a separate game behavior. The supplied Demeo intro
+explicitly starts faded out and fades out again before lobby activation. Its
+identified `Utility/CameraFading` material uses source-over black with alpha
+source factorOne and destinationOneMinusSrcAlpha: the authored fade makes the
+image opaque. Frame content records fully opaque intervals. A short native
+compositor source switch at lobby loading also emits None metadata. Later brief
+source gaps and recoverable packet retries remain in the log; neither aggregate
+counters nor the user report prove an uninterrupted picture during every switch.
+Only logs were read on the Frame, with frozen originals and hashes retained in
+the ignored `frame-pc0214-20261021-141019` directory. No device writes or restarts.
+
+Version1.4.12 preserves game fade state/tweens and callbacks, and gives only the
+identified fade mesh an owned material while the current native source is admitted.
+Demeo and Battles expose `Boardgame.Rendering.CameraFadeController`: observer
+postfixes follow `OnUpdate(float)` and `SetFadedOut()`, reading the controller's
+original animated material. Mono fields and IL2CPP properties are both checked.
+Battlemarked instead exposes `Jade.GameView.FadeToBlackPresenter` in `GameView`:
+its `SetFadePlaneColor(float,float,float,float)` supplies exact opacity for the
+view's `FadeCubeRenderer`. Its black/transparent material choices and existing
+property block are preserved. No unrelated screen, UI, fog, vignette or material
+is selected by colour/name similarity.
+
+The owned shader multiplies current RGB contribution and coverage by1−fadeOpacity.
+A complete fade therefore shows the room, and transparent background never gains
+coverage. Geometry and draw order remain game-owned. A separate shader bundle
+keeps the existing opaque-depth coverage bundle byte-identical. A distinct
+`_PassthroughFade` property prevents game `_Color`/`_BaseColor` property blocks
+from overriding the observed opacity. Original game materials are never modified.
+Opt-out, source revocation and unload restore only still-owned renderer materials;
+foreign replacements are preserved. There are at most16tracked faders, no render
+readback/wait, and bounded failure diagnostics retain ordinary game fades.
+
+Local Unity GPU tests exercise both eyes, separate and instanced output,1x/4x
+MSAA, zero/partial/opaque original coverage and partial/complete fades, including
+existing game-style material property blocks. A real source-over-black GPU
+control verifies that the old blend makes an empty background opaque. The owned
+Windows bundle passes native Unity loading and exact D3D11 blend/variant checks.
+Real Harmony dispatch tests execute each production adapter against owned Mono/
+generated-interop-shaped ports, preserving original updates/completion callbacks,
+current material choices, permission changes and unload/foreign ownership. Their
+pinned modern CLR test dependency is separate from the loader's shipped Harmony;
+it is never bundled with a mod. These tests do not execute the games' IL2CPP
+machine code or certify the new fades on a headset. Demeo is the first next
+headset check, followed by Battles/Battlemarked. Genuine loading periods without
+an admitted submitted eye image remain outside this material-only correction.
+PC0.2.14, Frame0.2.12, source/wire proof and Gloomhaven remain unchanged.
+
 ## October21 no-OVR control and PC0.2.14 continuity candidate
 
 The controlled Demeo1.4.11 run fully exits OVR Advanced Settings before the game:

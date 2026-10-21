@@ -33,6 +33,7 @@ jobs:
           python3 -m venv .build/coverage-checks
           .build/coverage-checks/bin/pip install --disable-pip-version-check -q -r scripts/coverage-requirements.txt
           .build/coverage-checks/bin/python scripts/check-coverage.py
+          .build/coverage-checks/bin/python scripts/check-fade.py
           if .build/coverage-checks/bin/python scripts/check-coverage.py tests/fixtures/coverage-missing-container.bundle; then
             echo 'Bundle gate accepted missing AssetBundle container' >&2
             exit 1
@@ -51,6 +52,8 @@ jobs:
         run: ./tests/InstallerChecks.ps1
       - name: Download pinned public build dependencies
         run: python3 scripts/fetch-build-deps.py
+      - name: Check fade timing and native material ownership for all three games
+        run: python3 scripts/check-fade-lifecycle.py
       - name: Build and package all three games
         run: .build/coverage-checks/bin/python scripts/package.py
       - name: Verify embedded resources in all six produced mods

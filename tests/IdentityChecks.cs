@@ -32,6 +32,11 @@ internal static class IdentityChecks
                             dll ? SteamLinkConnection.ApiSha256 : SteamLinkConnection.HelperSha256,dll),
                             "produced mod resource has the correct PE identity and pin: "+loader+"/"+game);
                     }
+                    using var fade=assembly.GetManifestResourceStream("GreenScreen.NativeFade");
+                    Check(fade!=null,"produced mod includes its passthrough fade: "+loader+"/"+game);
+                    using var fadeBytes=new MemoryStream(); fade.CopyTo(fadeBytes);
+                    Check(fadeBytes.ToArray().AsSpan().SequenceEqual(File.ReadAllBytes("assets/nativefade.bundle")),
+                        "produced mod embeds the exact validated fade: "+loader+"/"+game);
                     using var coverage=assembly.GetManifestResourceStream("GreenScreen.NativeCoverage");
                     Check(coverage!=null,"produced mod contains the verified coverage bundle: "+loader+"/"+game);
                     using var bundledBytes=new MemoryStream(); coverage.CopyTo(bundledBytes);

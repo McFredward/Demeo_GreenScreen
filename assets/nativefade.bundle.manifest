@@ -1,0 +1,17 @@
+ManifestFileVersion: 0
+CRC: 1805883766
+Hashes:
+  AssetFileHash:
+    serializedVersion: 2
+    Hash: f7ef6afa3a13c5d411f35af9f9c10046
+  TypeTreeHash:
+    serializedVersion: 2
+    Hash: 1848cfd019ebe6ef89967c6f90f2a3d4
+HashAppended: 0
+ClassTypes:
+- Class: 48
+  Script: {instanceID: 0}
+SerializeReferenceClassIdentifiers: []
+Assets:
+- Assets/NativeFade.shader
+Dependencies: []

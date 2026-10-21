@@ -54,6 +54,7 @@ namespace GreenScreen
             if (_started) return;
             _started = true;
             ConfigurationStore.Refresh();
+            PassthroughFade.Initialize();
 #if DEMEO
             Camera.onPreCull += PreCullCallback;
             RenderPipelineManager.beginCameraRendering += SrpCallback;
@@ -84,6 +85,7 @@ namespace GreenScreen
 
         private static void TickCore()
         {
+            PassthroughFade.Tick(Time.unscaledTime);
             if (_rescan || Time.unscaledTime >= _nextScan)
             {
                 _rescan = false;
@@ -163,6 +165,7 @@ namespace GreenScreen
             _frame = Time.frameCount;
             head.SetBackground(Color.clear, true);
             OpenVrSubmission.Activate(grant);
+            PassthroughFade.SetActive(true);
             Report("Steam Link native RGBA source enabled. Both companions and a headset picture check are required.");
         }
 
@@ -336,7 +339,11 @@ namespace GreenScreen
                 && (_hdrPrecision == null || _hdrPrecision.Current); }
             catch { valid = false; }
             foreach (RenderSettingLease lease in PostProcessing) valid &= lease.Current;
-            if (valid) return;
+            if (valid)
+            {
+                PassthroughFade.Refresh();
+                return;
+            }
             // Revoke the entire source epoch, including when authority is lost
             // between the eyes. Never reuse the preceding eye's coverage.
             SteamLinkCoverageBridge.Reset();
@@ -346,6 +353,7 @@ namespace GreenScreen
 
         private static void LeaveNative()
         {
+            PassthroughFade.SetActive(false);
             OpenVrSubmission.Deactivate();
             _grant = null;
             _frame = -1;
@@ -381,6 +389,7 @@ namespace GreenScreen
             LeaveNative();
             OpenVrSubmission.Reset();
             RestoreCameras();
+            PassthroughFade.Shutdown();
             SrpOpaqueCoverage.Shutdown();
             SrpAlphaProbe.Shutdown();
             OpaqueCoverage.Unload();
