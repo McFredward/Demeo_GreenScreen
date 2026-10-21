@@ -310,7 +310,7 @@ internal static class SteamLinkCoverageBridge
             foreach (Process server in servers)
             {
                 cancellation.ThrowIfCancellationRequested();
-                if (await ObserveCompatibleAsync(version => ReadServerAsync(server, publish, cancellation, version), _budgetPolicy).ConfigureAwait(false)) return;
+                if (await ObserveCompatibleAsync(version => ReadServerAsync(server, publish, cancellation, version), _budgetPolicy, cancellation).ConfigureAwait(false)) return;
             }
         }
         finally { foreach (Process server in servers) server.Dispose(); }
@@ -319,10 +319,11 @@ internal static class SteamLinkCoverageBridge
     // A rejected old endpoint may close with EOF or IOException. Neither can
     // grant permission; both must still allow a fresh v1 connection. Once a
     // valid session was observed, its later EOF stays a real withdrawal.
-    internal static async Task<bool> ObserveCompatibleAsync(Func<bool, Task<bool>> observe, bool requestBudget = true)
+    internal static async Task<bool> ObserveCompatibleAsync(Func<bool, Task<bool>> observe, bool requestBudget = true, CancellationToken cancellation = default)
     {
         foreach (bool budget in requestBudget ? new[] { true, false } : new[] { false })
         {
+            cancellation.ThrowIfCancellationRequested();
             try { if (await observe(budget).ConfigureAwait(false)) return true; }
             catch (OperationCanceledException) { throw; }
             catch (Exception) { }
@@ -369,6 +370,7 @@ internal static class SteamLinkCoverageBridge
                 }
                 return observed;
             }
+            catch (IOException) when (observed) { return true; }
             finally { publish(Snapshot.Unavailable); }
         }
     }

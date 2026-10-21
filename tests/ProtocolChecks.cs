@@ -53,6 +53,13 @@ internal static class ProtocolChecks
         bool cancelled = false;
         try { await SteamLinkCoverageBridge.ObserveCompatibleAsync(budget => throw new OperationCanceledException()); } catch(OperationCanceledException) { cancelled = true; }
         Check(cancelled, "cancellation never starts a fallback connection");
+        using var cancelledPipe = new CancellationTokenSource(); negotiations = 0; cancelled = false;
+        try
+        {
+            await SteamLinkCoverageBridge.ObserveCompatibleAsync(budget => { negotiations++; cancelledPipe.Cancel(); throw new IOException("cancelled old pipe"); }, true, cancelledPipe.Token);
+        }
+        catch(OperationCanceledException) { cancelled = true; }
+        Check(cancelled && negotiations == 1, "pipe disposal reported as IOException cannot create a fallback after cancellation");
         Check(Parse(Grant())?.CanAcceptOrdinaryRgba == true, "ordinary RGBA format grant bootstraps without coverage");
         foreach (int offset in new[] { 0, 4, 6, 8, 12, 16, 20, 24, 64, 127 })
         {
