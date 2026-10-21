@@ -37,6 +37,23 @@ internal static class RecenterChecks
         Construct(false, "Verified Frame startup reset suppressed before cached identity or camera admission");
         Construct(false, "Reinitialization/lobby reset also suppressed");
         Check(observations == 2, "Another constructor observer runs exactly once per initialization");
+        var rig = new Unity.XR.CoreUtils.XROrigin();
+        var subsystem = new UnityEngine.XR.XRInputSubsystem();
+        Check(rig.Initialize(subsystem) && subsystem.Resets == 0, "Device-mode rig initialization retains the current origin and reports success");
+        Check(subsystem.ModeUpdates == 1 && rig.Offsets == 1 && rig.Completed == 1,
+            "Rig mode selection, height offsets and completion still execute exactly once");
+        Check(rig.Initialize(subsystem) && subsystem.Resets == 0 && rig.Completed == 2,
+            "A second scene's rig initialization also avoids automatic recenter");
+        Check(subsystem.TryRecenter() && subsystem.Resets == 1, "Direct/manual Unity subsystem recenter remains available");
+        Check(Harmony.GetPatchInfo(typeof(UnityEngine.XR.XRInputSubsystem).GetMethod("TryRecenter")) == null,
+            "The shared Unity recenter API is never patched");
+        rig.DeviceMode = false;
+        Check(rig.Initialize(subsystem) && subsystem.Resets == 1, "Floor-mode setup retains its original branch without a reset");
+        rig.DeviceMode = true;
+        var otherSubsystem = new UnityEngine.XR.XRInputSubsystem();
+        otherSubsystem.subsystemDescriptor.id = "OpenXR Input";
+        Check(rig.Initialize(otherSubsystem) && otherSubsystem.Resets == 1,
+            "Another runtime's subsystem is not suppressed by a separately initialized OpenVR interface");
 
         int before = CVRChaperone.Resets;
         OpenVR.Chaperone.ResetZeroPose(ETrackingUniverseOrigin.TrackingUniverseStanding);
@@ -47,8 +64,13 @@ internal static class RecenterChecks
         before = CVRSystem.Reads;
         ConfigurationStore.Current.SteamLinkNativePassthrough = false;
         Construct(true, "INI opt-out preserves game reset");
+        Check(rig.Initialize(subsystem) && subsystem.Resets == 2, "INI opt-out restores the original rig setup reset");
         Check(CVRSystem.Reads == before, "Opt-out performs no OpenVR identity query");
         ConfigurationStore.Current.SteamLinkNativePassthrough = true;
+        CVRSystem.Connected = false;
+        Check(rig.Initialize(subsystem) && subsystem.Resets == 3, "Unverified connection retains original rig recenter");
+        CVRSystem.Frame();
+        before = CVRSystem.Reads;
         UnityEngine.Application.platform = UnityEngine.RuntimePlatform.LinuxPlayer;
         Construct(true, "Unsupported platform retains game reset");
         Check(CVRSystem.Reads == before, "Unsupported platform performs no identity query");
@@ -110,6 +132,9 @@ internal static class RecenterChecks
             Check(refused, "Missing, Seated or duplicate reset layout is refused");
         }
         DemeoAutomaticRecenter.Shutdown();
+        Check(rig.Initialize(subsystem) && subsystem.Resets == 4, "Unload restores the real rig setup method");
+        var rigPatch = Harmony.GetPatchInfo(typeof(Unity.XR.CoreUtils.XROrigin).GetMethod("SetupCamera", BindingFlags.NonPublic | BindingFlags.Instance));
+        Check(rigPatch == null || rigPatch.Transpilers.Count == 0, "Unload removes the owned rig transpiler");
         var remaining = Harmony.GetPatchInfo(typeof(Boardgame.SteamVR.SteamVRInput).GetConstructor(Type.EmptyTypes));
         Check(remaining != null && remaining.Transpilers.Count == 0 && remaining.Postfixes.Count == 1,
             "Unload removes only the owned constructor hook");
@@ -140,6 +165,36 @@ namespace UnityEngine
 {
     public enum RuntimePlatform { WindowsPlayer, LinuxPlayer }
     public static class Application { public static RuntimePlatform platform = RuntimePlatform.WindowsPlayer; }
+}
+namespace UnityEngine.XR
+{
+    public sealed class XRInputSubsystem
+    {
+        public int Resets, ModeUpdates;
+        public readonly Descriptor subsystemDescriptor = new Descriptor();
+        public sealed class Descriptor { public string id = "OpenVR Input"; }
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public bool TryRecenter() { Resets++; return true; }
+        public void SetMode() { ModeUpdates++; }
+    }
+}
+namespace Unity.XR.CoreUtils
+{
+    public sealed class XROrigin
+    {
+        public bool DeviceMode = true;
+        public int Offsets, Completed;
+        public bool Initialize(UnityEngine.XR.XRInputSubsystem input) => SetupCamera(input);
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private bool SetupCamera(UnityEngine.XR.XRInputSubsystem input)
+        {
+            input.SetMode();
+            Offsets++;
+            bool ready = !DeviceMode || input.TryRecenter();
+            Completed++;
+            return ready;
+        }
+    }
 }
 namespace Boardgame.SteamVR
 {

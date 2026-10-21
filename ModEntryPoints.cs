@@ -7,7 +7,7 @@ using UnityEngine;
 
 #if MELONLOADER
 using MelonLoader;
-[assembly: MelonInfo(typeof(GreenScreenMod), "GreenScreen", "1.4.13", "McFredward",
+[assembly: MelonInfo(typeof(GreenScreenMod), "GreenScreen", "1.4.14", "McFredward",
     "https://github.com/McFredward/Demeo_GreenScreen")]
 #if DEMEO
 [assembly: MelonGame("Resolution Games", "Demeo")]
@@ -34,7 +34,7 @@ namespace GreenScreen
         }
     }
 #elif DEMEO
-    [BepInEx.BepInPlugin("566784", "GreenScreen", "1.4.13")]
+    [BepInEx.BepInPlugin("566784", "GreenScreen", "1.4.14")]
     public sealed class BepInExPlugin : BepInEx.BaseUnityPlugin
     {
         internal static BepInEx.Logging.ManualLogSource Log;
@@ -48,7 +48,7 @@ namespace GreenScreen
         private void OnDestroy() => ModLifecycle.Shutdown();
     }
 #else
-    [BepInEx.BepInPlugin("566784", "GreenScreen", "1.4.13")]
+    [BepInEx.BepInPlugin("566784", "GreenScreen", "1.4.14")]
     public sealed class BepInExPlugin : BepInEx.Unity.IL2CPP.BasePlugin
     {
         internal static new BepInEx.Logging.ManualLogSource Log;

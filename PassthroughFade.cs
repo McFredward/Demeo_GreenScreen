@@ -15,6 +15,11 @@ namespace GreenScreen
         private const BindingFlags Members = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         private static readonly List<Fader> Faders = new List<Fader>();
         private static readonly List<MethodInfo> Targets = new List<MethodInfo>();
+#if !DEMEOBATTLEMARKED
+        private static readonly List<TimelineFader> TimelineFaders = new List<TimelineFader>();
+        private static MethodInfo _introAwake;
+        private static MethodInfo IntroObserver => typeof(PassthroughFade).GetMethod(nameof(AfterIntroAwake), BindingFlags.NonPublic | BindingFlags.Static);
+#endif
         private static HarmonyLib.Harmony _patch;
         private static Func<object, object> _view, _material, _renderer;
 #if DEMEOBATTLEMARKED
@@ -55,6 +60,17 @@ namespace GreenScreen
                 foreach (MethodInfo target in Targets)
                     _patch.Patch(target, postfix: new HarmonyMethod(Observer));
                 Utils.LogInfo("Passthrough fade observer ready: " + controller.FullName + ".");
+#if !DEMEOBATTLEMARKED
+                // The two proven intro Timeline spheres have their own animated
+                // URP material; CameraFadeController never owns these renderers.
+                try
+                {
+                    _introAwake = FindType("Assembly-CSharp", "Boardgame.Intro.IntroController")?.GetMethod("Awake", Members, null, Type.EmptyTypes, null);
+                    if (_introAwake != null && _introAwake.ReturnType == typeof(void))
+                        _patch.Patch(_introAwake, postfix: new HarmonyMethod(IntroObserver));
+                }
+                catch (Exception error) { Utils.LogInfo("Intro timeline fade binding unavailable; retaining original timeline material: " + error.GetType().Name + "."); }
+#endif
             }
             catch (Exception error)
             {
@@ -155,6 +171,19 @@ namespace GreenScreen
         // Refresh before the admitted camera renders, after game tween updates.
         internal static void Refresh()
         {
+#if !DEMEOBATTLEMARKED
+            for (int i = TimelineFaders.Count - 1; i >= 0; i--)
+            {
+                TimelineFader fader = TimelineFaders[i];
+                try
+                {
+                    if (fader.Dead) { fader.Restore(); TimelineFaders.RemoveAt(i); }
+                    else if (!_active || _failed) fader.Restore();
+                    else fader.Apply();
+                }
+                catch (Exception error) { fader.Restore(); Warn(error); }
+            }
+#endif
             for (int i = Faders.Count - 1; i >= 0; i--)
             {
                 Fader fader = Faders[i];
@@ -203,6 +232,10 @@ namespace GreenScreen
         private static void RemoveHooks()
         {
             if (_patch != null) foreach (MethodInfo target in Targets) _patch.Unpatch(target, Observer);
+#if !DEMEOBATTLEMARKED
+            if (_patch != null && _introAwake != null) _patch.Unpatch(_introAwake, IntroObserver);
+            _introAwake = null;
+#endif
             _patch = null;
             Targets.Clear();
         }
@@ -211,6 +244,9 @@ namespace GreenScreen
         {
             SetActive(false);
             Faders.Clear();
+#if !DEMEOBATTLEMARKED
+            TimelineFaders.Clear();
+#endif
             RemoveHooks();
             _view = _material = _renderer = null;
 #if DEMEOBATTLEMARKED
@@ -222,6 +258,71 @@ namespace GreenScreen
             _attempted = _reported = _failed = false;
             _nextBind = 0;
         }
+
+#if !DEMEOBATTLEMARKED
+        private static void AfterIntroAwake(object __instance)
+        {
+            try
+            {
+                if (!(__instance is Component controller)) return;
+                foreach (string path in new[] { "Intro/invert_sphere", "Intro/invert_sphere_end" })
+                {
+                    MeshRenderer renderer = controller.transform.Find(path)?.GetComponent<MeshRenderer>();
+                    if (renderer == null || TimelineFaders.Count >= 8) continue;
+                    bool known = false;
+                    foreach (TimelineFader fader in TimelineFaders) known |= fader.Renderer == renderer;
+                    if (known) continue;
+                    Material[] slots = renderer.sharedMaterials;
+                    if (slots.Length != 1 || !TimelineFader.Compatible(slots[0])) continue;
+                    TimelineFaders.Add(new TimelineFader(renderer, slots[0]));
+                    Utils.LogInfo("Intro timeline passthrough fade bound: " + path + "; animated URP BaseColor and original geometry retained.");
+                }
+                Refresh();
+            }
+            catch (Exception error) { Utils.LogInfo("Intro timeline fade discovery unavailable: " + error.GetType().Name + "."); }
+        }
+
+        private sealed class TimelineFader
+        {
+            internal readonly MeshRenderer Renderer;
+            private readonly Material _original;
+            private Material _owned;
+            internal bool Dead => Renderer == null || _original == null;
+            internal TimelineFader(MeshRenderer renderer, Material original) { Renderer = renderer; _original = original; }
+            internal static bool Compatible(Material material)
+            {
+                if (material == null || material.shader == null || material.shader.name != "Universal Render Pipeline/Unlit"
+                    || material.renderQueue < 3000 || material.renderQueue >= 4000) return false;
+                foreach (string property in new[] { "_BaseColor", "_SrcBlend", "_DstBlend", "_SrcBlendAlpha", "_DstBlendAlpha", "_Surface", "_ZWrite" })
+                    if (!material.HasProperty(property)) return false;
+                return material.GetFloat("_Surface") == 1 && material.GetFloat("_ZWrite") == 0;
+            }
+            internal void Apply()
+            {
+                Material current = Renderer.sharedMaterial;
+                if (current != _original && current != _owned) return;
+                if (_owned == null)
+                {
+                    // Keep URP's animation properties, keywords, alpha calculation,
+                    // culling, stencil and draw order. Only RGB/alpha blend factors
+                    // change to Zero / OneMinusSrcAlpha. Timeline property blocks
+                    // continue to supply exact opacity directly on the GPU.
+                    _owned = new Material(_original) { hideFlags = HideFlags.HideAndDontSave };
+                    _owned.SetFloat("_SrcBlend", 0);
+                    _owned.SetFloat("_SrcBlendAlpha", 0);
+                    _owned.SetFloat("_DstBlend", 10);
+                    _owned.SetFloat("_DstBlendAlpha", 10);
+                }
+                Renderer.sharedMaterial = _owned;
+            }
+            internal void Restore()
+            {
+                if (_owned == null) return;
+                if (Renderer != null && Renderer.sharedMaterial == _owned) Renderer.sharedMaterial = _original;
+                UnityEngine.Object.Destroy(_owned); _owned = null;
+            }
+        }
+#endif
 
         private sealed class Fader
         {

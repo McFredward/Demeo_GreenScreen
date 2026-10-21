@@ -2,7 +2,7 @@
   <PropertyGroup>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Configurations>DEMEO;DEMEOBATTLES;DEMEOBATTLEMARKED</Configurations>
-    <Version>1.4.13</Version>
+    <Version>1.4.14</Version>
     <TargetFramework Condition="'$(Configuration)' == 'DEMEO'">netstandard2.1</TargetFramework>
     <TargetFramework Condition="'$(Configuration)' != 'DEMEO'">net6.0</TargetFramework>
     <LangVersion>latest</LangVersion>

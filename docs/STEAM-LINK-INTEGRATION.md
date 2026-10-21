@@ -12,6 +12,61 @@ The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
 
+## October21 15:51 capture and additional intro paths (1.4.14)
+
+The1.4.13 capture still records PC Standing resets at15:51:07.988 and
+15:51:38.028. The guard reports ready but no suppressed call. The constructor
+candidate therefore did not eliminate the observed resets; the previous logs
+were insufficient to identify their caller. No decoder restart or explicit
+Frame recenter action accompanies either event. The private PC/Frame originals
+are hashed in `frame-1413-20261021-155409`; only logs were read on the Frame.
+
+The supplied Intro scene actually contains a `Unity.XR.CoreUtils.XROrigin` on
+`PlayerIntro`, with serialized requested mode Device. That library's
+`SetupCamera(XRInputSubsystem)` independently calls `TryRecenter`, including
+when initializing a replacement rig. Valve's public
+[input provider](https://github.com/ValveSoftware/unity-xr-plugin/blob/master/Providers/Input/Input.cpp)
+routes recenter to chaperone `ResetZeroPose` in the current tracking space.
+This is a concrete additional automatic path, not yet a per-event caller trace.
+Version1.4.14 guards only this call inside the rig setup method and retains all
+mode/height/callback work. It checks the subsystem descriptor `OpenVR Input`
+and the existing early current-headset identity gate. Returning success for an
+intentionally retained origin avoids spurious initialization retries. Direct
+subsystem and Frame/manual resets are not patched. Suppression logs identify
+the call site and wall-clock time; a bounded message also identifies rejected
+headset verification. Both old and new targets are unpatched on unload.
+
+The Intro Timeline also owns two separate renderers at
+`IntroContainer/Intro/invert_sphere` and `Intro/invert_sphere_end`. The supplied
+assets bind their animators in both normal/skip timelines and use `BG_sphere`,
+URP Unlit, queue3000, transparent surface, no depth writes. Its compiled Unlit
+pass exposes all four blend factors through material properties and writes
+RGBA. Its original source alpha blend factorOne makes the black sphere cover
+the room. These renderers never belong to `CameraFadeController`.
+
+Version1.4.14 discovers only those two children after the Intro controller's
+original Awake. With current native permission it assigns an owned clone of
+the game's URP material, changing RGB/alpha source factors toZero and destination
+factors toOneMinusSrcAlpha. The original shader, animation properties/property
+blocks, keywords, culling, geometry, depth, timing and queue remain game-owned.
+No shader bundle changes or game assets are distributed. Unknown materials,
+multi-material renderers and another owner's replacement are retained. Losing
+permission or unloading restores owned renderers. Demeo/Battles share this
+conditional binding; the supplied sphere assets were inspected for Demeo only.
+Battlemarked retains its existing presenter fade path.
+
+Real Harmony tests cover rig setup versus direct recenter and the existing
+constructor guard on the modern test CLR and both pinned Demeo loaders on
+Unity Mono. The fade tests exercise both exact Timeline children, original
+callback execution, material ownership, all four factors, retained animated
+alpha blocks, opt-out and unknown/foreign materials. A private probe binds the
+supplied real constructor and rig setup method without executing native/game
+methods. Automated checks do not establish an executed D3D11/headset outcome.
+The old capture contains opaque game pictures and separate short mask-free
+source intervals; it cannot attribute every visible black frame. Both new
+paths need the next headset test. PC0.2.14/Frame0.2.12, Gloomhaven's shared
+patches and the working stereo/coverage bundles remain unchanged.
+
 ## Demeo automatic recenter guard (1.4.13)
 
 The October21 15:15–15:21 capture contains PC Standing-origin resets at

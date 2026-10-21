@@ -70,9 +70,11 @@ namespace UnityEngine
     { public string name; public static void Destroy(Object value) { } }
     public class Component : Object
     {
+        public Transform transform;
         public object Extra;
         public T GetComponent<T>() where T : class => Extra as T;
     }
+    public class Transform : Component { public Transform Find(string path) => null; }
     public class MonoBehaviour : Component { public MonoBehaviour() { } public MonoBehaviour(IntPtr pointer) { } }
     public class GameObject : Object
     {
@@ -171,8 +173,10 @@ namespace UnityEngine
         public Shader shader;
         public Color color; public int renderQueue;
         public Material(Shader shader) { this.shader=shader; if(shader.name=="Hidden/Demeo/NativeFade") passCount=1; }
+        public Material(Material source) { shader=source.shader; color=source.color; renderQueue=source.renderQueue; }
         public bool HasProperty(string name) => true;
         public void SetFloat(string name,float value) { }
+        public float GetFloat(string name) => 0;
         public int FindPass(string name) => name=="RESET" || name=="ROOM_FADE" ? 0 : 1;
     }
     public class MeshRenderer : Component { public Material sharedMaterial; public Material[] sharedMaterials => new[] { sharedMaterial }; }

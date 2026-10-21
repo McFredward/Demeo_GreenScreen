@@ -137,3 +137,10 @@ That adds both shipped Demeo loader Harmony versions on Mono, using locked
 framework reference packages. These test dependencies and owned fixtures are
 never shipped. No device connection is required; a successful test does not
 prove the cause or disappearance of every recenter in the actual game.
+
+Since1.4.14 this also exercises the automatic `XROrigin.SetupCamera` call,
+retained tracking-mode/offset callbacks and unsuppressed direct subsystem
+recenter. The fade lifecycle gate additionally checks the two exact Intro
+Timeline sphere material copies, four RGB/alpha blend factors and preservation
+of animated alpha/property blocks. Neither gate executes IL2CPP machine code
+or substitutes for the next Demeo headset test.

@@ -81,8 +81,66 @@ internal static class FadeChecks
         var bad=new Controller(badView);Fade(bad,1);PassthroughFade.SetActive(true);
         Check(badView.Renderer.sharedMaterial==badSource,"Unproven multi-material renderers stay original.");
         PassthroughFade.Shutdown();
+#if !DEMEOBATTLEMARKED
+        TimelineChecks();
+#endif
         Console.WriteLine("Production passthrough fade with real Harmony: "+checks+" checks PASS; "+typeof(Controller).FullName+"; controlled Unity ports, no headset.");
     }
+#if !DEMEOBATTLEMARKED
+    private static Material TimelineMaterial()
+    {
+        var material = new Material(new Shader { name="Universal Render Pipeline/Unlit" }) { renderQueue=3000, color=Color.black };
+        foreach (var entry in new Dictionary<string,float> { {"_Surface",1}, {"_ZWrite",0}, {"_SrcBlend",5}, {"_DstBlend",10},
+            {"_SrcBlendAlpha",1}, {"_DstBlendAlpha",10}, {"_Cull",2} }) material.SetFloat(entry.Key,entry.Value);
+        return material;
+    }
+    private static void TimelineChecks()
+    {
+        PassthroughFade.Initialize();
+        Material first=TimelineMaterial(), second=TimelineMaterial();
+        var left=new MeshRenderer { sharedMaterial=first };
+        var right=new MeshRenderer { sharedMaterial=second };
+        var root=new Transform();
+        root.Children["Intro/invert_sphere"]=new Transform { Renderer=left };
+        root.Children["Intro/invert_sphere_end"]=new Transform { Renderer=right };
+        var intro=new Boardgame.Intro.IntroController { transform=root };
+        intro.Awake();
+        Check(intro.Calls==1 && left.sharedMaterial==first && right.sharedMaterial==second,"Discovery retains original intro callbacks and opt-out materials");
+        PassthroughFade.SetActive(true);
+        Material owned=left.sharedMaterial;
+        Check(owned!=first && right.sharedMaterial!=second,"Both exact Timeline spheres receive independent owned copies");
+        Check(owned.shader==first.shader && owned.renderQueue==3000 && owned.GetFloat("_Cull")==2 && owned.GetFloat("_ZWrite")==0,
+            "Timeline shader, culling, depth and draw order remain original");
+        Check(owned.GetFloat("_SrcBlend")==0 && owned.GetFloat("_SrcBlendAlpha")==0 && owned.GetFloat("_DstBlend")==10 && owned.GetFloat("_DstBlendAlpha")==10,
+            "Both RGB and alpha use Zero / OneMinusSrcAlpha");
+        Check(first.GetFloat("_SrcBlend")==5 && first.GetFloat("_SrcBlendAlpha")==1,"Original shared game material is not modified");
+        foreach(float alpha in new[] {0f,.25f,.5f,1f})
+        {
+            left.Animated["_BaseColor"]=new Color(0,0,0,alpha);
+            PassthroughFade.Refresh();
+            Check(left.sharedMaterial==owned && left.Animated["_BaseColor"].a==alpha,"Animated GPU property block is retained, including partial and zero opacity");
+        }
+        intro.Awake();
+        Check(intro.Calls==2 && left.sharedMaterial==owned,"Repeated discovery does not replace the owned material or skip the original callback");
+        PassthroughFade.SetActive(false);
+        Check(left.sharedMaterial==first && right.sharedMaterial==second && owned.Destroyed,"Opt-out restores both original materials");
+        PassthroughFade.SetActive(true);
+        Material foreign=TimelineMaterial();left.sharedMaterial=foreign;
+        PassthroughFade.Refresh();PassthroughFade.SetActive(false);
+        Check(left.sharedMaterial==foreign,"Another owner's material is retained on permission loss");
+        PassthroughFade.Shutdown();
+        Check(right.sharedMaterial==second,"Unload restores the remaining owned Timeline material");
+        PassthroughFade.Initialize();
+        var badRoot=new Transform();var bad=new MeshRenderer { sharedMaterial=Original() };
+        badRoot.Children["Intro/invert_sphere"]=new Transform { Renderer=bad };
+        var multiple=new MeshRenderer {sharedMaterial=TimelineMaterial(),Multiple=true};
+        badRoot.Children["Intro/invert_sphere_end"]=new Transform {Renderer=multiple};
+        var unknown=new Boardgame.Intro.IntroController {transform=badRoot};unknown.Awake();PassthroughFade.SetActive(true);
+        Check(bad.sharedMaterial.shader.name=="original game fade" && multiple.sharedMaterial.GetFloat("_SrcBlend")==5,
+            "Unknown shaders and multi-material Timeline renderers are refused");
+        PassthroughFade.Shutdown();
+    }
+#endif
 }
 namespace GreenScreen { internal static class Utils { internal static void LogInfo(string message) { Console.WriteLine(message); } } }
 namespace UnityEngine
@@ -98,19 +156,28 @@ namespace UnityEngine
     }
     public struct Color { public float r,g,b,a;public Color(float r,float g,float b,float a){this.r=r;this.g=g;this.b=b;this.a=a;}public static Color black=>new Color(0,0,0,1); }
     public enum HideFlags {HideAndDontSave}
+    public class Component : Object { public Transform transform; }
+    public class Transform : Object
+    {
+        public readonly Dictionary<string,Transform> Children=new Dictionary<string,Transform>();
+        public MeshRenderer Renderer;
+        public Transform Find(string path)=>Children.TryGetValue(path,out var child)?child:null;
+        public T GetComponent<T>() where T:Object =>Renderer as T;
+    }
     public class Shader : Object {public bool isSupported=true;}
     public class Material : Object
     {
         public Shader shader;public Color color;public HideFlags hideFlags;public bool enableInstancing;public int renderQueue;
         private readonly Dictionary<string,float> floats=new Dictionary<string,float>();
         public Material(Shader shader){this.shader=shader;}
+        public Material(Material source){shader=source.shader;color=source.color;renderQueue=source.renderQueue;enableInstancing=source.enableInstancing;foreach(var entry in source.floats)floats[entry.Key]=entry.Value;}
         public int passCount=>shader.name=="Hidden/Demeo/NativeFade"?1:2;
         public int FindPass(string name)=>name=="ROOM_FADE"?0:-1;
-        public bool HasProperty(string name)=>name=="_Color";
+        public bool HasProperty(string name)=>name=="_Color" || name=="_BaseColor" || floats.ContainsKey(name);
         public void SetFloat(string name,float value)=>floats[name]=value;
         public float GetFloat(string name)=>floats[name];
     }
-    public class MeshRenderer : Object {public Material sharedMaterial;public bool Multiple;public Material[] sharedMaterials=>Multiple?new[]{sharedMaterial,sharedMaterial}:new[]{sharedMaterial};}
+    public class MeshRenderer : Object {public Material sharedMaterial;public bool Multiple;public readonly Dictionary<string,Color> Animated=new Dictionary<string,Color>();public Material[] sharedMaterials=>Multiple?new[]{sharedMaterial,sharedMaterial}:new[]{sharedMaterial};}
     public class AssetBundle : Object
     {
         public static bool Reject;public static int LoadAttempts;
@@ -144,6 +211,15 @@ namespace Jade.GameView
     }
 }
 #else
+namespace Boardgame.Intro
+{
+    public sealed class IntroController : UnityEngine.Component
+    {
+        public int Calls;
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void Awake(){Calls++;}
+    }
+}
 namespace Boardgame.Rendering
 {
     public class CameraFadeView
