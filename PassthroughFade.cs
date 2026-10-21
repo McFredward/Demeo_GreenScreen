@@ -18,6 +18,16 @@ namespace GreenScreen
 #if !DEMEOBATTLEMARKED
         private static readonly List<TimelineFader> TimelineFaders = new List<TimelineFader>();
         private static MethodInfo _introAwake;
+        private static MethodInfo _cameraView;
+        private static int _tracked;
+#if DEMEO
+        private static ConstructorInfo _controllerConstructor;
+        private static MethodInfo BeforeConstructor => typeof(PassthroughFade).GetMethod(nameof(BeforeControllerConstructor), BindingFlags.NonPublic | BindingFlags.Static);
+        private static MethodInfo AfterConstructor => typeof(PassthroughFade).GetMethod(nameof(AfterControllerConstructor), BindingFlags.NonPublic | BindingFlags.Static);
+#else
+        private static PropertyInfo _nativeMaterial;
+        private static MethodInfo BeforeNativeFade => typeof(PassthroughFade).GetMethod(nameof(BeforeNativeGameFade), BindingFlags.NonPublic | BindingFlags.Static);
+#endif
         private static MethodInfo IntroObserver => typeof(PassthroughFade).GetMethod(nameof(AfterIntroAwake), BindingFlags.NonPublic | BindingFlags.Static);
 #endif
         private static HarmonyLib.Harmony _patch;
@@ -54,12 +64,30 @@ namespace GreenScreen
                 _material = Reader(controller, "fadeMaterial", out Type material);
                 if (renderer != typeof(MeshRenderer) || material != typeof(Material))
                     throw new MissingMemberException("Demeo/Battles fade renderer/material contract");
+#if DEMEOBATTLES
+                _nativeMaterial = controller.GetProperty("fadeMaterial", Members);
+                if (_nativeMaterial == null || !_nativeMaterial.CanWrite)
+                    throw new MissingMemberException("Battles native fade material setter");
+#endif
+                foreach (MethodInfo getter in typeof(Component).GetMethods())
+                    if (getter.Name == "GetComponent" && getter.IsGenericMethodDefinition && getter.GetParameters().Length == 0)
+                    { _cameraView = getter.MakeGenericMethod(view); break; }
+                if (_cameraView == null) throw new MissingMethodException("CameraFadeView GetComponent");
                 AddTarget(controller, "OnUpdate", new[] { typeof(float) });
                 AddTarget(controller, "SetFadedOut", Type.EmptyTypes);
 #endif
                 _patch = new HarmonyLib.Harmony("McFredward.DemeoGreenScreen.PassthroughFade");
                 foreach (MethodInfo target in Targets)
-                    _patch.Patch(target, postfix: new HarmonyMethod(Observer));
+                    _patch.Patch(target, postfix: new HarmonyMethod(Observer)
+#if DEMEOBATTLES
+                        , prefix: new HarmonyMethod(BeforeNativeFade)
+#endif
+                    );
+#if DEMEO
+                _controllerConstructor = controller.GetConstructor(new[] { view });
+                if (_controllerConstructor == null) throw new MissingMethodException(controller.FullName, ".ctor(CameraFadeView)");
+                _patch.Patch(_controllerConstructor, prefix: new HarmonyMethod(BeforeConstructor), postfix: new HarmonyMethod(AfterConstructor));
+#endif
                 Utils.LogInfo("Passthrough fade observer ready: " + controller.FullName + ".");
 #if !DEMEOBATTLEMARKED
                 // The two proven intro Timeline spheres have their own animated
@@ -129,12 +157,73 @@ namespace GreenScreen
             Targets.Add(method);
         }
 
+#if DEMEO
+        private static void BeforeControllerConstructor(object __0)
+        {
+            try
+            {
+                var renderer = _renderer(__0) as MeshRenderer;
+                for (int i = Faders.Count - 1; i >= 0; i--)
+                    if (Faders[i].Renderer == renderer)
+                    {
+                        // A reused view's renderer.material must give the game
+                        // its own animated material, not our replacement shader.
+                        Faders[i].Restore(); Faders.RemoveAt(i);
+                    }
+            }
+            catch (Exception error) { Warn(error); }
+        }
+        private static void AfterControllerConstructor(object __instance) => Observe(__instance, 0);
+#endif
+
+#if DEMEOBATTLES
+        private static void BeforeNativeGameFade(object __instance)
+        {
+            try
+            {
+                var renderer = _renderer(_view(__instance)) as MeshRenderer;
+                var material = _material(__instance) as Material;
+                foreach (Fader fader in Faders)
+                    if (!fader.Dead && fader.Renderer == renderer && fader.Owns(material))
+                    {
+                        // A new native controller may have cached our renderer
+                        // material. Redirect only that exact owned reference to
+                        // its original animation material before the game writes.
+                        _nativeMaterial.SetValue(__instance, fader.Primary);
+                        return;
+                    }
+            }
+            catch (Exception error) { Warn(error); }
+        }
+#endif
+
         private static MethodInfo Observer => typeof(PassthroughFade).GetMethod(nameof(AfterGameFade), BindingFlags.NonPublic | BindingFlags.Static);
 #if DEMEOBATTLEMARKED
         private static void AfterGameFade(object __instance, float __3) => Observe(__instance, __3);
 #else
         private static void AfterGameFade(object __instance) => Observe(__instance, 0);
 #endif
+        internal static void TrackCamera(Camera camera)
+        {
+#if !DEMEOBATTLEMARKED
+            if (_cameraView == null || camera == null) return;
+            try
+            {
+                object view = _cameraView.Invoke(camera, null);
+                if (view == null) return;
+                var renderer = _renderer(view) as MeshRenderer;
+                if (renderer == null) return;
+                foreach (Fader fader in Faders) if (fader.Renderer == renderer && !fader.Dead) return;
+                Material material = renderer.sharedMaterial;
+                // Only the proven camera-fade component/shader on this exact
+                // admitted XR camera. No renderer or black-colour scene scan.
+                if (material == null || material.shader == null || material.shader.name != "Utility/CameraFading") return;
+                Capture(renderer, material, null, 0);
+            }
+            catch (Exception error) { Warn(error); }
+#endif
+        }
+
         private static void Observe(object controller, float alpha)
         {
             try
@@ -149,23 +238,33 @@ namespace GreenScreen
                 Material alternate = null;
                 if (material == null || !material.HasProperty("_Color")) return;
 #endif
-                if (renderer == null || material == null) return;
-                for (int i = Faders.Count - 1; i >= 0; i--)
-                {
-                    if (Faders[i].Dead) { Faders[i].Restore(); Faders.RemoveAt(i); }
-                    else if (Faders[i].Renderer == renderer)
-                    {
-                        Faders[i].Alpha = alpha;
-                        Refresh();
-                        return;
-                    }
-                }
-                var slots = renderer.sharedMaterials;
-                if (slots.Length != 1 || (slots[0] != material && slots[0] != alternate) || Faders.Count >= 16) return;
-                Faders.Add(new Fader(renderer, material, alternate) { Alpha = alpha });
-                Refresh();
+                Capture(renderer, material, alternate, alpha);
             }
             catch (Exception error) { Warn(error); }
+        }
+
+        private static void Capture(MeshRenderer renderer, Material material, Material alternate, float alpha)
+        {
+            if (renderer == null || material == null) return;
+            for (int i = Faders.Count - 1; i >= 0; i--)
+            {
+                if (Faders[i].Dead) { Faders[i].Restore(); Faders.RemoveAt(i); }
+                else if (Faders[i].Renderer == renderer)
+                {
+                    Faders[i].Alpha = alpha;
+                    Refresh();
+                    return;
+                }
+            }
+            var slots = renderer.sharedMaterials;
+            if (slots.Length != 1 || (slots[0] != material && slots[0] != alternate) || Faders.Count >= 16) return;
+            Faders.Add(new Fader(renderer, material, alternate) { Alpha = alpha });
+#if !DEMEOBATTLEMARKED
+            if (_tracked++ < 16) Utils.LogInfo("Camera fade controller tracked: renderer=" + renderer.name + "; source=" + material.shader.name
+                + "; alpha=" + material.color.a + "; at=" + DateTime.Now.ToString("HH:mm:ss.fff")
+                + ". Native material animation is observed before rendering, including constructor-only loading fades.");
+#endif
+            Refresh();
         }
 
         internal static void SetActive(bool active) { _active = active; Refresh(); }
@@ -233,6 +332,18 @@ namespace GreenScreen
             if (_patch != null) foreach (MethodInfo target in Targets) _patch.Unpatch(target, Observer);
 #if !DEMEOBATTLEMARKED
             if (_patch != null && _introAwake != null) _patch.Unpatch(_introAwake, IntroObserver);
+#if DEMEO
+            if (_patch != null && _controllerConstructor != null)
+            {
+                _patch.Unpatch(_controllerConstructor, BeforeConstructor);
+                _patch.Unpatch(_controllerConstructor, AfterConstructor);
+            }
+            _controllerConstructor = null;
+#else
+            if (_patch != null) foreach (MethodInfo target in Targets) _patch.Unpatch(target, BeforeNativeFade);
+            _nativeMaterial = null;
+#endif
+            _cameraView = null; _tracked = 0;
             _introAwake = null;
 #endif
             _patch = null;
@@ -331,6 +442,8 @@ namespace GreenScreen
             private Material _original, _owned;
             internal float Alpha;
             internal bool Dead => Renderer == null || _primary == null;
+            internal Material Primary => _primary;
+            internal bool Owns(Material material) => _owned != null && material == _owned;
             internal Fader(MeshRenderer renderer, Material primary, Material alternate)
             { Renderer = renderer; _primary = primary; _alternate = alternate; }
 

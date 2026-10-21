@@ -296,6 +296,7 @@ namespace GreenScreen
                 if (_coverage == null)
                 { reason = OpaqueCoverage.Failure ?? "The bundled opaque-coverage shader could not be prepared."; LeaveNative(); return false; }
             }
+            PassthroughFade.TrackCamera(head.Camera);
             reason = null;
             return true;
         }
@@ -408,7 +409,7 @@ namespace GreenScreen
         {
             if (_status == message) return;
             _status = message;
-            Utils.LogInfo(message);
+            Utils.LogInfo(message + " [at=" + DateTime.Now.ToString("HH:mm:ss.fff") + "]");
         }
 
         internal static object RuntimeObject(UnityEngine.Object source, string name)

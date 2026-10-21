@@ -37,6 +37,16 @@ internal static class IdentityChecks
                         Check(Calls("AsyncGPUReadback","Request")== (game=="DEMEO"),
                             "produced IL2CPP mods cannot issue optional Unity XR GPU readbacks; Mono probe retained: "+loader+"/"+game);
                         Check(!Calls("AccessTools","TypeByName"),"produced mods avoid global type enumeration of invalid interop types: "+loader+"/"+game);
+                        bool HasFadeMethod(string name) => metadata.TypeDefinitions.Any(handle=>
+                        {
+                            var type=metadata.GetTypeDefinition(handle);
+                            return metadata.GetString(type.Name)=="PassthroughFade" && type.GetMethods().Any(method=>
+                                metadata.GetString(metadata.GetMethodDefinition(method).Name)==name);
+                        });
+                        Check(HasFadeMethod("BeforeControllerConstructor")== (game=="DEMEO"),
+                            "only Mono may hook the original fade constructor; allocating IL2CPP wrappers are excluded: "+loader+"/"+game);
+                        Check(HasFadeMethod("BeforeNativeGameFade")== (game=="DEMEOBATTLES"),
+                            "only Battles repairs the exact cached replacement before native fade writes: "+loader+"/"+game);
                         string expected=metadata.GetAssemblyDefinition().Version.ToString(3);
                         string attributeVersion=null;
                         foreach (var handle in metadata.CustomAttributes)

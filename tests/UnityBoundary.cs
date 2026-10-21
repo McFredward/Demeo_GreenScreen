@@ -442,8 +442,8 @@ namespace HarmonyLib
         public static MethodInfo FinalPostfix;
         public Harmony(string id) { }
         public static void CreateAndPatchAll(Assembly assembly) { }
-        public void Patch(MethodInfo target,HarmonyMethod postfix) { if(target.DeclaringType.Name=="FinalBlitPass") FinalPostfix=postfix.Method; else OpaquePostfix=postfix.Method; }
-        public void Unpatch(MethodInfo target,MethodInfo postfix) { if(OpaquePostfix==postfix) OpaquePostfix=null; if(FinalPostfix==postfix) FinalPostfix=null; }
+        public void Patch(MethodBase target,HarmonyMethod prefix=null,HarmonyMethod postfix=null) { if(postfix==null)return; if(target.DeclaringType.Name=="FinalBlitPass") FinalPostfix=postfix.Method; else if(target.DeclaringType.Name=="DrawObjectsPass") OpaquePostfix=postfix.Method; }
+        public void Unpatch(MethodBase target,MethodInfo postfix) { if(OpaquePostfix==postfix) OpaquePostfix=null; if(FinalPostfix==postfix) FinalPostfix=null; }
     }
 }
 namespace UnityEngine.Rendering.Universal.Internal

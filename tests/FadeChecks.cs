@@ -84,10 +84,63 @@ internal static class FadeChecks
 #if !DEMEOBATTLEMARKED
         TimelineChecks();
         LoadingChecks();
+        ConstructorChecks();
 #endif
         Console.WriteLine("Production passthrough fade with real Harmony: "+checks+" checks PASS; "+typeof(Controller).FullName+"; controlled Unity ports, no headset.");
     }
 #if !DEMEOBATTLEMARKED
+    private static void ConstructorChecks()
+    {
+        PassthroughFade.Initialize();PassthroughFade.SetActive(true);
+        var source=Original();var view=View(source);var first=new Controller(view);
+#if DEMEO
+        Check(view.Renderer.sharedMaterial!=source && view.Renderer.sharedMaterial.shader.name=="Hidden/Demeo/NativeFade",
+            "A controller created with an already-black loading material is captured without an OnUpdate/SetFadedOut callback.");
+        Material oldOwned=view.Renderer.sharedMaterial;
+        Check(!oldOwned.HasProperty("_Color"),"The fixture replacement matches the actual shader's absence of the game's _Color property.");
+        var second=new Controller(view);
+        Check(second.Source==source && oldOwned.Destroyed,
+            "A reused view's native constructor receives its original game material, never our shader without _Color.");
+        second.AnimateNative(.65f);PassthroughFade.Refresh();
+        Check(view.Renderer.sharedMaterial.GetFloat("_PassthroughFade")==.65f,
+            "Direct native material animation is observed before rendering even when helper OnUpdate is bypassed.");
+#else
+        Check(view.Renderer.sharedMaterial==source && HarmonyLib.Harmony.GetPatchInfo(typeof(Controller).GetConstructor(new[]{typeof(View)}))==null,
+            "The native constructor is never detoured through its allocating generated wrapper.");
+        Fade(first,1);Material oldOwned=view.Renderer.sharedMaterial;
+        Check(!oldOwned.HasProperty("_Color"),"The native replacement has no game animation property.");
+        var second=new Controller(view);
+        Check(second.Source==oldOwned,"The owned port reproduces a new native controller caching our renderer replacement.");
+        second.OnUpdate(.65f);PassthroughFade.Refresh();
+        Check(second.Source==source && view.Renderer.sharedMaterial==oldOwned && oldOwned.GetFloat("_PassthroughFade")==.65f,
+            "Before a native fade writes, only its exact cached owned reference is redirected to the original animation material.");
+#endif
+        int callbacks=0;second.Finish(()=>callbacks++);
+        Check(callbacks==1 && view.Renderer.sharedMaterial.GetFloat("_PassthroughFade")==1,
+            "The replacement controller retains its original loading completion.");
+        PassthroughFade.SetActive(false);
+        Check(view.Renderer.sharedMaterial==source,"Permission loss after controller reuse restores the real game shader.");
+        PassthroughFade.SetActive(true);PassthroughFade.Shutdown();
+        Check(view.Renderer.sharedMaterial==source,"Unload releases the reused controller's replacement.");
+        var afterUnload=new Controller(view);
+        Check(view.Renderer.sharedMaterial==source && afterUnload.Source==source,"Unload removes native constructor hooks.");
+        PassthroughFade.Initialize();PassthroughFade.SetActive(true);
+        var nativeSource=new Material(new Shader {name="Utility/CameraFading"}) {color=Color.black,renderQueue=3980};
+        var nativeView=View(nativeSource);nativeView.Bind();var camera=new Camera {Extra=nativeView};
+        PassthroughFade.TrackCamera(camera);
+        Check(nativeView.Renderer.sharedMaterial!=nativeSource && nativeView.Renderer.sharedMaterial.GetFloat("_PassthroughFade")==1,
+            "The admitted camera's pre-existing native fade is discovered even with no constructor/helper callback.");
+        Material nativeOwned=nativeView.Renderer.sharedMaterial;
+        PassthroughFade.TrackCamera(camera);nativeSource.color=new Color(0,0,0,.45f);PassthroughFade.Refresh();
+        Check(nativeView.Renderer.sharedMaterial==nativeOwned && nativeOwned.GetFloat("_PassthroughFade")==.45f,
+            "Camera discovery is idempotent and direct native animation still updates the owned fade.");
+        var foreign=Original();var foreignView=View(foreign);foreignView.Bind();
+        PassthroughFade.TrackCamera(new Camera {Extra=foreignView});
+        Check(foreignView.Renderer.sharedMaterial==foreign,"An unrelated shader cannot enter the camera-only fade fallback.");
+        PassthroughFade.Shutdown();
+        Check(nativeView.Renderer.sharedMaterial==nativeSource,"Camera-only discovery restores the original game material on unload.");
+    }
+
     private static void LoadingChecks()
     {
         PassthroughFade.Initialize();
@@ -210,7 +263,12 @@ namespace UnityEngine
     }
     public struct Color { public float r,g,b,a;public Color(float r,float g,float b,float a){this.r=r;this.g=g;this.b=b;this.a=a;}public static Color black=>new Color(0,0,0,1); }
     public enum HideFlags {HideAndDontSave}
-    public class Component : Object { public Transform transform; }
+    public class Component : Object
+    {
+        public Transform transform; public object Extra;
+        public T GetComponent<T>() where T:class => Extra as T;
+    }
+    public class Camera : Component { }
     public class Transform : Object
     {
         public readonly Dictionary<string,Transform> Children=new Dictionary<string,Transform>();
@@ -228,7 +286,7 @@ namespace UnityEngine
         public Material(Material source){shader=source.shader;color=source.color;renderQueue=source.renderQueue;enableInstancing=source.enableInstancing;foreach(var entry in source.floats)floats[entry.Key]=entry.Value;}
         public int passCount=>shader.name=="Hidden/Demeo/NativeFade"?1:2;
         public int FindPass(string name)=>name=="ROOM_FADE"?0:-1;
-        public bool HasProperty(string name)=>name=="_Color" || name=="_BaseColor" || floats.ContainsKey(name);
+        public bool HasProperty(string name)=>shader.name=="Hidden/Demeo/NativeFade" ? name=="_PassthroughFade" : name=="_Color" || name=="_BaseColor" || floats.ContainsKey(name);
         public void SetFloat(string name,float value)=>floats[name]=value;
         public float GetFloat(string name)=>floats[name];
     }
@@ -295,10 +353,13 @@ namespace Boardgame.Rendering
         private readonly Material fadeMaterial;
 #else
         public CameraFadeView cameraFadeView {get;}
-        public Material fadeMaterial {get;}
+        public Material fadeMaterial {get;set;}
 #endif
         public int Calls;
-        public CameraFadeController(CameraFadeView view){view.Bind();cameraFadeView=view;fadeMaterial=view.Primary;}
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public CameraFadeController(CameraFadeView view){view.Bind();cameraFadeView=view;fadeMaterial=view.Renderer.sharedMaterial;}
+        public Material Source=>fadeMaterial;
+        public void AnimateNative(float value){fadeMaterial.color=new Color(0,0,0,value);}
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void OnUpdate(float value){Calls++;fadeMaterial.color=new Color(0,0,0,value);}
         [MethodImpl(MethodImplOptions.NoInlining)]

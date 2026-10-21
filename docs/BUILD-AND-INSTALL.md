@@ -172,6 +172,19 @@ its notification callbacks are intentionally retained. Loader compilation and
 software checks do not establish an executed native detour or headset outcome.
 The existing PC0.2.14/Frame0.2.12 companions require no update or Frame restart.
 
+Version1.4.20 extends the Battles method-port profile to38 checks for its scoped
+legacy avatar reset, preserving manual/nested recenter and cleaning up after
+exceptions. Battlemarked remains observational with15 checks. The fade lifecycle
+gate now checks69 assertions per Demeo/Battles profile and26 for Battlemarked,
+including Mono constructor-only fades, reused views and discovery directly on
+an admitted camera when no helper callback was observed. Battles' allocating
+constructor wrappers are excluded; its exact cached replacement is repaired
+before native animation writes, using the generated GC-safe field setter. On Battles, expect
+`scoped legacy avatar reset=True` in the ready message and a suppression message
+when that native path executes. Camera fade discoveries and source transitions
+now carry timestamps. Owned-port tests do not establish native detour execution
+or the headset result; test scenario loading and manual recenter after installing.
+
 
 ## Checking the Unity6 IL2CPP shader loader (1.4.17)
 

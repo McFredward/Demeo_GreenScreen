@@ -12,6 +12,89 @@ The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
 
+## Battles loading camera and scoped avatar reset (1.4.20)
+
+The Battles1.4.19 test still shows a fully black scenario-loading transition
+and one unsolicited menu recenter. Private capture
+`frame-battles1419-20261021-192203` contains twelve hashed originals, including
+PC logs and Frame logs obtained read-only. PID6704 connects at19:19:48.118
+and exits at19:20:30.734 on October21. The prior UI observer reports ready but
+never reports applying its Background correction; that change is not established
+as covering this transition. The user confirms the entire picture was black.
+
+At19:20:12.902–.903 the game records avatar placements for slots-1 through3
+with offset enabled. SteamVR changes the Standing origin at19:20:12.903.
+Frame logs do not show a corresponding headset recenter/relocalization action.
+The supplied Demeo game code has precisely this placement sequence in OnLeftRoom,
+followed by ResetAvatar, whose parenting/hand setup includes InputTracking.Recenter.
+Battles exposes the corresponding native ResetAvatar and legacy Recenter methods.
+The timing identifies an unguarded candidate; it is not a native call-stack proof.
+
+Version1.4.20 uses the loader's Harmony IL2CPP backend to scope Battles'
+ResetAvatar with a prefix/finalizer. The shared InputTracking.Recenter method
+forwards normally except on that same thread, inside this automatic scope, with
+independently verified Frame passthrough and active OpenVR. The supplied generated
+Recenter binding has a native MethodInfo and runtime-invoke boundary, checked
+against the actual interop file. This detours a native method rather than
+transpiling wrapper IL; native compiler inlining remains a hardware-test limit.
+Explicit null-subsystem RecenterDefault requests override the automatic scope.
+Finalizers balance both scopes on exceptions and nested calls. Parenting, hands,
+avatar callbacks, required local scene placements, bounds recovery and direct or
+other-thread legacy recenter continue. Existing viewpoint guards remain available
+if the extra legacy guard cannot install. Demeo's existing Mono call-site guards
+and Battlemarked's separate OpenXR observer are unchanged.
+
+The camera-fade correction discovers the exact CameraFadeView on the admitted
+XR camera in Demeo and Battles, and captures original Demeo controller construction. This avoids
+depending solely on observing later OnUpdate/SetFadedOut helpers. Camera discovery
+requires the proven Utility/CameraFading shader; it does not scan black objects
+or classify image pixels. Original material alpha is read before rendering,
+including native updates that bypass a hooked helper. A reproduced reuse defect
+is also fixed: a new controller must see its original animation material through
+renderer.material, instead of caching our replacement shader without _Color.
+Demeo's constructor prefix restores the old lease before original construction;
+the postfix captures the resulting material. Battles instead checks for the
+exact owned material cached in a controller before OnUpdate/SetFadedOut writes,
+and redirects only that reference to the original animation material through
+the supplied GC-safe field setter. Battles constructor wrappers allocate native
+objects before invoking the original constructor; the pinned Harmony backend
+copies this wrapper body when making its native detour, so those constructors
+are deliberately not patched. Binary gates enforce that exclusion. Original
+animation timing and completion callbacks execute. The existing loading-UI and Intro adapters remain.
+These shared camera changes cover Demeo and Battles; Battlemarked retains its
+different presenter contract.
+
+The last bounded eye statistics show2,054 successful submits on each eye, zero
+Submit errors and12 samples per eye. Near the end the mod reports waiting for
+current OpenVR eye textures and SteamVR reallocates textures at19:20:25–26.
+The old status lines have no timestamps, so this cannot be assigned reliably
+to scenario loading rather than shutdown. Version1.4.20 timestamps source-status
+changes and bounded camera-fade discoveries. No stale mask reuse, weakened
+current-frame proof, eye-layout change or companion patch is introduced. There
+is no decoder hard reset/unrecoverable FEC abort during the active game window;
+the19:19:36 decoder reset precedes connection. Packet retries alone do not
+establish a rendering blackout.
+
+The latest293-byte ErrorLog contains the two prior Breakpad setup lines plus a
+SteamNetworkingSockets warning about sockets still open during low-level cleanup.
+It has no access-violation stack trace. This is a separate native Steam shutdown
+warning; the mod does not use SteamNetworkingSockets. No native log output is
+filtered or deleted. The former global Harmony type-search warning is absent.
+
+Production fade checks use real Harmony on owned ports:69 assertions each for
+Demeo/Battles and26 for Battlemarked. They include Demeo callback-free construction,
+controller reuse, an already-existing camera fade with no constructor/helper
+observation, exact shader rejection, callback retention and restoration.
+The recenter checks cover106 assertions on each of three Demeo CLR/Mono runs,
+38 on Battles ports and15 on Battlemarked ports, including nested/manual calls,
+exceptions, other threads, opt-out and identity/transport rejection. Nine private
+metadata checks confirm actual constructor/renderer/native-recenter contracts
+and Battles' GC-safe material setter. All six loader builds and90 produced-DLL
+checks pass, including exclusion of IL2CPP constructor hooks. These tests do not
+execute the native game or certify headset rendering. Test Battles scenario
+loading, return to menu and intentional recenter next. PC0.2.14/Frame0.2.12,
+shader bundles and Gloomhaven are unchanged; no Frame update/restart is needed.
+
 ## Loading canvas audit and ErrorLog (1.4.19)
 
 The maintainer confirms the1.4.18 Battles Intro/stereo/crash corrections work,

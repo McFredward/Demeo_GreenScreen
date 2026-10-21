@@ -65,9 +65,32 @@ internal static class Il2CppRecenterChecks
         avatar.ResetAvatarPositionRotationScaleTilt(1, true);
         Check(avatar.Placements == 1 && Utils.Messages.Exists(s => s.Contains("placement retained; slot=1; offset=True")),
             "Game-owned scene/team/bounds placement runs and is observed");
-        avatar.ResetAvatar();
-        Check(avatar.Setups == 1 && avatar.Callbacks == 1, "Native avatar initialization is never skipped wholesale");
         int before = InputTracking.Resets;
+        avatar.ResetAvatar();
+        Check(avatar.Setups == 1 && avatar.Callbacks == 1 && InputTracking.Resets==before,
+            "Scoped native legacy reset is suppressed while every avatar setup/callback still runs");
+        avatar.DuringReset=()=>controller.Notify(null);
+        avatar.ResetAvatar();
+        Check(InputTracking.Resets==before+1 && avatar.Callbacks==2,
+            "Explicit manual recenter nested inside an avatar callback remains available");
+        avatar.DuringReset=()=>throw new InvalidOperationException("owned setup failure");
+        try { avatar.ResetAvatar(); } catch(InvalidOperationException) { }
+        avatar.DuringReset=null;
+        InputTracking.Before=()=>throw new InvalidOperationException("owned manual failure");
+        avatar.DuringReset=()=>controller.Notify(null);
+        try { avatar.ResetAvatar(); } catch(InvalidOperationException) { }
+        InputTracking.Before=null;avatar.DuringReset=null;
+        before=InputTracking.Resets;avatar.ResetAvatar();
+        Check(InputTracking.Resets==before,"An exceptional manual request cannot leak manual permission into a later automatic reset");
+        before=InputTracking.Resets;InputTracking.Recenter();
+        Check(InputTracking.Resets==before+1,"An exception clears the automatic scope before any later manual call");
+        avatar.DuringReset=()=>System.Threading.Tasks.Task.Run(()=>InputTracking.Recenter()).GetAwaiter().GetResult();
+        before=InputTracking.Resets;avatar.ResetAvatar();
+        Check(InputTracking.Resets==before+1,"Other native threads are never covered by the avatar call's scope");
+        avatar.DuringReset=()=>{avatar.DuringReset=null;avatar.ResetAvatar();};
+        before=InputTracking.Resets;int callbacks=avatar.Callbacks;avatar.ResetAvatar();
+        Check(InputTracking.Resets==before && avatar.Callbacks==callbacks+2,"Nested automatic avatar resets balance their scopes and retain callbacks");
+        before = InputTracking.Resets;
         InputTracking.Recenter();
         Check(InputTracking.Resets == before + 1, "Direct/manual legacy API remains available");
         foreach (var profile in new[] {
@@ -79,6 +102,8 @@ internal static class Il2CppRecenterChecks
             Identity(profile[0], profile[1], profile[2]);
             before = controller.Moves; controller.AutoTeleportAvatar();
             Check(controller.Moves == before + 1, "Wrong headset/transport retains automatic movement");
+            int resets=InputTracking.Resets;avatar.ResetAvatar();
+            Check(InputTracking.Resets==resets+1,"An avatar on another headset/transport keeps its legacy tracking reset");
         }
         SteamLinkConnection.Reset();
         before = controller.Moves; controller.AutoTeleportAvatar();
@@ -86,10 +111,14 @@ internal static class Il2CppRecenterChecks
         Identity(); SteamLinkConnectionLifecycle.UsesOpenVr = false;
         before = controller.Moves; controller.AutoTeleportAvatar();
         Check(controller.Moves == before + 1, "A separate OpenVR reader cannot authorize a different game transport");
+        int transportResets=InputTracking.Resets;avatar.ResetAvatar();
+        Check(InputTracking.Resets==transportResets+1,"An OpenXR game cannot enter the OpenVR avatar suppression scope");
         SteamLinkConnectionLifecycle.UsesOpenVr = true;
         ConfigurationStore.Current.SteamLinkNativePassthrough = false;
         before = controller.Moves; controller.AutoTeleportAvatar();
         Check(controller.Moves == before + 1, "INI opt-out restores automatic viewpoint");
+        int optOutResets=InputTracking.Resets;avatar.ResetAvatar();
+        Check(InputTracking.Resets==optOutResets+1,"INI opt-out restores the original avatar tracking reset");
         ConfigurationStore.Current.SteamLinkNativePassthrough = true;
         UnityEngine.Application.platform = UnityEngine.RuntimePlatform.LinuxPlayer;
         before = controller.Moves; controller.AutoTeleportAvatar();
@@ -123,11 +152,18 @@ internal static class Il2CppRecenterChecks
             && Utils.Messages.FindAll(s => s.Contains("tracking-origin notification retained")).Count == 32,
             "Repeated origin notifications keep callbacks and bounded diagnostics");
 #endif
+#if DEMEOBATTLES
+        Check(Harmony.GetPatchInfo(typeof(InputTracking).GetMethod("Recenter")).Prefixes.Count==1,
+            "Exactly one native legacy API guard exists, forwarding outside the verified avatar scope");
+#else
         Check(Harmony.GetPatchInfo(typeof(InputTracking).GetMethod("Recenter")) == null,
-            "Shared legacy recenter API is unpatched");
+            "Battlemarked's shared legacy recenter API is unpatched");
+#endif
         Check(Harmony.GetPatchInfo(typeof(XRInputSubsystem).GetMethod("TryRecenter")) == null,
             "Shared subsystem recenter API is unpatched");
         DemeoAutomaticRecenter.Shutdown();
+        Check(Harmony.GetPatchInfo(typeof(InputTracking).GetMethod("Recenter"))?.Prefixes.Count is null or 0,
+            "Unload removes the scoped legacy guard");
         Check(Harmony.GetPatchInfo(target).Prefixes.Count == 0 && Harmony.GetPatchInfo(target).Postfixes.Count == 1,
             "Unload removes only owned prefix and retains another owner");
         int calls = controller.Calls;
@@ -163,8 +199,8 @@ namespace UnityEngine.XR
     }
     public static class InputTracking
     {
-        public static int Resets;
-        [MethodImpl(MethodImplOptions.NoInlining)] public static void Recenter() => Resets++;
+        public static int Resets;public static Action Before;
+        [MethodImpl(MethodImplOptions.NoInlining)] public static void Recenter() {Before?.Invoke();Resets++;}
     }
 }
 namespace Boardgame
@@ -179,8 +215,9 @@ namespace Boardgame
     public class AvatarController
     {
         public int Placements, Setups, Callbacks;
+        public Action DuringReset;
         [MethodImpl(MethodImplOptions.NoInlining)] public void ResetAvatarPositionRotationScaleTilt(int slot, bool checkForOffset = false) => Placements++;
-        [MethodImpl(MethodImplOptions.NoInlining)] public void ResetAvatar() { Setups++; InputTracking.Recenter(); Callbacks++; }
+        [MethodImpl(MethodImplOptions.NoInlining)] public void ResetAvatar() { Setups++; DuringReset?.Invoke(); InputTracking.Recenter(); Callbacks++; }
     }
 }
 namespace Jade.XRRecentering
