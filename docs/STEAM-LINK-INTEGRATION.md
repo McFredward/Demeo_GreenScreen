@@ -12,6 +12,85 @@ The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
 
+## October21 follow-up: separate origin and picture continuity failures
+
+The maintainer's second October21 Demeo1.4.11 test still has short black flashes,
+mainly during the intro, and menu glitches/unwanted recentering. The maintainer
+explicitly reports no deliberate recenter or playspace adjustment. Preserve the
+previously confirmed opacity/stereo correction; the PC0.2.13 cleanup candidate
+does not resolve the remaining hardware failures.
+
+The private capture is `.planning/debug/frame-1411-20261021-1250/`, including
+frozen PC originals, Frame native logs, the journal, Steam's `steam_output.log`
+and `console_log.txt`, SHA256 manifests and a structured audit. The compositor
+survived the preceding test, so Frame totals must be differenced against that
+session rather than interpreted as fresh counts. All device access was limited
+to reading logs; no installation, setting write or restart was performed.
+
+The PC native log proves the new cleanup behavior is present:49 requests,
+41 empty,8 changing,0 lock misses. During the game the two genuine allocation
+removals remain distinct from recurring empty identity-reader cleanup. Final
+copy-pair refusals are4, versus30 in the preceding test, but these totals do not
+identify every visible black frame. The mod records equal successful eye counts,
+error0 and zero Unity origin notifications/discontinuous pairs. Native readback
+reports4,785 certified masks, zero busy/errors; the Frame adds4,785 decoded mask
+metadata records, zero upload refusals and zero guarded-submit refusals. Those
+metadata totals are not a count of displayed pictures.
+
+Between Frame journal samples12:45:04 and12:45:19, signed-None metadata stays
+4,852, rejected masks stay0, and the ready-mask draw refusal stays0. However,
+exact-picture draw refusals grow94 to114 and opaque submits grow70,969 to70,979.
+This is an intermittent exact decoded-picture lookup failure, **not evidence of
+missing uploaded mask storage**. It cannot be fixed by weakening association or
+reusing a different frame's coverage. Aggregate submit/draw counts are not eye
+frame counts, and do not prove the precise on-headset flash times. Fully opaque
+mask content also grows by106 between12:45:14 and12:45:19; retained intro fades
+are a separate possible contributor. Neither observation alone attributes every
+reported flash.
+
+Steam's separate output log supplies the video-process handoff diagnostics,
+which are absent from its ordinary `vrlink.txt` log. Its last in-game milestone
+records4,096 waits,4,085 ready returns,11 exact-unavailable returns,0 emergency
+timeouts and21,714us maximum handoff duration. It is an intermediate milestone,
+not the final session total. The compositor's corresponding wait counters are
+normally zero because the waiting callback belongs to the video process. Do not
+infer decoder success or failure from the wrong process's counters.
+
+Native transport fails at Frame12:44:59.894795 with a backtrack-window/FEC error,
+then hard-resets at12:45:00.895180. The PC still reports zero certified masks at
+12:45:02.772 and first certifies coverage at12:45:04.076. Consequently this
+particular native reset precedes the first MR mask payload. The mask bandwidth
+overhead is not established as its cause. Cross-device clocks were not calibrated;
+nearby PC and Frame timestamps cannot be treated as an exact latency measurement.
+There is no further decoder hard reset during the later menu origin bursts.
+
+The PC compositor records74 standing-origin reset events. Eight occur between
+12:45:35.945 and12:45:36.209 without another decoder restart; the corresponding
+standing translation initially changes about6.2cm. Further bursts occur at
+12:45:40.992,12:45:56.068 and12:46:01.090. Most of the74 events belong to the
+final12:46:06–08 burst near headset presence/tracking shutdown and must not all
+be labeled ordinary gameplay glitches. These are real native origin updates,
+independent of the mod's zero Unity callback count. Treating every position
+change as a video reconnect is incorrect.
+
+OVR Advanced Settings starts alongside this session. Its upstream
+[MoveCenterTabController](https://github.com/OpenVR-Advanced-Settings/OpenVR-AdvancedSettings/blob/master/src/tabcontrollers/MoveCenterTabController.cpp)
+can write seated/standing origins and preview chaperone transforms. This makes
+it a candidate external writer, not a proven culprit: SteamVR's supplied logs
+do not identify the caller of each update, and the working Gloomhaven comparison
+also has that overlay installed. Inspection of the supplied Demeo assembly finds
+an automatic standing reset in SteamVR input construction and input-driven
+avatar recentering; static call sites do not prove the writer of the later bursts.
+No game implementation or Valve runtime code is redistributed.
+
+The next controlled headset comparison should retain the exact same mod and
+companions while OVR Advanced Settings is fully exited. Record intro flashes
+and menu position changes separately and collect both PC logs and the Frame
+Steam output log. This distinguishes an external origin feedback/offset path
+before adding tracking compensation or suppressing legitimate resets. It is
+not a claim that either remaining defect has been fixed. Gloomhaven and the
+PC-only installer behavior remain unchanged.
+
 ## Headset and transport admission
 
 The isolated background reader queries connected HMD0/class and public OpenVR
