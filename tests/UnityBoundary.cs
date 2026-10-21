@@ -59,6 +59,10 @@ namespace Il2CppSystem
     public class Action<T> : Delegate
     { public void Invoke(T a) { foreach (var callback in Functions) callback.DynamicInvoke(a); } }
 }
+namespace Il2CppSystem.Collections.Generic
+{
+    public class List<T> : System.Collections.Generic.List<T> { }
+}
 namespace UnityEngine
 {
     public static class SubsystemManager
@@ -323,9 +327,23 @@ namespace UnityEngine.XR
     public class XRInputSubsystem
     {
         public bool running = true;
+#if DEMEO
         public event Action<XRInputSubsystem> trackingOriginUpdated;
         public int Listeners => trackingOriginUpdated?.GetInvocationList().Length ?? 0;
         public void NotifyOrigin() => trackingOriginUpdated?.Invoke(this);
+#else
+        private Il2CppSystem.Action<XRInputSubsystem> trackingOriginUpdated;
+        public bool RetiredOriginCallback;
+        public int Listeners => trackingOriginUpdated?.Functions.Count ?? 0;
+        public void NotifyOrigin() => trackingOriginUpdated?.Invoke(this);
+        public void add_trackingOriginUpdated(Il2CppSystem.Action<XRInputSubsystem> callback)
+            => trackingOriginUpdated = Il2CppSystem.Delegate.Combine(trackingOriginUpdated, callback).Cast<Il2CppSystem.Action<XRInputSubsystem>>();
+        public void remove_trackingOriginUpdated(Il2CppSystem.Action<XRInputSubsystem> callback)
+        {
+            if (RetiredOriginCallback) throw new ObjectDisposedException("Owned retired subsystem");
+            trackingOriginUpdated = Il2CppSystem.Delegate.Remove(trackingOriginUpdated, callback)?.Cast<Il2CppSystem.Action<XRInputSubsystem>>();
+        }
+#endif
     }
     public enum XRNode { Head }
     [Flags] public enum InputDeviceCharacteristics { None=0, HeadMounted=1, Controller=2 }

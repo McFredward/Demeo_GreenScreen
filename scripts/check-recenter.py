@@ -23,6 +23,13 @@ def main():
         runner = args.mono if framework == 'net472' else 'dotnet'
         subprocess.run([runner, str(binary)], cwd=ROOT, check=True, timeout=30)
 
+    for game in ('DEMEOBATTLES', 'DEMEOBATTLEMARKED'):
+        subprocess.run(['dotnet', 'build', 'tests/Il2CppRecenterChecks.csproj',
+                        '-p:Game=' + game, '-p:RestoreLockedMode=true', '--nologo', '-v:q'], cwd=ROOT, check=True)
+        name = 'Assembly-CSharp' if game == 'DEMEOBATTLES' else 'Jade.XRRecentering'
+        binary = ROOT / 'tests/bin/Il2CppRecenter' / game / 'net8.0' / (name + '.dll')
+        subprocess.run(['dotnet', str(binary)], cwd=ROOT, check=True, timeout=30)
+
 
 if __name__ == '__main__':
     main()

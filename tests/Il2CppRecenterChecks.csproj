@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <NuGetLockFilePath>Il2CppRecenterChecks.packages.lock.json</NuGetLockFilePath>
+    <Game Condition="'$(Game)' == ''">DEMEOBATTLES</Game>
+    <DefineConstants>$(DefineConstants);$(Game)</DefineConstants>
+    <AssemblyName Condition="'$(Game)' == 'DEMEOBATTLES'">Assembly-CSharp</AssemblyName>
+    <AssemblyName Condition="'$(Game)' == 'DEMEOBATTLEMARKED'">Jade.XRRecentering</AssemblyName>
+    <OutputPath>bin/Il2CppRecenter/$(Game)/</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../DemeoAutomaticRecenter.cs;../Il2CppAutomaticRecenter.cs;../SteamLinkConnection.cs;Il2CppRecenterChecks.cs" />
+    <PackageReference Include="Lib.Harmony" Version="[2.4.2]" />
+  </ItemGroup>
+</Project>

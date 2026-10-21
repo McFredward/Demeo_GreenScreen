@@ -342,9 +342,9 @@ namespace GreenScreen
             _failed = false; _nextBind = 0; _suppressed = _readFailures = _positionLogs = 0;
         }
 #else
-        internal static void Initialize() { }
-        internal static void Tick(float now) { }
-        internal static void Shutdown() { }
+        internal static void Initialize() => Il2CppAutomaticRecenter.Initialize();
+        internal static void Tick(float now) => Il2CppAutomaticRecenter.Tick(now);
+        internal static void Shutdown() => Il2CppAutomaticRecenter.Shutdown();
 #endif
     }
 }

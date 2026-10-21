@@ -12,6 +12,79 @@ The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
 
+## IL2CPP transfer for Battles and Battlemarked (1.4.16)
+
+The maintainer's Demeo1.4.15 test at16:51–16:54 was visibly clean. The private
+hashed capture `frame-1415-20261021-165827` confirms suppression of avatar
+initialization at16:52:20.515 and two automatic viewpoint requests at
+16:53:59.557/.558. After the early startup reset at16:51:52.203 there is no
+further PC Standing-origin reset. No runtime decoder hard reset, unrecoverable
+FEC abort, receiver source-proof loss or PC bridge transport failure occurs.
+There are131 logged substantive packet retries and isolated synchronization
+warnings; this is evidence for the tested clean run, not proof that the previous
+packet-loss outage is permanently fixed. The short16:52:19 camera pause coincides
+with the Intro/lobby transition; the final16:54:33 pause accompanies explicit
+dashboard opening, followed by SteamVR shutdown. Only logs were read on Frame.
+
+All three games already share verified identity admission, per-eye coverage,
+alpha/HDR handling, camera/source lifecycle and passthrough fade behavior.
+Battles also already uses the OpenVR separate-2D-eye adapter and exact Intro
+Timeline binding where the known transparent URP sphere hierarchy is present.
+Battlemarked retains its OpenXR eye layout and presenter fade adapter.
+No new shader bundles, protocol changes or companion patches are introduced.
+
+The supplied Battles interop metadata contains the exact instance-void methods:
+`Boardgame.CameraMoveAndScaleControl.AutoTeleportAvatar()`,
+`RecenterDefault(XRInputSubsystem)`, and
+`Boardgame.AvatarController.ResetAvatarPositionRotationScaleTilt(int,bool)`.
+Version1.4.16 uses loader-supported Harmony prefixes at these methods, rather
+than transpiling generated IL2CPP invocation wrappers. Only independently
+confirmed Frame passthrough with the active OpenVR game transport suppresses
+the automatic viewpoint and non-null OpenVR tracking-notification paths.
+The null subsystem argument retains explicit controller/keyboard recenter.
+Other game-owned placements are observed up to32 times with timestamp/slot;
+suppression messages stop after64 events without disabling the guard.
+
+Demeo's Mono call-site rewrites in the SteamVR input constructor,
+`AvatarController.ResetAvatar` and `XROrigin.SetupCamera` are **not** blindly
+transferred. Their native IL2CPP bodies cannot be rewritten by changing the
+managed invocation wrappers. Whole-method skips would also remove input fields,
+parenting, tracking-mode/height setup or completion callbacks. These paths retain
+normal Battles behavior; a remaining startup reset needs its own native evidence.
+
+Battlemarked's supplied metadata instead exposes
+`Jade.XRRecentering.XRRecentering.OnTrackingOriginUpdated(XRInputSubsystem)`
+in `Jade.XRRecentering.dll`. It has listener and input-subsystem members; this
+is not the Battles automatic viewpoint method. Version1.4.16 observes this
+notification, without suppressing listeners or manual recenter, and logs at most32
+events under current native Frame identity. Its scene, cutscene and avatar
+placement methods remain game-owned. An unwanted movement in its hardware test
+must be attributed before disabling a required placement path.
+
+`OpenVrOrigin` now uses the supplied IL2CPP list and
+`Il2CppSystem.Action<XRInputSubsystem>` add/remove contracts. The same source,
+identity, transport and native-admission checks guard discontinuity marking;
+OpenXR events never change OpenVR submit flags. It observes actual callbacks,
+never resets/moves the origin, and removes only its own delegate on stop/opt-out.
+Battlemarked's normal OpenXR route has no owned OpenVR submission and therefore
+does not enable this observer. Demeo retains its Mono subscription behavior.
+
+A private Cecil probe checks all eight selected game/callback signatures against
+the actual supplied interop files without executing game/native code. Production
+prefix tests on owned member-shape ports cover Battles automatic versus explicit
+recenter, independent headset/transport rejection, opt-out, retained avatar setup,
+bounded diagnostics and owned unpatching. Battlemarked tests prove that origin
+notifications always reach their original listeners. Integration checks now cover
+both callback forms, another delegate owner, transport rejection and actual
+per-eye submission lifecycle in all six build variants. These tests cannot
+execute the game's native IL2CPP detours or certify the headset picture.
+
+Build both loaders for each game using metadata-only references, then test
+**Demeo Battles first**, including Intro, menu, entering a match, automatic
+viewpoint triggers and intentional recenter. Battlemarked remains next. Keep the
+working PC0.2.14/Frame0.2.12 components: this mod update requires no companion
+installation and no Frame restart. Gloomhaven's shared patches are unchanged.
+
 ## October21 16:23 capture: game-space reframing and real stream loss (1.4.15)
 
 The maintainer confirms1.4.14 removes the black Intro-to-logo transition, but

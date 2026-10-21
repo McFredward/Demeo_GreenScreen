@@ -154,3 +154,20 @@ other callbacks; remaining game avatar placements execute with bounded event
 diagnostics. These checks cover106 assertions on each supported test runtime.
 The menu stream/camera outage in the16:23 capture remains unresolved and is not
 covered by a claim that the recenter or fade changes fix network recovery.
+
+
+Version1.4.16 adds two IL2CPP method-port profiles to the same recenter script:
+Battles tests its actual-signature automatic viewpoint/tracking prefix behavior;
+Battlemarked verifies its separate origin notification remains observational.
+These use real Harmony dispatch on owned ports and do not execute native game
+methods. The integration gate now exercises Mono and IL2CPP origin add/remove
+callbacks, preserving foreign listeners and rejecting OpenXR events for OpenVR
+submit flags. Six metadata-reference builds still package only the mod DLL.
+
+After updating `dev`, run the normal installer and test Demeo Battles next.
+Look for `Demeo Battles IL2CPP recenter guard ready:` and, when the game requests
+an automatic viewpoint, `Suppressed Demeo Battles automatic recenter`.
+Battlemarked instead logs `Demeo Battlemarked IL2CPP recenter observer ready:`;
+its notification callbacks are intentionally retained. Loader compilation and
+software checks do not establish an executed native detour or headset outcome.
+The existing PC0.2.14/Frame0.2.12 companions require no update or Frame restart.

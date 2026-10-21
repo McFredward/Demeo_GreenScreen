@@ -2,10 +2,8 @@
 using System;
 using System.Threading;
 using UnityEngine;
-#if DEMEO
 using System.Collections.Generic;
 using UnityEngine.XR;
-#endif
 
 namespace GreenScreen
 {
@@ -16,9 +14,15 @@ namespace GreenScreen
         private static long _revision;
         internal static long Revision => Interlocked.Read(ref _revision);
         internal static void Mark() => Interlocked.Increment(ref _revision);
-#if DEMEO
         private static readonly List<XRInputSubsystem> Watched = new List<XRInputSubsystem>();
+#if DEMEO
         private static readonly List<XRInputSubsystem> Current = new List<XRInputSubsystem>();
+#else
+        private static readonly Il2CppSystem.Collections.Generic.List<XRInputSubsystem> Current = new();
+        private static readonly Il2CppSystem.Action<XRInputSubsystem> ChangedCallback =
+            Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action<XRInputSubsystem>>(
+                (Action<XRInputSubsystem>)Changed);
+#endif
         private static float _next;
         private static int _reports;
 
@@ -32,10 +36,10 @@ namespace GreenScreen
                 SubsystemManager.GetSubsystems(Current);
                 for (int i = Watched.Count - 1; i >= 0; --i)
                     if (!Current.Contains(Watched[i]) || !Watched[i].running)
-                    { Watched[i].trackingOriginUpdated -= Changed; Watched.RemoveAt(i); }
+                    { Subscribe(Watched[i], false); Watched.RemoveAt(i); }
                 foreach (var input in Current)
                     if (input.running && !Watched.Contains(input))
-                    { input.trackingOriginUpdated += Changed; Watched.Add(input); }
+                    { Subscribe(input, true); Watched.Add(input); }
                 Current.Clear();
             }
             catch (Exception)
@@ -45,6 +49,17 @@ namespace GreenScreen
                 Reset();
                 _next = Time.unscaledTime + 5f;
             }
+        }
+
+        private static void Subscribe(XRInputSubsystem input, bool add)
+        {
+#if DEMEO
+            if (add) input.trackingOriginUpdated += Changed;
+            else input.trackingOriginUpdated -= Changed;
+#else
+            if (add) input.add_trackingOriginUpdated(ChangedCallback);
+            else input.remove_trackingOriginUpdated(ChangedCallback);
+#endif
         }
 
         private static void Changed(XRInputSubsystem input)
@@ -62,16 +77,12 @@ namespace GreenScreen
 
         internal static void Reset()
         {
-            foreach (var input in Watched) input.trackingOriginUpdated -= Changed;
+            foreach (var input in Watched)
+                try { Subscribe(input, false); }
+                catch (Exception) { } // A retired native subsystem may already be disposed.
             Watched.Clear(); Current.Clear(); _next = 0;
             // Keep the monotonic revision across opt-out. A reactivated submit
             // establishes its own baseline rather than replaying old events.
         }
-#else
-        // IL2CPP games retain their existing input boundary until the public
-        // origin callback is validated with those supplied interop assemblies.
-        internal static void Tick(bool requested) { }
-        internal static void Reset() { }
-#endif
     }
 }
