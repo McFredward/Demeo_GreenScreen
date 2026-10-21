@@ -93,3 +93,30 @@ Windows Steam installation run.
 
 Native passthrough additionally needs the per-game headset checks described in
 [the source integration notes](STEAM-LINK-INTEGRATION.md).
+
+
+## Building and checking native game fades
+
+The1.4.12 fade uses its own `assets/nativefade.bundle`; do not rebuild or replace
+`nativecoverage.bundle` when changing only game fades. With the licensed Unity
+2021.3 Editor and Windows build support, use `BuildFade.Build` on the `unity`
+project. `FadeGpuChecks.Run` additionally needs an actual graphics device and
+checks both eyes, separate/instanced rendering and1x/4x MSAA. Its source-over
+black control must make an empty background opaque; the owned fade must keep
+that background transparent throughout.
+
+`python3 scripts/check-fade.py` validates the compiled owned Windows bundle with
+UnityPy. `python3 scripts/check-fade-lifecycle.py` runs actual Harmony dispatch
+for all three adapters using owned game/Unity ports and the locked modern CLR
+test dependency. It does not run IL2CPP machine code or replace the mod loader's
+Harmony. Packaging and CI include both gates, and each of the six mod DLLs must
+embed the exact validated fade resource. No game assemblies enter the ZIPs.
+
+Successful startup logs `Passthrough fade observer ready:` with the game's
+controller type. `Game black fades now fade into passthrough` confirms a known
+renderer was admitted under native permission. The bindings accommodate lazy
+interop assembly loading on both loaders. Missing/changed contracts or an
+unsupported shader retain original game fades and report a bounded reason.
+Headset validation remains separate, starting with Demeo and then the two
+IL2CPP games. Native PC0.2.14/Frame0.2.12 components require no update for this
+mod-only change.
