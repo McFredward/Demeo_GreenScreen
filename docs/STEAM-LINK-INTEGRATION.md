@@ -12,6 +12,79 @@ The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
 
+## October21 16:23 capture: game-space reframing and real stream loss (1.4.15)
+
+The maintainer confirms1.4.14 removes the black Intro-to-logo transition, but
+reports a menu blackout and an unsolicited recenter **during a started game**.
+The original PC/Frame logs are frozen and hashed in the private ignored capture
+`frame-1414-20261021-162716`. Only logs were read on the Frame. No device
+configuration, files or services were changed.
+
+The game log rejects both initialization guards with `oculus / Oculus Quest2`,
+then the independent SDK helper correctly reports `cv / Deckard MP / empty`.
+The game-process properties therefore cannot be the sole identity gate.
+Version1.4.15 prefers the existing isolated reader's current result; it never
+adds Quest2 to the Frame classifier. Only NoSession/Pending permits the previous
+early in-process fallback. An explicit independent rejection is authoritative.
+Unconfirmed early startup calls keep their original behavior. No polling, wait,
+VR initialization or extra helper is added to the patched game methods.
+
+The PC compositor has Standing resets at16:23:21.482 and16:23:50.831, and a
+Seated reset at16:23:22.072. There is no further PC origin reset before exit at
+16:24:55.680. These early events alone do not explain the reported gameplay
+jump. Supplied game IL reveals a separate local-space route:
+`CameraMoveAndScaleControl.AutoTeleportAvatar` is called on level load, character
+selection and action completion. It can move/tween the avatar without changing
+SteamVR's global origin, or schedule a fade, legacy recenter and local movement.
+
+For verified Frame passthrough on the active OpenVR game transport,1.4.15 skips
+this automatic viewpoint method, including its fade/tween. A prefix on
+`RecenterDefault(XRInputSubsystem)` rejects automatic OpenVR tracking-origin
+notifications before they schedule a fade/local reset; null identifies the
+game's explicit controller/keyboard path and retains its original behavior.
+The supplied SteamVR platform does not normally register that Quest/Rift-only
+notification handler, so it is an additional scoped guard, not an attribution
+of the reported jump. A checked one-call rewrite in `AvatarController.ResetAvatar`
+also guards its legacy `InputTracking.Recenter` while retaining parenting,
+scale, hands and avatar-assignment callbacks. Global recenter APIs are unpatched.
+
+Required scene/shop/team/bounds placements remain game-owned. The exact
+`ResetAvatarPositionRotationScaleTilt(int,bool)` method logs at most32
+observations with timestamp, slot, offset flag and bounded managed caller names.
+This will distinguish those remaining movements from automatic viewpoint,
+manual recenter and stream recovery. It does not establish a caller for the
+old gameplay jump. Suppression logs are limited to64 events per mod lifetime.
+Battles and Battlemarked retain their input behavior.
+
+The menu blackout has stronger transport evidence: at16:23:54.716 the Frame
+requests216 missing packets for video frame4323; at54.764 it reports an
+out-of-backtrack-window frame, and at54.774 aborts the stream because too many
+packets are missing even to retransmit. At55.756 the stalled decoder performs a
+hard reset. XRService explicitly pauses passthrough cameras at54.804 and resumes
+them at56.808. The PC's transport/source revocation follows at55.691, after the
+Frame's failure. This is a real transport/camera outage, not another Timeline
+black material or evidence that routine same-contract QoS revoked the source.
+The exact cause of the packet loss is **not** established by these logs.
+
+Approximate PC counters record450,713,573 compressed coverage bytes alongside
+1,463,049,522 original video bytes across7,022 masked frames, about30.8% extra
+coverage payload. That motivates investigating transport capacity including
+coverage overhead, but does not prove network saturation or justify an
+unmeasured global bitrate change. No mask bytes were dropped, approximated or
+reused to conceal the outage. A fade shader cannot supply real passthrough while
+the Frame has paused its cameras. The remaining transport outage is unresolved.
+
+Production Harmony checks exercise106 assertions each on .NET8 and both pinned
+Demeo loader Harmony versions on Unity Mono. They reproduce game Quest2 emulation
+with independently confirmed Frame identity, rejection/expiry, active transport
+scope, automatic view movement versus manual recenter, retained avatar callbacks,
+legacy-call shape rejection, diagnostics and complete owned unpatching. A private
+probe binds all six hooks against the supplied game/library methods without
+executing the game methods; Unity native-call resolution warnings are expected
+outside a running Unity process. The existing six-loader rendering and three-game
+fade gates remain separate. These are software checks; the1.4.15 gameplay changes
+need a headset test. PC0.2.14/Frame0.2.12 and Gloomhaven remain unchanged.
+
 ## October21 15:51 capture and additional intro paths (1.4.14)
 
 The1.4.13 capture still records PC Standing resets at15:51:07.988 and

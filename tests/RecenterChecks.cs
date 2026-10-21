@@ -16,6 +16,13 @@ internal static class RecenterChecks
     private static int observations;
     private static void Observe() { observations++; }
     private static void Check(bool value, string why) { checks++; if (!value) throw new Exception(why); }
+    private static void Isolated(SteamLinkConnection.Snapshot snapshot)
+    {
+        // Publish the owned reader result at the production monitor boundary;
+        // never launch an SDK helper or grant renderer/source permission here.
+        object monitor = typeof(SteamLinkConnection).GetField("State", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+        typeof(SteamLinkConnection.Monitor).GetProperty("Current", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(monitor, snapshot);
+    }
     private static void Construct(bool resetExpected, string why)
     {
         int before = CVRChaperone.Resets;
@@ -37,6 +44,60 @@ internal static class RecenterChecks
         Construct(false, "Verified Frame startup reset suppressed before cached identity or camera admission");
         Construct(false, "Reinitialization/lobby reset also suppressed");
         Check(observations == 2, "Another constructor observer runs exactly once per initialization");
+        var movement = new Boardgame.CameraMoveAndScaleControl();
+        movement.AutoTeleportAvatar();
+        Check(movement.Moves == 0 && movement.Fades == 0, "Automatic game viewpoint cannot fade or move the avatar in native mode");
+        var avatar = new Boardgame.AvatarController();
+        avatar.Initialize();
+        Check(UnityEngine.XR.InputTracking.Resets == 0 && avatar.Parents == 1 && avatar.Hands == 1 && avatar.Callbacks == 1,
+            "Avatar setup retains parenting, hands and callbacks while avoiding its legacy automatic recenter");
+        movement.Notify(new UnityEngine.XR.XRInputSubsystem());
+        Check(movement.Placements == 0, "Automatic tracking notification cannot schedule a local-avatar reset");
+        movement.Notify(null);
+        Check(movement.Placements == 1 && UnityEngine.XR.InputTracking.Resets == 1, "Explicit controller/keyboard recenter remains available");
+        movement.Notify(new UnityEngine.XR.XRInputSubsystem { subsystemDescriptor = { id = "OpenXR Input" } });
+        Check(movement.Placements == 2, "Other runtime's tracking callback retains original behavior");
+        UnityEngine.XR.InputTracking.Recenter();
+        Check(UnityEngine.XR.InputTracking.Resets == 3, "Direct legacy recenter including bounds recovery is unchanged");
+        Check(Harmony.GetPatchInfo(typeof(UnityEngine.XR.InputTracking).GetMethod("Recenter")) == null,
+            "The shared legacy InputTracking API is never patched");
+
+        // Real1.4.14 failure: the game emulates Quest2, while the isolated SDK
+        // reader correctly identifies Frame. Do not admit Quest2 as a Frame.
+        CVRSystem.Tracking = "oculus"; CVRSystem.Model = "Oculus Quest2";
+        Construct(true, "Emulated Quest2 before independent confirmation is not Frame permission");
+        movement.AutoTeleportAvatar();
+        Check(movement.Moves == 1, "Pending/unverified identity retains automatic game movement");
+        Isolated(SteamLinkConnection.Classify(true, 1, "cv", "Deckard MP", ""));
+        Construct(false, "Independent confirmed Frame suppresses reset despite game Quest2 emulation");
+        var verifiedRigInput = new UnityEngine.XR.XRInputSubsystem();
+        Check(new Unity.XR.CoreUtils.XROrigin().Initialize(verifiedRigInput) && verifiedRigInput.Resets == 0,
+            "Independent Frame confirmation also protects automatic rig initialization with game emulation");
+        avatar.Initialize();
+        Check(UnityEngine.XR.InputTracking.Resets == 3 && avatar.Parents == 2 && avatar.Hands == 2 && avatar.Callbacks == 2,
+            "Independent Frame confirmation protects avatar reset and still runs all callbacks");
+        avatar.ResetAvatarPositionRotationScaleTilt(2, true);
+        Check(avatar.Placements == 1 && Utils.Messages.Exists(s => s.Contains("avatar placement retained; slot=2; offset=True")),
+            "Other game placements execute and produce an event diagnostic");
+        movement.AutoTeleportAvatar();
+        Check(movement.Moves == 1, "Verified Frame prevents game-space automatic reframe despite emulation");
+        SteamLinkConnectionLifecycle.UsesOpenVr = false;
+        movement.AutoTeleportAvatar();
+        avatar.Initialize();
+        Check(movement.Moves == 2 && UnityEngine.XR.InputTracking.Resets == 4,
+            "A separate OpenVR reader cannot suppress another active game transport");
+        SteamLinkConnectionLifecycle.UsesOpenVr = true;
+        ConfigurationStore.Current.SteamLinkNativePassthrough = false;
+        movement.AutoTeleportAvatar();
+        Check(movement.Moves == 3, "Opt-out restores automatic game viewpoint");
+        ConfigurationStore.Current.SteamLinkNativePassthrough = true;
+        Isolated(new SteamLinkConnection.Snapshot(SteamLinkConnection.Reason.Pending));
+        movement.AutoTeleportAvatar();
+        Check(movement.Moves == 4, "Expired/lost independent proof cannot authorize suppression with a Quest2 interface");
+        CVRSystem.Frame();
+        Isolated(SteamLinkConnection.Classify(true, 1, "oculus", "Oculus Quest2", ""));
+        Construct(true, "A verified different independent headset takes priority over game Frame emulation");
+        SteamLinkConnection.Reset();
         var rig = new Unity.XR.CoreUtils.XROrigin();
         var subsystem = new UnityEngine.XR.XRInputSubsystem();
         Check(rig.Initialize(subsystem) && subsystem.Resets == 0, "Device-mode rig initialization retains the current origin and reports success");
@@ -131,7 +192,32 @@ internal static class RecenterChecks
             catch (TargetInvocationException e) when (e.InnerException is NotSupportedException) { refused = true; }
             Check(refused, "Missing, Seated or duplicate reset layout is refused");
         }
+        var avatarRewrite = typeof(DemeoAutomaticRecenter).GetMethod("TranspileAvatarReset", BindingFlags.Static | BindingFlags.NonPublic);
+        foreach (var code in new[] {
+            new List<CodeInstruction>(),
+            new List<CodeInstruction> { new CodeInstruction(OpCodes.Call, typeof(UnityEngine.XR.InputTracking).GetMethod("Recenter")),
+                new CodeInstruction(OpCodes.Call, typeof(UnityEngine.XR.InputTracking).GetMethod("Recenter")) } })
+        {
+            bool refused = false;
+            try { avatarRewrite.Invoke(null, new object[] { code }); }
+            catch (TargetInvocationException e) when (e.InnerException is NotSupportedException) { refused = true; }
+            Check(refused, "Missing or ambiguous avatar legacy recenter layout is refused");
+        }
         DemeoAutomaticRecenter.Shutdown();
+        before = movement.Moves;
+        movement.AutoTeleportAvatar();
+        Check(movement.Moves == before + 1, "Unload restores game automatic viewpoint");
+        foreach (var target in new[] {
+            typeof(Boardgame.CameraMoveAndScaleControl).GetMethod("AutoTeleportAvatar"),
+            typeof(Boardgame.CameraMoveAndScaleControl).GetMethod("RecenterDefault", BindingFlags.NonPublic | BindingFlags.Instance),
+            typeof(Boardgame.AvatarController).GetMethod("ResetAvatar", BindingFlags.NonPublic | BindingFlags.Instance),
+            typeof(Boardgame.AvatarController).GetMethod("ResetAvatarPositionRotationScaleTilt") })
+            Check(Harmony.GetPatchInfo(target) == null || Harmony.GetPatchInfo(target).Owners.Count == 0,
+                "Unload removes each owned game hook: " + target.Name);
+        before = UnityEngine.XR.InputTracking.Resets;
+        avatar.Initialize();
+        Check(UnityEngine.XR.InputTracking.Resets == before + 1 && avatar.Parents == avatar.Callbacks,
+            "Unload restores avatar native recenter and retains all initialization");
         Check(rig.Initialize(subsystem) && subsystem.Resets == 4, "Unload restores the real rig setup method");
         var rigPatch = Harmony.GetPatchInfo(typeof(Unity.XR.CoreUtils.XROrigin).GetMethod("SetupCamera", BindingFlags.NonPublic | BindingFlags.Instance));
         Check(rigPatch == null || rigPatch.Transpilers.Count == 0, "Unload removes the owned rig transpiler");
@@ -160,6 +246,7 @@ namespace GreenScreen
     }
     internal static class ConfigurationStore { internal static readonly Settings Current = new Settings(); }
     internal sealed class Settings { internal bool SteamLinkNativePassthrough = true; }
+    internal static class SteamLinkConnectionLifecycle { internal static bool UsesOpenVr = true; }
 }
 namespace UnityEngine
 {
@@ -168,6 +255,12 @@ namespace UnityEngine
 }
 namespace UnityEngine.XR
 {
+    public static class InputTracking
+    {
+        public static int Resets;
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void Recenter() { Resets++; }
+    }
     public sealed class XRInputSubsystem
     {
         public int Resets, ModeUpdates;
@@ -176,6 +269,29 @@ namespace UnityEngine.XR
         [MethodImpl(MethodImplOptions.NoInlining)]
         public bool TryRecenter() { Resets++; return true; }
         public void SetMode() { ModeUpdates++; }
+    }
+}
+namespace Boardgame
+{
+    public sealed class CameraMoveAndScaleControl
+    {
+        public int Moves, Fades, Placements;
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void AutoTeleportAvatar() { Fades++; Moves++; }
+        public void Notify(UnityEngine.XR.XRInputSubsystem input) => RecenterDefault(input);
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void RecenterDefault(UnityEngine.XR.XRInputSubsystem subsystem = null)
+        { Fades++; UnityEngine.XR.InputTracking.Recenter(); Placements++; }
+    }
+    public sealed class AvatarController
+    {
+        public int Parents, Hands, Callbacks, Placements;
+        public void Initialize() => ResetAvatar();
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void ResetAvatar()
+        { Parents++; UnityEngine.XR.InputTracking.Recenter(); Hands++; Callbacks++; }
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void ResetAvatarPositionRotationScaleTilt(int slot, bool checkForOffset = false) { Placements++; }
     }
 }
 namespace Unity.XR.CoreUtils

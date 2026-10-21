@@ -144,3 +144,13 @@ recenter. The fade lifecycle gate additionally checks the two exact Intro
 Timeline sphere material copies, four RGB/alpha blend factors and preservation
 of animated alpha/property blocks. Neither gate executes IL2CPP machine code
 or substitutes for the next Demeo headset test.
+
+
+Since1.4.15 the recenter gate also reproduces the game-process Quest2 emulation
+with a separately confirmed Frame, verifies independent rejection and pending
+proof, and exercises automatic game-space viewpoint/tracking notifications
+versus explicit recenter. The legacy avatar initialization rewrite retains all
+other callbacks; remaining game avatar placements execute with bounded event
+diagnostics. These checks cover106 assertions on each supported test runtime.
+The menu stream/camera outage in the16:23 capture remains unresolved and is not
+covered by a claim that the recenter or fade changes fix network recovery.
