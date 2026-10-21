@@ -60,15 +60,11 @@ namespace GreenScreen
                         using (var data = new MemoryStream())
                         {
                             resource.CopyTo(data);
-                            _bundle = AssetBundle.LoadFromMemory(data.ToArray());
+                            _bundle = UnityShaderLoader.LoadBundle(data.ToArray());
                         }
                     }
                     if (_bundle == null) throw new InvalidDataException("AssetBundle.LoadFromMemory rejected the embedded coverage bundle.");
-#if DEMEO
-                    _shader = _bundle.LoadAsset<Shader>("assets/nativecoverage.shader");
-#else
-                    _shader = _bundle.LoadAsset("assets/nativecoverage.shader", Il2CppInterop.Runtime.Il2CppType.Of<Shader>())?.Cast<Shader>();
-#endif
+                    _shader = UnityShaderLoader.LoadShader(_bundle, "assets/nativecoverage.shader");
                     if (_shader == null) throw new InvalidDataException("The coverage bundle does not contain its Shader asset.");
                     if (_shader.name != "Hidden/Demeo/NativeCoverage") throw new InvalidDataException("The coverage Shader has an unexpected name: " + _shader.name);
                     if (!_shader.isSupported) throw new NotSupportedException("The coverage Shader is unsupported on " + SystemInfo.graphicsDeviceType + ".");
@@ -79,6 +75,7 @@ namespace GreenScreen
             catch (Exception error)
             {
                 Failure = "The bundled opaque-coverage shader is unavailable: " + error.GetType().Name + ": " + error.Message;
+                Utils.LogInfo(Failure + "; details=" + error);
                 return null;
             }
         }

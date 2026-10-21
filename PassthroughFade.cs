@@ -208,15 +208,11 @@ namespace GreenScreen
                 using (var data = new MemoryStream())
                 {
                     resource.CopyTo(data);
-                    _bundle = AssetBundle.LoadFromMemory(data.ToArray());
+                    _bundle = UnityShaderLoader.LoadBundle(data.ToArray());
                 }
             }
             if (_bundle == null) throw new InvalidDataException("Unity rejected the passthrough fade bundle.");
-#if DEMEO
-            _shader = _bundle.LoadAsset<Shader>("assets/nativefade.shader");
-#else
-            _shader = _bundle.LoadAsset("assets/nativefade.shader", Il2CppInterop.Runtime.Il2CppType.Of<Shader>())?.Cast<Shader>();
-#endif
+            _shader = UnityShaderLoader.LoadShader(_bundle, "assets/nativefade.shader");
             if (_shader == null || _shader.name != "Hidden/Demeo/NativeFade" || !_shader.isSupported)
                 throw new NotSupportedException("The passthrough fade shader is unavailable.");
             return true;

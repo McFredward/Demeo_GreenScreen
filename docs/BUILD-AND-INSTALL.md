@@ -171,3 +171,22 @@ Battlemarked instead logs `Demeo Battlemarked IL2CPP recenter observer ready:`;
 its notification callbacks are intentionally retained. Loader compilation and
 software checks do not establish an executed native detour or headset outcome.
 The existing PC0.2.14/Frame0.2.12 companions require no update or Frame restart.
+
+
+## Checking the Unity6 IL2CPP shader loader (1.4.17)
+
+Run `python3 scripts/check-shader-loader.py` on Linux with .NET8 and a C11 compiler.
+The owned native fixture checks the production synchronous byte/string span
+ABI, Unity GC-handle versus object-pointer translation, fake-null ownership,
+wrapper lifetime under forced GC and clean rejection paths. It runs24 checks
+for each IL2CPP profile and3 for the unchanged Mono public API route. CI runs
+this gate before packaging. These fixture exports contain no game/engine code;
+the tests do not execute Unity's real shader loader or certify headset rendering.
+
+Both owned shader bundles use this loader. No new runtime dependency or full
+game assembly is shipped. Coverage failures now include the first full exception
+in the PC log, bounded by the existing once-per-mod-lifetime failure policy.
+After updating `dev`, install Battles with `./scripts/install.ps1 -Game DemeoBattles`.
+The expected progress markers are `Opaque coverage shader loaded from the embedded
+AssetBundle`, active URP opaque depth coverage and native coverage operational.
+The PC/Frame companions require no update or Frame restart for this mod fix.

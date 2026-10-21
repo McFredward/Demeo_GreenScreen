@@ -49,6 +49,8 @@ jobs:
         run: python3 scripts/check-integration.py
       - name: Check automatic recenter suppression and preserve manual recenter
         run: python3 scripts/check-recenter.py
+      - name: Check Unity6 IL2CPP shader loader against native span and handle fixture
+        run: python3 scripts/check-shader-loader.py
       - name: Check Steam discovery and installation
         shell: pwsh
         run: ./tests/InstallerChecks.ps1

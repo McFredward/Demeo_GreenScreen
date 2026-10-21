@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <Game Condition="'$(Game)' == ''">DEMEOBATTLES</Game>
+    <DefineConstants>$(DefineConstants);$(Game)</DefineConstants>
+    <OutputPath>bin/ShaderLoader/$(Game)/</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../UnityShaderLoader.cs;ShaderLoaderChecks.cs" />
+  </ItemGroup>
+</Project>

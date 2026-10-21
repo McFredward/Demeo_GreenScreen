@@ -12,6 +12,78 @@ The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
 
+## Battles black passthrough: Unity6 IL2CPP shader loading (1.4.17)
+
+The maintainer reports that Battles1.4.16 shows black where passthrough should
+appear. Original PC/Frame logs are frozen and hashed in the private ignored
+`frame-battles1416-20261021-174548` capture. Frame access was logs-only; no device
+files, settings or services were changed. The PC records two Battles sessions:
+PID25320 at17:42:12.033–17:42:51.779 and PID8980 at17:43:54.723–17:44:21.349.
+The supplied mod log is from the latest run. It confirms the IL2CPP recenter/fade
+bindings and independent `cv / Deckard MP` identity, then reports:
+
+`The bundled opaque-coverage shader is unavailable: ObjectCollectedException`
+
+It never reports operational native coverage. PC mask counters remain zero
+through normal game output; only two masked pictures appear near shutdown.
+Frame traffic similarly remains almost entirely mask-free. Neither game window
+contains a decoder hard reset, unrecoverable FEC abort or receiver proof-loss
+series. This supports a failure to initialize the game coverage route, distinct
+from the earlier Demeo packet-loss outage. The loader's error text alone does
+not prove which generated instruction failed or that a shader's real engine
+object was prematurely garbage-collected.1.4.17 records the bounded first full
+coverage-loading exception to make a remaining failure attributable.
+
+The supplied Unity6 interop AssetBundle APIs contain generated Span/ReadOnlySpan
+paths for byte buffers and asset names. The selected injected binding contract
+instead takes a by-reference16-byte span with pointer at0 and Int32 length at8.
+Its synchronous return is a Unity GC handle, not an IL2CPP object address.
+Unity's [unmarshalling contract](https://github.com/Unity-Technologies/UnityCsReference/blob/6000.0/Runtime/Export/Scripting/BindingsHelpers.cs)
+retains real engine-owned handles and frees the special zero-instance-ID fake
+null handle. The loader's own [Unity6 AssetBundle bridge](https://github.com/LavaGang/MelonLoader/blob/master/UnityUtilities/UnityEngine.Il2CppAssetBundleManager/Il2CppAssetBundleManager.cs)
+also handles the changed native span and returned-handle boundary explicitly.
+These sources establish the ABI/ownership behavior; they do not identify the
+exact failed instruction in the old capture.
+
+Version1.4.17 routes both owned coverage/fade bundles through `UnityShaderLoader`.
+For IL2CPP it checks Unity6000/x64, the actual span field layout and both injected
+method signatures before resolving the two exact ICalls. It pins the original
+.NET byte array for synchronous bundle loading and the UTF16 asset name for
+shader loading. Asset-name lengths are character counts. It passes the bundle's
+native Unity C++ pointer and the IL2CPP reflection-type object pointer, keeping
+both wrappers alive through the call. Returned handles are resolved before
+creating independently rooted typed wrappers. Zero handles remain null;
+unavailable targets and wrong native types are refused. Real engine-owned
+return handles remain untouched; only the contract's fake-null handle is freed.
+No guessed object/header offsets or global wrapper patches are used.
+
+The existing shader identity, pass and platform validation, once-per-lifetime
+loading failure policy, bundle lifetime and material teardown remain in place.
+The new path bypasses both generated span-bearing public wrappers, covering
+bundle bytes and shader asset names. Demeo's Mono branch continues to call its
+original `LoadFromMemory` and generic `LoadAsset<Shader>` APIs. No shader bundle,
+coverage algorithm, game camera setting, recenter guard or companion changes.
+The initial transient Forward-renderer rejection in the capture is separate;
+preparation later reaches the fatal shader error. A further renderer mismatch
+must be diagnosed from the next run rather than assumed fixed by this loader.
+
+`python3 scripts/check-shader-loader.py` compiles an owned C fixture and executes
+the production bridge through unmanaged function pointers. Each IL2CPP profile
+passes24 checks: exact byte/UTF16 spans, full-width high-bit handles, distinct
+native/object/handle pointer domains, type rejection, real versus fake-null
+ownership, forced GC during native calls, missing entry points, null results
+and retained native wrapper roots. Generated wrapper ports throw if called.
+The Mono profile passes3 checks proving its two public API calls execute once
+without entering either new native span entry point. This does not execute
+Unity, its native bundle decoder, shaders, IL2CPP detours or D3D11 on a headset.
+
+Camera/material lifecycle tests retain a controlled engine asset-loader port;
+the new native fixture separately tests the production loader's actual ABI.
+All six metadata-reference variants and produced resources must pass the normal
+package gates. Demeo's working Mono path and PC0.2.14/Frame0.2.12/Gloomhaven
+components remain unchanged. Retest **Demeo Battles** next; Battlemarked gets
+the same loader correction but still needs its separate first hardware check.
+
 ## IL2CPP transfer for Battles and Battlemarked (1.4.16)
 
 The maintainer's Demeo1.4.15 test at16:51–16:54 was visibly clean. The private
