@@ -32,6 +32,7 @@ namespace GreenScreen
 
         internal static void Initialize()
         {
+            LoadingPassthrough.Initialize();
             if (_patch != null) return;
             try
             {
@@ -81,17 +82,18 @@ namespace GreenScreen
 
         internal static void Tick(float now)
         {
+            LoadingPassthrough.Tick(now);
             if (_patch != null || _failed || now < _nextBind) return;
             _nextBind = now + 1f;
             Initialize();
         }
 
-        private static Type FindType(string assemblyName, string name)
+        internal static Type FindType(string assemblyName, string name)
         {
             foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
                 if (assembly.GetName().Name == assemblyName || assembly.GetName().Name == "Il2Cpp" + assemblyName)
                 {
-                    Type type = assembly.GetType(name) ?? assembly.GetType("Il2Cpp" + name);
+                    Type type = assembly.GetType(name) ?? assembly.GetType("Il2Cpp" + name) ?? assembly.GetType("Il2Cpp." + name);
                     if (type != null) return type;
                 }
             // Interop assemblies may be resolved lazily by either loader.
@@ -100,7 +102,7 @@ namespace GreenScreen
                 try
                 {
                     Assembly assembly = Assembly.Load(new AssemblyName(candidate));
-                    Type type = assembly.GetType(name) ?? assembly.GetType("Il2Cpp" + name);
+                    Type type = assembly.GetType(name) ?? assembly.GetType("Il2Cpp" + name) ?? assembly.GetType("Il2Cpp." + name);
                     if (type != null) return type;
                 }
                 catch (FileNotFoundException) { }
@@ -171,6 +173,7 @@ namespace GreenScreen
         // Refresh before the admitted camera renders, after game tween updates.
         internal static void Refresh()
         {
+            LoadingPassthrough.Refresh(_active);
 #if !DEMEOBATTLEMARKED
             for (int i = TimelineFaders.Count - 1; i >= 0; i--)
             {
@@ -238,6 +241,7 @@ namespace GreenScreen
 
         internal static void Shutdown()
         {
+            LoadingPassthrough.Shutdown();
             SetActive(false);
             Faders.Clear();
 #if !DEMEOBATTLEMARKED

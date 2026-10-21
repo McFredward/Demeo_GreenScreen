@@ -83,10 +83,64 @@ internal static class FadeChecks
         PassthroughFade.Shutdown();
 #if !DEMEOBATTLEMARKED
         TimelineChecks();
+        LoadingChecks();
 #endif
         Console.WriteLine("Production passthrough fade with real Harmony: "+checks+" checks PASS; "+typeof(Controller).FullName+"; controlled Unity ports, no headset.");
     }
 #if !DEMEOBATTLEMARKED
+    private static void LoadingChecks()
+    {
+        PassthroughFade.Initialize();
+        var image=new UnityEngine.UI.Image { color=Color.black, raycastTarget=true };
+        var spinner=new UnityEngine.UI.Image { color=new Color(1,1,1,1) };
+        var art=new UnityEngine.UI.Image { color=new Color(1,1,1,1), sprite=new UnityEngine.Object() };
+        var root=new Transform();
+        root.Children["Background"]=new Transform { Extra=image };
+        root.Children["Spinner"]=new Transform { Extra=spinner };
+        root.Children["Images/Image (1)"]=new Transform { Extra=art };
+        var view=new PVPLoadingScreenView {transform=root};
+        view.Awake();
+        Check(image.color.a==1 && view.Calls==1,"A registered loading view stays unchanged before native source admission.");
+        PassthroughFade.SetActive(true);
+        Check(image.color.a==0 && image.raycastTarget && image.enabled && view.Active,
+            "Native admission hides only the black loading background while retaining UI behavior and input blocking.");
+        Check(spinner.color.a==1 && art.color.a==1,"Loading artwork and spinner alpha are never modified.");
+        int shown=0;var presenter=new PVPLoadingScreenPresenter(view);presenter.Completed=()=>shown++;
+        presenter.Show(false);view.OnEnable();
+        Check(presenter.Calls==1 && shown==1 && view.Calls==2 && image.color.a==0,
+            "Real Harmony observers preserve loading Show and OnEnable callbacks exactly once.");
+        image.color=new Color(0,0,0,.35f);PassthroughFade.Refresh();
+        Check(image.color.a==0,"A new game-written black opacity is followed during an owned source.");
+        PassthroughFade.SetActive(false);
+        Check(image.color.a==.35f,"Admission loss restores the latest original game opacity rather than an old snapshot.");
+        PassthroughFade.SetActive(true);image.color=new Color(1,0,0,1);PassthroughFade.Refresh();PassthroughFade.SetActive(false);
+        Check(image.color.r==1 && image.color.a==1,"A foreign coloured replacement is never hidden or overwritten on restore.");
+        image.color=Color.black;PassthroughFade.SetActive(true);image.sprite=new UnityEngine.Object();PassthroughFade.Refresh();
+        Check(image.color.a==1,"Adding artwork during ownership restores its original visible tint.");
+        image.sprite=null;image.color=Color.black;PassthroughFade.Refresh();
+        Check(image.color.a==0,"Removing artwork allows the known black background again.");
+        var lateImage=new UnityEngine.UI.Image {color=Color.black};var lateRoot=new Transform();
+        lateRoot.Children["Background"]=new Transform {Extra=lateImage};
+        var lateView=new PVPLoadingScreenView {transform=lateRoot};
+        new PVPLoadingScreenPresenter(lateView).Show(false);
+        Check(lateImage.color.a==0,"Presenter Show discovers a pre-existing loading view even if Awake was missed.");
+        var vanillaImage=new UnityEngine.UI.Image {color=Color.black};var vanillaRoot=new Transform();
+        vanillaRoot.Children["Background"]=new Transform {Extra=vanillaImage};
+        var vanilla=new VanillaLoadingScreenView {transform=vanillaRoot};vanilla.Awake();
+        Check(vanillaImage.color.a==0,"The equivalent Vanilla loading view shares the scoped correction.");
+        var textured=new UnityEngine.UI.Image {color=Color.black,sprite=new UnityEngine.Object()};
+        var texturedRoot=new Transform();texturedRoot.Children["Background"]=new Transform {Extra=textured};
+        new PVPLoadingScreenView {transform=texturedRoot}.Awake();
+        Check(textured.color.a==1,"A textured Background with different semantics remains untouched.");
+        PassthroughFade.Shutdown();
+        Check(image.color.a==1 && lateImage.color.a==1 && vanillaImage.color.a==1,"Unload restores every live owned loading image.");
+        image.color=Color.black;presenter.Show(false);view.OnEnable();
+        Check(image.color.a==1,"Unload removes both loading view and presenter observers.");
+        PassthroughFade.Initialize();PassthroughFade.SetActive(true);view.OnEnable();
+        Check(image.color.a==0,"Reload can reacquire the original loading background without stale owner state.");
+        PassthroughFade.Shutdown();
+    }
+
     private static Material TimelineMaterial()
     {
         var material = new Material(new Shader { name="Universal Render Pipeline/Unlit" }) { renderQueue=3000, color=Color.black };
@@ -161,8 +215,9 @@ namespace UnityEngine
     {
         public readonly Dictionary<string,Transform> Children=new Dictionary<string,Transform>();
         public MeshRenderer Renderer;
+        public Object Extra;
         public Transform Find(string path)=>Children.TryGetValue(path,out var child)?child:null;
-        public T GetComponent<T>() where T:Object =>Renderer as T;
+        public T GetComponent<T>() where T:Object =>Renderer as T ?? Extra as T;
     }
     public class Shader : Object {public bool isSupported=true;}
     public class Material : Object
@@ -251,5 +306,45 @@ namespace Boardgame.Rendering
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void Finish(Action completed){SetFadedOut();completed();}
     }
+}
+#endif
+
+#if !DEMEOBATTLEMARKED
+namespace UnityEngine.UI
+{
+    public class Image : UnityEngine.Object
+    {
+        public UnityEngine.Color color {get;set;}
+        public UnityEngine.Object sprite {get;set;}
+        public bool raycastTarget,enabled=true;
+    }
+}
+public class PVPLoadingScreenView : UnityEngine.Component
+{
+    public int Calls;public bool Active=true;
+    [MethodImpl(MethodImplOptions.NoInlining)] public void Awake(){Calls++;}
+    [MethodImpl(MethodImplOptions.NoInlining)] public void OnEnable(){Calls++;}
+}
+public class VanillaLoadingScreenView : UnityEngine.Component
+{
+    [MethodImpl(MethodImplOptions.NoInlining)] public void Awake(){}
+    [MethodImpl(MethodImplOptions.NoInlining)] public void OnEnable(){}
+}
+public class PVPLoadingScreenPresenter
+{
+#if DEMEO
+    private readonly PVPLoadingScreenView view;
+#else
+    public PVPLoadingScreenView view {get;}
+#endif
+    public int Calls;public Action Completed;
+    public PVPLoadingScreenPresenter(PVPLoadingScreenView view){this.view=view;}
+    [MethodImpl(MethodImplOptions.NoInlining)] public void Show(bool previous){Calls++;Completed?.Invoke();}
+}
+public class VanillaLoadingScreenPresenter
+{
+    public VanillaLoadingScreenView view {get;}
+    public VanillaLoadingScreenPresenter(VanillaLoadingScreenView view){this.view=view;}
+    [MethodImpl(MethodImplOptions.NoInlining)] public void Show(bool previous){}
 }
 #endif

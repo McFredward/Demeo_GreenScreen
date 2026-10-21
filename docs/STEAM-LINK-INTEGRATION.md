@@ -12,6 +12,83 @@ The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
 
+## Loading canvas audit and ErrorLog (1.4.19)
+
+The maintainer confirms the1.4.18 Battles Intro/stereo/crash corrections work,
+with a black transition still visible while entering a scenario. The frozen,
+hashed private capture is `frame-battles1418-20261021-185625`, including PC logs
+and logs read from Frame without changing files/settings/services. Battles is
+PID12032, connected18:52:54.869 and disconnected18:54:00.667 on October21.
+The bounded mod statistics reach4,721 successful submits per eye, zero Submit
+errors and27 exact-submit alpha samples per eye. Automatic viewpoints are
+suppressed three times around18:53:27. The decoder hard reset at18:52:43 is
+before the game connects. There is no runtime decoder hard reset/unrecoverable
+FEC abort in this game window. PC keyed-texture synchronization warnings occur
+around18:53:26–28 during loading; those alone do not identify a UI fade.
+
+The supplied Battles prefab in `sharedassets1.assets` has a distinct
+`PVPLoadingScreenView` on `PVPLoadingView`. Its direct child `Background` is a
+black opaque untextured UI Image. The game animates the parent CanvasGroup and
+renders its hint/artwork/spinner separately. The corresponding Demeo prefab in
+`sharedassets3.assets` has `VanillaLoadingScreenView` on `VanillaLoadingView`,
+with the same black untextured direct Background. This canvas can cover the
+camera's already transparent fade and was outside the camera-fade observer.
+
+Version1.4.19 observes the exact views' Awake/OnEnable and presenters' Show,
+including Show for a view instantiated before the observer. It leases only the
+black untextured direct Background's colour alpha while the existing native
+source grant is active. GameObject/component enabled state, raycast settings,
+CanvasGroup opacity/tween, loading hint/spinner/artwork and callbacks remain
+original. No black-pixel classification, scene-wide Image scan, image mask or
+new shader is used. Changed game opacity is followed; a coloured or textured
+replacement is preserved. Permission loss/unload restores the latest owned
+original tint, never overwriting a foreign changed colour. Late/destroyed views
+and unload/reload are bounded. Normal/non-Frame rendering remains original.
+
+The broader audit finds the following additional transition routes. Demeo's
+actual Mono call sites for new game, saved game, next level, exit/disconnect,
+reconnect, onboarding, out-of-bounds and PVP game-over use the already adapted
+CameraFadeController. Both supplied Battles camera-fade methods have the same
+checked binding surface. Its Intro also has the two independently handled
+Timeline spheres. SteamVR_Fade is present as a library class, but no direct game
+call is found in Demeo's supplied assembly; there is no new global SteamVR fade
+suppression. Battlemarked exposes level/menu/cutscene/skip/bounds methods on
+its existing FadeToBlackPresenter and its observed SetFadePlaneColor boundary.
+The supplied Battlemarked FadeToBlack view does not contain the same PVP or
+Vanilla loading-background contract, so the new PVP/Vanilla observer is omitted
+there. This audit is not a claim to have executed every native game transition.
+Real source gaps, game rendering stalls and transport recovery remain separate
+from an identified UI black surface.
+
+The new132-byte ErrorLog contains only `Setting breakpad minidump AppID` and
+`SteamInternal_SetMinidumpSteamID` startup messages. The previous access
+violation/stack trace is absent. These lines configure/cache crash-reporting
+identity; they do not record an actual dump or exception. Steam's
+[crash-reporting documentation](https://partner.steamgames.com/doc/features/error_reporting)
+distinguishes configuring the handler from writing a dump. The mod does not
+create this ErrorLog file; its native caller/file redirection is outside the
+mod's managed logging code. No stderr filter, log deletion or crash-reporter
+patch is introduced to hide those messages. The independent loader warnings
+about a malformed generated CoreModule type are addressed by resolving only
+the known GameStartup type in its game assembly, instead of globally enumerating
+all assemblies with AccessTools.TypeByName. This removes our triggering lookup;
+it does not repair another component's malformed generated type.
+
+The prior build's loader attribute still displayed1.4.17 although its assembly
+and behavior were1.4.18. The entry-point attributes now share ModInfo.Version.
+Produced-binary checks require both loader display versions to match the actual
+assembly version across all six binaries, reject a remaining global type-search
+reference, and retain the earlier IL2CPP unsafe-probe exclusion gate.
+
+Real Harmony lifecycle checks exercise the actual production loading observer
+against controlled game/UI ports, preserving callbacks, exact image selection,
+foreign changes, late views, original opacity and opt-out/unload/reload. The
+software fixture is not an executed Unity UI raycaster/rendering or headset
+test. All six metadata-reference builds and mod-only ZIPs remain required.
+Shader bundles, companions PC0.2.14/Frame0.2.12 and Gloomhaven are unchanged;
+no Frame update or restart is needed. Test entering/leaving a Battles scenario
+next, including its loading transition.
+
 ## Battles crash and black Intro (1.4.18)
 
 The Battles1.4.17 test freezes PC and read-only Frame logs in the private hashed

@@ -36,6 +36,25 @@ internal static class IdentityChecks
                             "produced IL2CPP mods contain no unsafe XR parameter wrapper call; Mono probe retained: "+loader+"/"+game);
                         Check(Calls("AsyncGPUReadback","Request")== (game=="DEMEO"),
                             "produced IL2CPP mods cannot issue optional Unity XR GPU readbacks; Mono probe retained: "+loader+"/"+game);
+                        Check(!Calls("AccessTools","TypeByName"),"produced mods avoid global type enumeration of invalid interop types: "+loader+"/"+game);
+                        string expected=metadata.GetAssemblyDefinition().Version.ToString(3);
+                        string attributeVersion=null;
+                        foreach (var handle in metadata.CustomAttributes)
+                        {
+                            var attribute=metadata.GetCustomAttribute(handle);
+                            if (attribute.Constructor.Kind!=HandleKind.MemberReference) continue;
+                            var constructor=metadata.GetMemberReference((MemberReferenceHandle)attribute.Constructor);
+                            if (constructor.Parent.Kind!=HandleKind.TypeReference) continue;
+                            var type=metadata.GetTypeReference((TypeReferenceHandle)constructor.Parent);
+                            string attributeName=metadata.GetString(type.Name);
+                            if (attributeName!=(loader=="BepInEx" ? "BepInPlugin" : "MelonInfoAttribute")) continue;
+                            var blob=metadata.GetBlobReader(attribute.Value);
+                            Check(blob.ReadUInt16()==1,"valid loader attribute encoding: "+loader+"/"+game);
+                            blob.ReadSerializedString(); // Plugin GUID or Melon System.Type.
+                            blob.ReadSerializedString(); // Display name.
+                            attributeVersion=blob.ReadSerializedString();
+                        }
+                        Check(attributeVersion==expected,"loader display version agrees with produced assembly version "+expected+": "+loader+"/"+game);
                     }
                     var assembly=System.Reflection.Assembly.LoadFile(path);
                     foreach (bool dll in new[] { false,true })

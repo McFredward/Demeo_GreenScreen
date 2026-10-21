@@ -7,7 +7,7 @@ using UnityEngine;
 
 #if MELONLOADER
 using MelonLoader;
-[assembly: MelonInfo(typeof(GreenScreenMod), "GreenScreen", "1.4.17", "McFredward",
+[assembly: MelonInfo(typeof(GreenScreenMod), "GreenScreen", ModInfo.Version, "McFredward",
     "https://github.com/McFredward/Demeo_GreenScreen")]
 #if DEMEO
 [assembly: MelonGame("Resolution Games", "Demeo")]
@@ -20,6 +20,8 @@ using MelonLoader;
 
 namespace GreenScreen
 {
+    internal static class ModInfo { internal const string Version = "1.4.19"; }
+
 #if MELONLOADER
     public sealed class GreenScreenMod : MelonMod
     {
@@ -34,7 +36,7 @@ namespace GreenScreen
         }
     }
 #elif DEMEO
-    [BepInEx.BepInPlugin("566784", "GreenScreen", "1.4.17")]
+    [BepInEx.BepInPlugin("566784", "GreenScreen", ModInfo.Version)]
     public sealed class BepInExPlugin : BepInEx.BaseUnityPlugin
     {
         internal static BepInEx.Logging.ManualLogSource Log;
@@ -48,7 +50,7 @@ namespace GreenScreen
         private void OnDestroy() => ModLifecycle.Shutdown();
     }
 #else
-    [BepInEx.BepInPlugin("566784", "GreenScreen", "1.4.17")]
+    [BepInEx.BepInPlugin("566784", "GreenScreen", ModInfo.Version)]
     public sealed class BepInExPlugin : BepInEx.Unity.IL2CPP.BasePlugin
     {
         internal static new BepInEx.Logging.ManualLogSource Log;
@@ -140,7 +142,7 @@ namespace GreenScreen
         [HarmonyPrepare]
         private static bool Prepare()
         {
-            Type startup = AccessTools.TypeByName("Boardgame.GameStartup");
+            Type startup = PassthroughFade.FindType("Assembly-CSharp", "Boardgame.GameStartup");
             _initializeGame = startup?.GetMethod("InitializeGame", BindingFlags.Instance | BindingFlags.Public
                 | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
             return _initializeGame != null;
