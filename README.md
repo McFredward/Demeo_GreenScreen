@@ -1,11 +1,23 @@
 # Demeo Mixed Reality
 
+Formerly **Demeo Green Screen**.
+
 **Version 2.0.0** brings Demeo, Demeo Battles and Demeo Battlemarked into your room.
 Steam Frame over Steam Link uses native passthrough automatically. Other headsets
 can use the coloured background with Virtual Desktop.
 
 <p align="center">
-  <img src="demeo_green.jpg" width="60%" alt="Demeo in mixed reality">
+  <a href="#steam-frame-passthrough">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/img/steam-frame-logo-dark.svg">
+      <img src="docs/img/steam-frame-logo.svg" width="240" alt="Steam Frame">
+    </picture><br>
+    <strong>Native passthrough over Steam Link</strong>
+  </a>
+</p>
+
+<p align="center">
+  <img src="docs/img/demeo-mixed-reality.jpg" width="720" alt="Demeo on a virtual table in a real living room using Steam Frame passthrough">
 </p>
 
 ## Installation

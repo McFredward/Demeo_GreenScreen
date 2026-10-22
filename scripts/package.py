@@ -39,6 +39,8 @@ def main():
         files = {assembly: binary,
                  "README.md": ROOT / "README.md", "LICENSE": ROOT / "LICENSE",
                  "licenses/OpenVR-LICENSE.txt": ROOT / "licenses/OpenVR-LICENSE.txt"}
+        for image in ("demeo-mixed-reality.jpg", "steam-frame-logo.svg", "steam-frame-logo-dark.svg", "README.md"):
+            files["docs/img/" + image] = ROOT / "docs/img" / image
         if backend == "MelonLoader":
             files["greenscreen.ini"] = ROOT / "greenscreen.ini.example"
         archive_path = destination / f"{name}.zip"
