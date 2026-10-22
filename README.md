@@ -28,7 +28,7 @@ Install the loader for your game in its game folder:
 |---|---|---|
 | Demeo | [BepInEx 5, x64 Mono](https://github.com/BepInEx/BepInEx/releases/download/v5.4.22/BepInEx_x64_5.4.22.0.zip) | `BepInEx/plugins` |
 | Demeo Battles | [BepInEx 6, IL2CPP Windows x64](https://builds.bepinex.dev/projects/bepinex_be) | `BepInEx/plugins` |
-| Demeo Battlemarked | [MelonLoader nightly](https://lemonloader.com/melonloader/) | `Mods` |
+| Demeo Battlemarked | [BepInEx 6, IL2CPP Windows x64](https://builds.bepinex.dev/projects/bepinex_be) | `BepInEx/plugins` |
 
 1. Start the game once with its loader, then close it.
 2. Download your game's ZIP from [Releases](https://github.com/McFredward/Demeo_GreenScreen/releases) and extract it into the folder above.
@@ -42,7 +42,7 @@ For automatic installation from this download, install [.NET SDK 8+](https://dot
 
 The installer finds installed games and their loaders, builds the matching mods
 and installs them. Existing configuration is preserved. It also supports
-BepInEx for Battlemarked.
+MelonLoader for all three games.
 
 ## Steam Frame passthrough
 

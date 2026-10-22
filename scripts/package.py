@@ -27,8 +27,8 @@ def main():
     default_log_level = "Debug" if channel == "dev" else "Important"
     archives = []
     for configuration, (name, assembly, framework) in GAMES.items():
-        backend = "MelonLoader" if configuration == "DEMEOBATTLEMARKED" else "BepInEx"
-        alternative = "BepInEx" if backend == "MelonLoader" else "MelonLoader"
+        backend = "BepInEx"
+        alternative = "MelonLoader"
         subprocess.run(["dotnet", "build", str(ROOT / "GreenScreen.csproj"), "-c", configuration,
                         f"-p:LoaderBackend={alternative}", "-p:UseReferenceAssemblies=true",
                         "-p:Optimize=true", f"-p:DefaultLogLevel={default_log_level}", "--nologo"], cwd=ROOT, check=True)

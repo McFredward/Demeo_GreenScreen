@@ -8,7 +8,6 @@
     <TargetFramework Condition="'$(Configuration)' != 'DEMEO'">net6.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
-    <LoaderBackend Condition="'$(LoaderBackend)' == '' And '$(Configuration)' == 'DEMEOBATTLEMARKED'">MelonLoader</LoaderBackend>
     <LoaderBackend Condition="'$(LoaderBackend)' == ''">BepInEx</LoaderBackend>
     <!-- All games expose the same assembly names. Never resolve another game's
          metadata DLL from SDK candidate-file globs before this HintPath. -->
