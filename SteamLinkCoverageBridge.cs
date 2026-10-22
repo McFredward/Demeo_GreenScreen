@@ -45,7 +45,7 @@ internal static class SteamLinkCoverageBridge
             && _reports < 8)
         {
             _reports++;
-            Utils.LogInfo("Steam Link coverage bridge: ordinary RGBA source="
+            Utils.LogDebug("Steam Link coverage bridge: ordinary RGBA source="
                 + current.CanAcceptOrdinaryRgba + "; native coverage operational=" + current.CoverageOperational
                 + "; metadata wire budget=" + current.MetadataBudget
                 + ". Without a compatible paired companion the normal game image remains visible. "
@@ -171,7 +171,7 @@ internal static class SteamLinkCoverageBridge
         private void ReportCleanupFailure(string operation, Exception error)
         {
             if (Interlocked.Increment(ref _cleanupReports) <= 3)
-                Utils.LogInfo("Steam Link coverage bridge observer teardown: " + operation
+                Utils.LogWarning("Steam Link coverage bridge observer teardown: " + operation
                     + " failure=" + error.GetType().Name + "; source permission remains revoked.");
         }
     }

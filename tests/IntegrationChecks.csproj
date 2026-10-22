@@ -8,12 +8,12 @@
     <Game Condition="'$(Game)' == ''">DEMEO</Game>
     <LoaderBackend Condition="'$(LoaderBackend)' == '' And '$(Game)' == 'DEMEOBATTLEMARKED'">MelonLoader</LoaderBackend>
     <LoaderBackend Condition="'$(LoaderBackend)' == ''">BepInEx</LoaderBackend>
-    <DefineConstants>$(DefineConstants);$(Game)</DefineConstants>
+    <DefineConstants>$(DefineConstants);$(Game);DEMEO_DIAGNOSTIC_LOGS</DefineConstants>
     <DefineConstants Condition="'$(LoaderBackend)' == 'MelonLoader'">$(DefineConstants);MELONLOADER</DefineConstants>
     <OutputPath>bin/Integration/$(LoaderBackend)/$(Game)/</OutputPath>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../ModEntryPoints.cs;../ModConfiguration.cs;../NativePassthrough.cs;../PassthroughFade.cs;../LoadingPassthrough.cs;../OpaqueCoverage.cs;../SrpOutput.cs;../SrpOpaqueCoverage.cs;../SrpAlphaProbe.cs;../SteamLinkConnectionLifecycle.cs;../OpenVrSubmission.cs;../OpenVrEyeSubmission.cs;../OpenVrEyeTextures.cs;../OpenVrNativeSettings.cs;../OpenVrOrigin.cs" />
+    <Compile Include="../ModLogging.cs;../ModEntryPoints.cs;../ModConfiguration.cs;../NativePassthrough.cs;../PassthroughFade.cs;../LoadingPassthrough.cs;../OpaqueCoverage.cs;../SrpOutput.cs;../SrpOpaqueCoverage.cs;../SrpAlphaProbe.cs;../SteamLinkConnectionLifecycle.cs;../OpenVrSubmission.cs;../OpenVrEyeSubmission.cs;../OpenVrEyeTextures.cs;../OpenVrNativeSettings.cs;../OpenVrOrigin.cs" />
     <Compile Include="../OpenVrViewport.cs;../OpenVrSubmitSettings.cs;OpenVrViewportChecks.cs;UnityBoundary.cs;IntegrationChecks.cs;OpenVrSubmissionChecks.cs;NativeSubmitChecks.cs;OpenVrOriginChecks.cs;ShaderLoaderPort.cs" />
     <EmbeddedResource Include="../assets/nativecoverage.bundle" LogicalName="GreenScreen.NativeCoverage" />
     <EmbeddedResource Include="../assets/nativefade.bundle" LogicalName="GreenScreen.NativeFade" />

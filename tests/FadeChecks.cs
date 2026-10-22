@@ -249,7 +249,7 @@ internal static class FadeChecks
     }
 #endif
 }
-namespace GreenScreen { internal static class Utils { internal static void LogInfo(string message) { Console.WriteLine(message); } } }
+namespace GreenScreen { internal static class Utils {  internal static void LogDebug(string m) => LogInfo(m); internal static void LogWarning(string m) => LogInfo(m); internal static void LogError(string m) => LogInfo(m); internal static void LogInfo(string message) { Console.WriteLine(message); } } }
 namespace UnityEngine
 {
     public class Object : Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase

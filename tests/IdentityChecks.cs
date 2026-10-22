@@ -6,7 +6,7 @@ using System.Reflection.PortableExecutable;
 using System.Threading.Tasks;
 using GreenScreen;
 
-namespace GreenScreen { public static class Utils { public static void LogInfo(string message) { } } }
+namespace GreenScreen { public static class Utils {  internal static void LogDebug(string m) => LogInfo(m); internal static void LogWarning(string m) => LogInfo(m); internal static void LogError(string m) => LogInfo(m); public static void LogInfo(string message) { } } }
 
 internal static class IdentityChecks
 {

@@ -66,7 +66,7 @@ namespace GreenScreen
                 _patch = new HarmonyLib.Harmony("McFredward.DemeoGreenScreen.AlphaProbe");
                 _patch.Patch(_target, postfix: new HarmonyMethod(typeof(SrpAlphaProbe).GetMethod(nameof(AfterBlit), BindingFlags.Static | BindingFlags.NonPublic)));
             }
-            catch (Exception error) { Utils.LogInfo("XR output alpha measurement unavailable: " + error.Message); }
+            catch (Exception error) { Utils.LogWarning("XR output alpha measurement unavailable: " + error.Message); }
         }
 
         private static void AfterBlit(object __1, object __2, object __4)
@@ -217,14 +217,14 @@ namespace GreenScreen
             if (Interlocked.Decrement(ref batch.Pending) != 0) return;
             if (ReferenceEquals(_active, batch)) _active = null;
             if (batch.Epoch == _epoch)
-                Utils.LogInfo("XR output alpha measurement: " + batch.Description + batch.Results[0] + batch.Results[1]);
+                Utils.LogDebug("XR output alpha measurement: " + batch.Description + batch.Results[0] + batch.Results[1]);
         }
 
         private static void ReportFailure(Exception error)
         {
             _frame = -1; _next = Time.unscaledTime + 2f;
             if (++_failures >= 4) _remaining = 0;
-            Utils.LogInfo("XR output alpha measurement " + (_remaining == 0 ? "stopped" : "deferred")
+            Utils.LogWarning("XR output alpha measurement " + (_remaining == 0 ? "stopped" : "deferred")
                 + " (" + _failures + "/4): " + error.GetType().Name + ": " + error.Message);
         }
 
@@ -251,7 +251,7 @@ namespace GreenScreen
         {
             if (_reported) return;
             _reported = true;
-            Utils.LogInfo("Optional XR GPU alpha probe disabled for IL2CPP: unsafe generated XRRenderParameter out binding. Native coverage and exact-submit alpha statistics remain active.");
+            Utils.LogDebug("Optional XR GPU alpha probe disabled for IL2CPP: unsafe generated XRRenderParameter out binding. Native coverage and exact-submit alpha statistics remain active.");
         }
         internal static void AfterCamera(Camera camera) { }
         internal static void Shutdown() => _reported = false;

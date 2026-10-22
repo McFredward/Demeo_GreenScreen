@@ -7,7 +7,7 @@ using UnityEngine;
 
 #if MELONLOADER
 using MelonLoader;
-[assembly: MelonInfo(typeof(GreenScreenMod), "GreenScreen", ModInfo.Version, "McFredward",
+[assembly: MelonInfo(typeof(GreenScreenMod), ModInfo.Name, ModInfo.Version, "McFredward",
     "https://github.com/McFredward/Demeo_GreenScreen")]
 #if DEMEO
 [assembly: MelonGame("Resolution Games", "Demeo")]
@@ -20,7 +20,7 @@ using MelonLoader;
 
 namespace GreenScreen
 {
-    internal static class ModInfo { internal const string Version = "1.4.21"; }
+    internal static class ModInfo { internal const string Name = "Demeo Mixed Reality"; internal const string Version = "2.0.0"; }
 
 #if MELONLOADER
     public sealed class GreenScreenMod : MelonMod
@@ -36,7 +36,7 @@ namespace GreenScreen
         }
     }
 #elif DEMEO
-    [BepInEx.BepInPlugin("566784", "GreenScreen", ModInfo.Version)]
+    [BepInEx.BepInPlugin("566784", ModInfo.Name, ModInfo.Version)]
     public sealed class BepInExPlugin : BepInEx.BaseUnityPlugin
     {
         internal static BepInEx.Logging.ManualLogSource Log;
@@ -50,7 +50,7 @@ namespace GreenScreen
         private void OnDestroy() => ModLifecycle.Shutdown();
     }
 #else
-    [BepInEx.BepInPlugin("566784", "GreenScreen", ModInfo.Version)]
+    [BepInEx.BepInPlugin("566784", ModInfo.Name, ModInfo.Version)]
     public sealed class BepInExPlugin : BepInEx.Unity.IL2CPP.BasePlugin
     {
         internal static new BepInEx.Logging.ManualLogSource Log;
@@ -102,7 +102,7 @@ namespace GreenScreen
             if (!_updateReported)
             {
                 _updateReported = true;
-                Utils.LogInfo("GreenScreen Unity Update is active.");
+                Utils.LogDebug("Demeo Mixed Reality Unity Update is active.");
             }
             NativePassthrough.Tick();
 #if DEMEOBATTLEMARKED
@@ -155,19 +155,29 @@ namespace GreenScreen
         private static void Prefix()
         {
             Utils.ChangeCamBackground();
-            Utils.LogInfo("Changed Background");
+            Utils.LogDebug("Changed Background");
         }
     }
 #endif
 
     public static class Utils
     {
-        public static void LogInfo(string message)
+        internal static bool DebugLogging => ModLogging.Enabled(ModLogLevel.Debug);
+        public static void LogInfo(string message) => Write(ModLogLevel.Important, message);
+        public static void LogDebug(string message) => Write(ModLogLevel.Debug, message);
+        public static void LogWarning(string message) => Write(ModLogLevel.Warning, message);
+        public static void LogError(string message) => Write(ModLogLevel.Error, message);
+        private static void Write(ModLogLevel level, string message)
         {
+            if (!ModLogging.Enabled(level)) return;
 #if MELONLOADER
-            Melon<GreenScreenMod>.Logger.Msg(message);
+            if (level == ModLogLevel.Error) Melon<GreenScreenMod>.Logger.Error(message);
+            else if (level == ModLogLevel.Warning) Melon<GreenScreenMod>.Logger.Warning(message);
+            else Melon<GreenScreenMod>.Logger.Msg(message);
 #else
-            BepInExPlugin.Log.LogInfo(message);
+            if (level == ModLogLevel.Error) BepInExPlugin.Log.LogError(message);
+            else if (level == ModLogLevel.Warning) BepInExPlugin.Log.LogWarning(message);
+            else BepInExPlugin.Log.LogInfo(message);
 #endif
         }
 

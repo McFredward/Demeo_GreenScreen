@@ -56,12 +56,12 @@ namespace GreenScreen
                     Add(presenter, "Show", new[] { typeof(bool) }, nameof(AfterShow));
                 }
                 if (Hooks.Count == 0) { RemoveHooks(); return; }
-                Utils.LogInfo("Loading-screen passthrough observer ready: exact PVP/Vanilla Background UI images; original loading logic retained.");
+                Utils.LogDebug("Loading-screen passthrough observer ready: exact PVP/Vanilla Background UI images; original loading logic retained.");
             }
             catch (Exception error)
             {
                 RemoveHooks(); _failed = true;
-                Utils.LogInfo("Loading-screen passthrough unavailable; retaining original UI: " + error.GetType().Name + ": " + error.Message);
+                Utils.LogWarning("Loading-screen passthrough unavailable; retaining original UI: " + error.GetType().Name + ": " + error.Message);
             }
         }
 
@@ -131,7 +131,7 @@ namespace GreenScreen
         {
             if (_failed) return;
             _failed = true;
-            Utils.LogInfo("Loading-screen passthrough stopped; retaining original UI: " + error.GetType().Name + ": " + error.Message);
+            Utils.LogWarning("Loading-screen passthrough stopped; retaining original UI: " + error.GetType().Name + ": " + error.Message);
             foreach (ImageLease image in Images) try { image.Restore(); } catch { }
         }
 
@@ -157,7 +157,7 @@ namespace GreenScreen
                 _colour.SetValue(Image, _written); _owned = true;
                 if (_reported) return;
                 _reported = true;
-                Utils.LogInfo("Black loading Background now reveals passthrough; UI raycasts, hints, spinner and loading callbacks are retained.");
+                Utils.LogDebug("Black loading Background now reveals passthrough; UI raycasts, hints, spinner and loading callbacks are retained.");
             }
             internal void Restore()
             {

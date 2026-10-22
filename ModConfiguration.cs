@@ -10,6 +10,7 @@ namespace GreenScreen
         internal bool DisableTable = true;
         internal bool SteamLinkNativePassthrough = true;
         internal bool SteamLinkAccountMaskBandwidth = true;
+        internal ModLogLevel LogLevel = ModLogLevel.Auto;
 
         internal static ModConfiguration Parse(string[] lines)
         {
@@ -29,6 +30,7 @@ namespace GreenScreen
                 if (equals <= 0) continue;
                 string key = text.Substring(0, equals).Trim().ToUpperInvariant();
                 string value = text.Substring(equals + 1).Trim();
+                if (section == "LOGGING" && key == "LEVEL") settings.LogLevel = ModLogging.Parse(value);
                 if (section == "COLOR" || section == "")
                 {
                     if (key == "R") r = Rgb(value);
@@ -90,12 +92,13 @@ namespace GreenScreen
                 ModConfiguration next = file == null ? new ModConfiguration()
                     : ModConfiguration.Parse(File.ReadAllLines(path));
                 Current = next;
+                ModLogging.Configure(next.LogLevel);
                 ActivePath = path.Length == 0 ? "" : Path.GetFullPath(path);
                 _path = path; _modified = modified; _length = length;
                 _loaded = true;
-                Utils.LogInfo("GreenScreen configuration: "
+                Utils.LogInfo("Demeo Mixed Reality configuration: "
                     + (ActivePath.Length == 0 ? "no INI found; expected " + Path.Combine(assemblyDirectory, "greenscreen.ini") : ActivePath)
-                    + "; Steam Link NativePassthrough=" + next.SteamLinkNativePassthrough + "."
+                    + "; LogLevel=" + ModLogging.Level + "; Steam Link NativePassthrough=" + next.SteamLinkNativePassthrough + "."
                     + (next.SteamLinkNativePassthrough ? " Enabled only after Frame/Steam Link identity is confirmed."
                         : " Virtual Desktop colour-key mode; Steam Link native passthrough is disabled. Set [STEAMLINK] NativePassthrough=true in this INI to enable it."));
                 return true;
@@ -105,7 +108,7 @@ namespace GreenScreen
                 // A partially saved or unreadable INI must revoke opt-in.
                 Current = new ModConfiguration { SteamLinkNativePassthrough = false };
                 ActivePath = "";
-                if (_length != -2) Utils.LogInfo("Could not read greenscreen.ini: " + error.Message);
+                if (_length != -2) Utils.LogError("Could not read greenscreen.ini: " + error.Message);
                 _length = -2;
                 return true;
             }

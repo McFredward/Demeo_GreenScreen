@@ -13,3 +13,8 @@ NativePassthrough=true
 # Include lossless mask traffic in the sender video budget (PC patch 0.2.15+).
 # May increase video compression under load; resolution/FPS and mask precision stay unchanged.
 AccountMaskBandwidth=true
+
+[LOGGING]
+; Auto uses the embedded build default: dev=Debug, main=Important.
+; Overrides: Debug, Important, Warning, Error.
+Level=Auto

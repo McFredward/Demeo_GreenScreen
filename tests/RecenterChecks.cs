@@ -242,7 +242,7 @@ namespace GreenScreen
     internal static class Utils
     {
         internal static readonly List<string> Messages = new List<string>();
-        internal static void LogInfo(string text) { Messages.Add(text); Console.WriteLine(text); }
+         internal static void LogDebug(string m) => LogInfo(m); internal static void LogWarning(string m) => LogInfo(m); internal static void LogError(string m) => LogInfo(m); internal static void LogInfo(string text) { Messages.Add(text); Console.WriteLine(text); }
     }
     internal static class ConfigurationStore { internal static readonly Settings Current = new Settings(); }
     internal sealed class Settings { internal bool SteamLinkNativePassthrough = true; }

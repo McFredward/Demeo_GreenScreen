@@ -121,7 +121,7 @@ namespace GreenScreen
             if (usesDefault && supported && !_defaultReported)
             {
                 _defaultReported = true;
-                Utils.LogInfo("URP camera uses the active asset's default " + mode + " renderer: " + camera.name
+                Utils.LogDebug("URP camera uses the active asset's default " + mode + " renderer: " + camera.name
                     + ". No per-camera renderer override is required for native coverage.");
             }
             return supported;

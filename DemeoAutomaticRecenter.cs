@@ -64,13 +64,13 @@ namespace GreenScreen
                 _patch.Patch(_avatarReset, transpiler: Hook(nameof(TranspileAvatarReset)));
                 _patch.Patch(_avatarPosition, prefix: Hook(nameof(ObserveAvatarPosition)));
                 _running = true;
-                Utils.LogInfo("Demeo automatic recenter guard ready: input/rig/avatar initialization, automatic viewpoint and tracking notifications. Manual recenter and bounds recovery remain available.");
+                Utils.LogDebug("Demeo automatic recenter guard ready: input/rig/avatar initialization, automatic viewpoint and tracking notifications. Manual recenter and bounds recovery remain available.");
             }
             catch (Exception error)
             {
                 Shutdown();
                 _failed = true;
-                Utils.LogInfo("Demeo automatic recenter guard unavailable; retaining game behavior: " + error.GetType().Name + ": " + error.Message);
+                Utils.LogWarning("Demeo automatic recenter guard unavailable; retaining game behavior: " + error.GetType().Name + ": " + error.Message);
             }
         }
 
@@ -141,7 +141,7 @@ namespace GreenScreen
                     if (callers.Length != 0) callers.Append(" <- ");
                     callers.Append(owner).Append('.').Append(method.Name);
                 }
-                Utils.LogInfo("Demeo avatar placement retained; slot=" + __0 + "; offset=" + __1
+                Utils.LogDebug("Demeo avatar placement retained; slot=" + __0 + "; offset=" + __1
                     + "; at=" + DateTime.Now.ToString("HH:mm:ss.fff") + "; callers=" + callers + ".");
             }
             catch (Exception) { } // Diagnostics must never interfere with game placement.
@@ -254,12 +254,12 @@ namespace GreenScreen
                 if (!headset.Available)
                 {
                     if (Interlocked.Increment(ref _readFailures) <= 3)
-                        Utils.LogInfo("Demeo automatic recenter retained in " + source + "; headset=" + headset.State
+                        Utils.LogDebug("Demeo automatic recenter retained in " + source + "; headset=" + headset.State
                             + "; tracking=" + headset.TrackingSystem + "; model=" + headset.Model + ".");
                     return false;
                 }
                 int count = Interlocked.Increment(ref _suppressed);
-                if (count <= 64) Utils.LogInfo("Suppressed Demeo automatic recenter in " + source + "; count=" + count
+                if (count <= 64) Utils.LogDebug("Suppressed Demeo automatic recenter in " + source + "; count=" + count
                     + "; at=" + DateTime.Now.ToString("HH:mm:ss.fff")
                     + "; Frame/Steam Link confirmed by " + (isolated ? "isolated reader" : "current game interface")
                     + ". Manual recenter is unchanged.");
@@ -268,7 +268,7 @@ namespace GreenScreen
             catch (Exception error)
             {
                 if (Interlocked.Increment(ref _readFailures) <= 3)
-                    Utils.LogInfo("Demeo automatic recenter: current headset could not be verified; retaining game reset: " + error.GetType().Name + ".");
+                    Utils.LogWarning("Demeo automatic recenter: current headset could not be verified; retaining game reset: " + error.GetType().Name + ".");
                 return false;
             }
         }

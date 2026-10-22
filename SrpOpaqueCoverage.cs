@@ -90,7 +90,7 @@ namespace GreenScreen
             _draw.Invoke(commands, arguments);
             if (_reported) return;
             _reported = true;
-            Utils.LogInfo("URP opaque depth coverage is active. Alpha is repaired on the current eye attachments before transparents; the game's XR layout and MSAA are retained.");
+            Utils.LogDebug("URP opaque depth coverage is active. Alpha is repaired on the current eye attachments before transparents; the game's XR layout and MSAA are retained.");
         }
 
         internal static void Shutdown()

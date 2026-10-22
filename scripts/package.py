@@ -2,6 +2,7 @@
 """Build all three mods and package an explicit mod-only file list."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -21,16 +22,19 @@ def main():
     subprocess.run([sys.executable, str(ROOT / "scripts/check-fade.py")], check=True)
     destination = ROOT / "dist"
     destination.mkdir(exist_ok=True)
+    channel = os.environ.get("GITHUB_REF_NAME") or subprocess.check_output(
+        ["git", "branch", "--show-current"], cwd=ROOT, text=True).strip()
+    default_log_level = "Debug" if channel == "dev" else "Important"
     archives = []
     for configuration, (name, assembly, framework) in GAMES.items():
         backend = "MelonLoader" if configuration == "DEMEOBATTLEMARKED" else "BepInEx"
         alternative = "BepInEx" if backend == "MelonLoader" else "MelonLoader"
         subprocess.run(["dotnet", "build", str(ROOT / "GreenScreen.csproj"), "-c", configuration,
                         f"-p:LoaderBackend={alternative}", "-p:UseReferenceAssemblies=true",
-                        "-p:Optimize=true", "--nologo"], cwd=ROOT, check=True)
+                        "-p:Optimize=true", f"-p:DefaultLogLevel={default_log_level}", "--nologo"], cwd=ROOT, check=True)
         subprocess.run(["dotnet", "build", str(ROOT / "GreenScreen.csproj"), "-c", configuration,
                         "-p:UseReferenceAssemblies=true", "-p:Optimize=true",
-                        "-p:ContinuousIntegrationBuild=true", "--nologo"], cwd=ROOT, check=True)
+                        "-p:ContinuousIntegrationBuild=true", f"-p:DefaultLogLevel={default_log_level}", "--nologo"], cwd=ROOT, check=True)
         binary = ROOT / "bin" / backend / configuration / framework / assembly
         files = {assembly: binary, "greenscreen.ini": ROOT / "greenscreen.ini.example",
                  "README.md": ROOT / "README.md", "LICENSE": ROOT / "LICENSE",
@@ -51,7 +55,7 @@ def main():
     (destination / "SHA256SUMS").write_text("".join(
         f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n" for path in archives))
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    (destination / "build-info.json").write_text(json.dumps({"commit": commit, "archives": [p.name for p in archives]}, indent=2) + "\n")
+    (destination / "build-info.json").write_text(json.dumps({"commit": commit, "channel": channel, "default_log_level": default_log_level, "archives": [p.name for p in archives]}, indent=2) + "\n")
 
 
 if __name__ == "__main__":

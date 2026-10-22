@@ -1,0 +1,22 @@
+<Project>
+  <!-- Resolve at build time, then embed the default in the DLL. ZIP users do
+       not need Git or a particular environment at game startup. -->
+  <Target Name="ResolveLoggingDefault" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <_LoggingBranch>$(GITHUB_REF_NAME)</_LoggingBranch>
+    </PropertyGroup>
+    <Exec Condition="'$(_LoggingBranch)' == '' And ('$(DefaultLogLevel)' == '' Or '$(DefaultLogLevel)' == 'Auto')"
+          Command="git -C &quot;$(MSBuildThisFileDirectory)&quot; symbolic-ref --short HEAD"
+          ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="Low" StandardErrorImportance="Low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_LoggingBranch" />
+    </Exec>
+    <PropertyGroup>
+      <DefaultLogLevel Condition="('$(DefaultLogLevel)' == '' Or '$(DefaultLogLevel)' == 'Auto') And '$(_LoggingBranch)' == 'dev'">Debug</DefaultLogLevel>
+      <DefaultLogLevel Condition="'$(DefaultLogLevel)' == '' Or '$(DefaultLogLevel)' == 'Auto'">Important</DefaultLogLevel>
+      <DefineConstants Condition="'$(DefaultLogLevel)' == 'Debug'">$(DefineConstants);DEMEO_DIAGNOSTIC_LOGS</DefineConstants>
+    </PropertyGroup>
+    <Error Condition="'$(DefaultLogLevel)' != 'Debug' And '$(DefaultLogLevel)' != 'Important'"
+           Text="DefaultLogLevel must be Auto, Debug or Important. Runtime overrides belong in [LOGGING] Level." />
+    <Message Importance="high" Text="Embedded logging default: $(DefaultLogLevel) (source branch: $(_LoggingBranch))." />
+  </Target>
+</Project>

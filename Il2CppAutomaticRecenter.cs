@@ -55,7 +55,7 @@ namespace GreenScreen
 #if DEMEOBATTLES
                 TryLegacyGuard(avatar);
 #endif
-                Utils.LogInfo(Game + " IL2CPP recenter " +
+                Utils.LogDebug(Game + " IL2CPP recenter " +
 #if DEMEOBATTLES
                     "guard ready: automatic viewpoint and OpenVR notification; scoped legacy avatar reset=" + _legacyReady + "."
 #else
@@ -67,7 +67,7 @@ namespace GreenScreen
             {
                 Shutdown();
                 _failed = true;
-                Utils.LogInfo(Game + " IL2CPP recenter binding unavailable; retaining game behavior: " + error.GetType().Name + ": " + error.Message);
+                Utils.LogWarning(Game + " IL2CPP recenter binding unavailable; retaining game behavior: " + error.GetType().Name + ": " + error.Message);
             }
         }
 
@@ -126,7 +126,7 @@ namespace GreenScreen
                     if (Hooks[i].Finalizer != null) _patch.Unpatch(Hooks[i].Target, Hooks[i].Finalizer);
                 }
                 Hooks.RemoveRange(first, Hooks.Count - first);
-                Utils.LogInfo("Scoped Battles legacy avatar reset unavailable; existing viewpoint guards remain active: "
+                Utils.LogWarning("Scoped Battles legacy avatar reset unavailable; existing viewpoint guards remain active: "
                     + error.GetType().Name + ": " + error.Message);
             }
         }
@@ -167,7 +167,7 @@ namespace GreenScreen
         private static bool Suppress(string source)
         {
             if (!Verified || !SteamLinkConnectionLifecycle.UsesOpenVr) return false;
-            if (_suppressed++ < 64) Utils.LogInfo("Suppressed " + Game + " automatic recenter in " + source
+            if (_suppressed++ < 64) Utils.LogDebug("Suppressed " + Game + " automatic recenter in " + source
                 + "; count=" + _suppressed + "; at=" + DateTime.Now.ToString("HH:mm:ss.fff")
                 + "; Frame/Steam Link confirmed by isolated reader. Manual recenter is unchanged.");
             return true;
@@ -176,14 +176,14 @@ namespace GreenScreen
         private static void ObservePlacement(int __0, bool __1)
         {
             if (Verified && SteamLinkConnectionLifecycle.UsesOpenVr && _observed++ < 32)
-                Utils.LogInfo(Game + " avatar placement retained; slot=" + __0 + "; offset=" + __1
+                Utils.LogDebug(Game + " avatar placement retained; slot=" + __0 + "; offset=" + __1
                     + "; at=" + DateTime.Now.ToString("HH:mm:ss.fff") + ".");
         }
 #else
         private static void ObserveOrigin(XRInputSubsystem __0)
         {
             if (Verified && _observed++ < 32)
-                Utils.LogInfo(Game + " tracking-origin notification retained; input=" + (__0 == null ? "none" : "present")
+                Utils.LogDebug(Game + " tracking-origin notification retained; input=" + (__0 == null ? "none" : "present")
                     + "; at=" + DateTime.Now.ToString("HH:mm:ss.fff") + ". User recenter/listener callbacks remain available.");
         }
 #endif

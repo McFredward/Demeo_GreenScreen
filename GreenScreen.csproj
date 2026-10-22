@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="BuildChannel.props" />
   <PropertyGroup>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Configurations>DEMEO;DEMEOBATTLES;DEMEOBATTLEMARKED</Configurations>
-    <Version>1.4.21</Version>
+    <Version>2.0.0</Version>
     <TargetFramework Condition="'$(Configuration)' == 'DEMEO'">netstandard2.1</TargetFramework>
     <TargetFramework Condition="'$(Configuration)' != 'DEMEO'">net6.0</TargetFramework>
     <LangVersion>latest</LangVersion>

@@ -60,7 +60,7 @@ internal static class SteamLinkConnection
         if (before.State == after.State && before.TrackingSystem == after.TrackingSystem
             && before.Model == after.Model && before.RegisteredDeviceType == after.RegisteredDeviceType
             && before.Detail == after.Detail) return;
-        Utils.LogInfo("Steam Link headset check: " + after.State + "; tracking=" + after.TrackingSystem
+        Utils.LogDebug("Steam Link headset check: " + after.State + "; tracking=" + after.TrackingSystem
             + "; model=" + after.Model + "; registered=" + after.RegisteredDeviceType
             + "; detail=" + after.Detail + ". Native passthrough requires Frame through Steam Link.");
     }

@@ -88,7 +88,7 @@ namespace GreenScreen
             if (_runtimeStatus != status)
             {
                 _runtimeStatus = status;
-                Utils.LogInfo("Steam Link game XR transport: " + status + "; SteamVR=" + supported + ".");
+                Utils.LogDebug("Steam Link game XR transport: " + status + "; SteamVR=" + supported + ".");
             }
             return _steamVrRuntime = supported;
         }

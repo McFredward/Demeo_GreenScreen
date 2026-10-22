@@ -68,14 +68,14 @@ namespace GreenScreen
                     if (_shader == null) throw new InvalidDataException("The coverage bundle does not contain its Shader asset.");
                     if (_shader.name != "Hidden/Demeo/NativeCoverage") throw new InvalidDataException("The coverage Shader has an unexpected name: " + _shader.name);
                     if (!_shader.isSupported) throw new NotSupportedException("The coverage Shader is unsupported on " + SystemInfo.graphicsDeviceType + ".");
-                    Utils.LogInfo("Opaque coverage shader loaded from the embedded AssetBundle.");
+                    Utils.LogDebug("Opaque coverage shader loaded from the embedded AssetBundle.");
                 }
                 return new OpaqueCoverage(camera, _shader, srp);
             }
             catch (Exception error)
             {
                 Failure = "The bundled opaque-coverage shader is unavailable: " + error.GetType().Name + ": " + error.Message;
-                Utils.LogInfo(Failure + "; details=" + error);
+                Utils.LogWarning(Failure + "; details=" + error);
                 return null;
             }
         }

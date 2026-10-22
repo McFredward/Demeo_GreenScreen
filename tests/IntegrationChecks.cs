@@ -125,6 +125,23 @@ internal static class IntegrationChecks
             var camera=new Camera(); Color original=camera.backgroundColor;
             GameObject.Scene=new[] { camera };
             CheckLoaderLifecycle(camera);
+            int beforeLogs=TestLog.Messages.Count;
+            ModLogging.Configure(ModLogLevel.Important);
+            Utils.LogDebug("suppressed diagnostic fixture");
+            Check(TestLog.Messages.Count==beforeLogs,"production logging suppresses diagnostics at the actual loader sink");
+            Utils.LogInfo("important fixture"); Utils.LogWarning("warning fixture"); Utils.LogError("error fixture");
+            Check(TestLog.Messages.Count==beforeLogs+3,"production logging retains important messages, warnings and errors");
+            ModLogging.Configure(ModLogLevel.Error);
+            Utils.LogInfo("suppressed important fixture"); Utils.LogWarning("suppressed warning fixture");
+            Check(TestLog.Messages.Count==beforeLogs+3,"Error threshold filters lower severity at the actual loader sink");
+            Utils.LogError("retained error fixture");
+            Check(TestLog.Messages.Count==beforeLogs+4,"Error threshold retains errors");
+            Check(ModConfiguration.Parse(new[]{"[LOGGING]","Level=Debug"}).LogLevel==ModLogLevel.Debug,
+                "INI can request debug diagnostics independently of the build default");
+            Check(ModLogging.Parse("garbage")==ModLogLevel.Auto&&ModLogging.Parse("3")==ModLogLevel.Auto,
+                "invalid and numeric logging values retain the build default");
+            ModLogging.Configure(ModLogLevel.Auto);
+
             Check(TestLog.Messages.Exists(message=>message.Contains("Unity Update is active")),"first Unity Update is observable in loader logs");
             NativePassthrough.Initialize(); Tick();
             Check(camera.backgroundColor==Color.black,"unclassified startup never writes a green frame");

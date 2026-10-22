@@ -88,7 +88,7 @@ namespace GreenScreen
                 if (_controllerConstructor == null) throw new MissingMethodException(controller.FullName, ".ctor(CameraFadeView)");
                 _patch.Patch(_controllerConstructor, prefix: new HarmonyMethod(BeforeConstructor), postfix: new HarmonyMethod(AfterConstructor));
 #endif
-                Utils.LogInfo("Passthrough fade observer ready: " + controller.FullName + ".");
+                Utils.LogDebug("Passthrough fade observer ready: " + controller.FullName + ".");
 #if !DEMEOBATTLEMARKED
                 // The two proven intro Timeline spheres have their own animated
                 // URP material; CameraFadeController never owns these renderers.
@@ -98,7 +98,7 @@ namespace GreenScreen
                     if (_introAwake != null && _introAwake.ReturnType == typeof(void))
                         _patch.Patch(_introAwake, postfix: new HarmonyMethod(IntroObserver));
                 }
-                catch (Exception error) { Utils.LogInfo("Intro timeline fade binding unavailable; retaining original timeline material: " + error.GetType().Name + "."); }
+                catch (Exception error) { Utils.LogWarning("Intro timeline fade binding unavailable; retaining original timeline material: " + error.GetType().Name + "."); }
 #endif
             }
             catch (Exception error)
@@ -260,7 +260,7 @@ namespace GreenScreen
             if (slots.Length != 1 || (slots[0] != material && slots[0] != alternate) || Faders.Count >= 16) return;
             Faders.Add(new Fader(renderer, material, alternate) { Alpha = alpha });
 #if !DEMEOBATTLEMARKED
-            if (_tracked++ < 16) Utils.LogInfo("Camera fade controller tracked: renderer=" + renderer.name + "; source=" + material.shader.name
+            if (_tracked++ < 16) Utils.LogDebug("Camera fade controller tracked: renderer=" + renderer.name + "; source=" + material.shader.name
                 + "; alpha=" + material.color.a + "; at=" + DateTime.Now.ToString("HH:mm:ss.fff")
                 + ". Native material animation is observed before rendering, including constructor-only loading fades.");
 #endif
@@ -324,7 +324,7 @@ namespace GreenScreen
         {
             if (_failed) return;
             _failed = true;
-            Utils.LogInfo("Passthrough fade unavailable; retaining the game's original fades: " + error.GetType().Name + ": " + error.Message);
+            Utils.LogWarning("Passthrough fade unavailable; retaining the game's original fades: " + error.GetType().Name + ": " + error.Message);
         }
 
         private static void RemoveHooks()
@@ -386,11 +386,11 @@ namespace GreenScreen
                     Material[] slots = renderer.sharedMaterials;
                     if (slots.Length != 1 || !TimelineFader.Compatible(slots[0])) continue;
                     TimelineFaders.Add(new TimelineFader(renderer, slots[0]));
-                    Utils.LogInfo("Intro timeline passthrough fade bound: " + path + "; animated URP BaseColor and original geometry retained.");
+                    Utils.LogDebug("Intro timeline passthrough fade bound: " + path + "; animated URP BaseColor and original geometry retained.");
                 }
                 Refresh();
             }
-            catch (Exception error) { Utils.LogInfo("Intro timeline fade discovery unavailable: " + error.GetType().Name + "."); }
+            catch (Exception error) { Utils.LogWarning("Intro timeline fade discovery unavailable: " + error.GetType().Name + "."); }
         }
 
         private sealed class TimelineFader
