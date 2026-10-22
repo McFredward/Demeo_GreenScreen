@@ -2,7 +2,8 @@
 
 Formerly **Demeo Green Screen**.
 
-**Version 2.0.0** brings Demeo, Demeo Battles and Demeo Battlemarked into your room.
+**Version 2.0.0** enables mixed reality in the PCVR versions of Demeo,
+Demeo Battles and Demeo Battlemarked.
 Steam Frame over Steam Link uses native passthrough automatically. Other headsets
 can use the coloured background with Virtual Desktop.
 
