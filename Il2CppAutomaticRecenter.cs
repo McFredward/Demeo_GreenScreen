@@ -231,6 +231,7 @@ namespace GreenScreen
         {
             __state = _placementSource;
             _placementSource = __originalMethod.Name;
+            if (_placementSource == "OnLevelLoaded") BattlemarkedMenuAlignment.Cancel();
             if (_placementSource == "OnMenuSceneLoaded" && _menuDepth++ == 0) _menuAvatar = null;
             if (Verified && _movementObserved++ < 64)
                 Utils.LogInfo("Battlemarked camera event: " + _placementSource + "; at=" + DateTime.Now.ToString("HH:mm:ss.fff") + ". Original game call retained.");
@@ -243,7 +244,7 @@ namespace GreenScreen
                 {
                     object avatar = _menuAvatar; _menuAvatar = null;
                     if (__exception == null && Verified && SteamLinkConnectionLifecycle.UsesOpenXr && avatar != null)
-                        BattlemarkedMenuAlignment.Align(avatar, _menuPosition, _menuRotation);
+                        BattlemarkedMenuAlignment.Request(avatar, _menuPosition, _menuRotation);
                 }
             }
             finally { _placementSource = __state; }
@@ -253,6 +254,7 @@ namespace GreenScreen
         {
             if (_menuDepth > 0)
             { _menuAvatar = __instance; _menuPosition = __0; _menuRotation = __1; }
+            else BattlemarkedMenuAlignment.Cancel();
             if (Verified && _movementObserved++ < 64)
                 Utils.LogInfo("Battlemarked avatar placement: source=" + (_placementSource ?? "direct/unknown")
                     + "; position=" + Coordinates(__0) + "; rotation=" + Coordinates(__1) + "; scale=" + __2.ToString("R", System.Globalization.CultureInfo.InvariantCulture)
@@ -288,6 +290,7 @@ namespace GreenScreen
             _avatarResetDepth = _manualDepth = 0; _legacyReady = false;
 #else
             _placementSource = null; _movementObserved = 0;
+            _menuDepth = 0; _menuAvatar = null; BattlemarkedMenuAlignment.Cancel();
 #endif
             Hooks.Clear(); _patch = null; _failed = false; _next = 0; _suppressed = _observed = 0;
         }

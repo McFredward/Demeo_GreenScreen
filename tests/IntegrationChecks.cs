@@ -209,6 +209,27 @@ internal static class IntegrationChecks
             Check(SrpOutput.AllowsCamera(intro) && SrpOutput.IsForward(intro) && intro.Extra==null
                 && intro.backgroundColor==Color.clear && SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
                 "an Intro camera without additional data uses URP's existing default Forward renderer without adding a component");
+#if DEMEOBATTLEMARKED
+            var priorLoader=UnityEngine.XR.Management.XRGeneralSettings.Instance.Manager.activeLoader;
+            UnityEngine.XR.Management.XRGeneralSettings.Instance.Manager.activeLoader=new UnityEngine.XR.OpenXR.OpenXRLoader();
+            Time.unscaledTime+=1.1f;
+            EnableNative();
+            var oldGrant=SteamLinkCoverageBridge.Current;
+            intro.isActiveAndEnabled=false;Tick();
+            Check(SteamLinkCoverageBridge.Current==oldGrant && intro.backgroundColor==Color.black,
+                "Short Battlemarked camera gap retains only the live game-process pipe, with old render source revoked");
+            var firstNewCamera=new Camera();Camera.Render(firstNewCamera);
+            Check(firstNewCamera.backgroundColor==Color.black,"A handoff camera rendering before admission remains opaque");
+            firstNewCamera.isActiveAndEnabled=false;
+            intro.isActiveAndEnabled=true;Tick();
+            Check(SteamLinkCoverageBridge.Current==oldGrant && intro.backgroundColor==Color.clear,
+                "First valid Update readmits independent eyes without another companion negotiation dwell");
+            intro.isActiveAndEnabled=false;Tick();Time.unscaledTime+=1.1f;Tick();
+            Check(!SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,"An extended missing-camera interval withdraws the process declaration");
+            intro.isActiveAndEnabled=true;EnableNative();
+            UnityEngine.XR.Management.XRGeneralSettings.Instance.Manager.activeLoader=priorLoader;
+            Time.unscaledTime+=1.1f;SteamLinkCoverageBridge.Grant();Tick();
+#endif
             var introCommands=new RasterCommandBuffer();
             DrawObjectsPass.ExecutePass(introCommands,new DrawObjectsPass.PassData { isOpaque=true,
                 cameraData=new UniversalCameraData { camera=intro } },0,0,false);

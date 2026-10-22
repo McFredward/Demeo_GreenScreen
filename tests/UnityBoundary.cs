@@ -543,6 +543,7 @@ namespace MelonLoader
     {
         public virtual void OnInitializeMelon() { }
         public virtual void OnUpdate() { }
+        public virtual void OnLateUpdate() { }
         public virtual void OnDeinitializeMelon() { }
         public virtual void OnSceneWasLoaded(int index,string scene) { }
     }
@@ -579,6 +580,7 @@ namespace GreenScreen
     internal static class TestLog { internal static readonly List<string> Messages=new List<string>(); }
     internal static class SteamLinkCoverageBridge
     {
+        internal static bool CanAcceptOrdinaryRgba => Current.CanAcceptOrdinaryRgba;
         internal sealed class Snapshot { internal bool CanAcceptOrdinaryRgba; }
         internal static Snapshot Current=new Snapshot();
         internal static void Tick(bool wanted,double now,bool accountMaskBandwidth=true) { if (!wanted) Reset(); }
@@ -588,3 +590,7 @@ namespace GreenScreen
 }
 
 namespace GreenScreen { internal static class BepInExConfiguration { internal static void Attach(object controlledLoaderPort) { } } }
+
+#if DEMEOBATTLEMARKED
+namespace GreenScreen { internal static class BattlemarkedMenuAlignment { internal static void LateTick(UnityEngine.Camera camera) { } } }
+#endif

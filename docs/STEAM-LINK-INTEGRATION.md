@@ -1676,3 +1676,40 @@ settings. Neither reading nor saving occurs in an eye render callback. Real
 pinned BepInEx 5/6 ConfigFile tests cover serialization, first import, restart
 precedence, unsectioned legacy values, live entry edits and external reload.
 Renderer lifecycle tests use an explicitly controlled configuration boundary.
+
+### Tracked menu pose and camera-less handoff (2026-10-22)
+
+The 13:55 run loads the new config and constructor-free fade handling. Its
+menu correction nevertheless reports effectively zero yaw/position immediately
+after `SetAvatarPosition`: that callback observes the reset logical avatar head,
+not a later tracked render pose. Queue only the successful menu placement and
+apply it once in the next frame's LateUpdate, using the admitted XR camera's
+actual transform under the avatar root. Preserve the same rigid head/hand
+correction, height and scale. Direct/manual placements, level loading, identity
+loss, opt-out, shutdown and a two-second entry deadline cancel the pending
+request; this cannot become an ongoing recenter loop. Log the rendered transform
+and the assembly's informational version/path for future verification.
+
+The post-intro loading interval also contains a 216 ms camera gap followed by
+over two seconds waiting to renegotiate the same process's source pipe. Retain
+an already-live game-PID pipe for at most one second with no active stereo camera
+on the confirmed Battlemarked OpenXR path. Revoke all render/material/alpha
+admission during the gap. The next camera must pass the existing complete Update
+profile before either eye is admitted. A newly appearing camera that renders
+before its first Update remains opaque; unsupported/ambiguous profiles, identity
+or companion loss still withdraw authority. No new request is granted solely
+because a scene transition is in progress. Other game/transport paths retain
+their existing behavior.
+
+Separate read-only native inventory identifies the installed Frame companion as
+0.2.13, not the published 0.2.15. The 13:55:32 main-menu blackout includes real
+SVLFEC packet loss/backtrack resets. See the companion PC 0.2.19 rate-policy
+fix; neither a camera pose adjustment nor a fade shader can repair that loss.
+The native installer is a separate update from the game-mod install script.
+
+The Windows source builds also showed `Important` despite `Auto` on dev. A
+quoted `MSBuildThisFileDirectory` ends in a backslash on Windows, escaping the
+closing quote in Git's command line. Append `.` before the closing quote so
+local branch detection works there. A Windows CI job builds a real local dev
+checkout with the CI branch variable removed and executes the embedded-default
+check; main and explicit runtime overrides retain their existing behavior.

@@ -28,6 +28,7 @@ namespace GreenScreen
         // MelonLoader applies this assembly's Harmony patches automatically.
         public override void OnInitializeMelon() => ModLifecycle.Initialize();
         public override void OnUpdate() => ModLifecycle.Update();
+        public override void OnLateUpdate() => ModLifecycle.LateUpdate();
         public override void OnDeinitializeMelon() => ModLifecycle.Shutdown();
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)
         {
@@ -48,6 +49,7 @@ namespace GreenScreen
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly());
         }
         private void Update() => ModLifecycle.Update();
+        private void LateUpdate() => ModLifecycle.LateUpdate();
         private void OnDestroy() => ModLifecycle.Shutdown();
     }
 #else
@@ -73,6 +75,7 @@ namespace GreenScreen
     {
         public PassthroughDriver(IntPtr pointer) : base(pointer) { }
         private void Update() => ModLifecycle.Update();
+        private void LateUpdate() => ModLifecycle.LateUpdate();
         private void OnDestroy() => ModLifecycle.Shutdown();
     }
 #endif
@@ -90,7 +93,16 @@ namespace GreenScreen
             _running = true;
             _updateReported = false;
             NativePassthrough.Initialize();
+            Utils.LogInfo("Demeo Mixed Reality build: " + (typeof(ModInfo).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? ModInfo.Version)
+                + "; assembly=" + typeof(ModInfo).Assembly.Location);
             InvalidateEnvironment();
+        }
+        internal static void LateUpdate()
+        {
+            if (!_running) return;
+#if DEMEOBATTLEMARKED
+            BattlemarkedMenuAlignment.LateTick(NativePassthrough.AdmittedCamera);
+#endif
         }
         internal static void InvalidateEnvironment()
         {

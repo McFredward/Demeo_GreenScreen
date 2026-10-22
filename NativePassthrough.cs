@@ -28,6 +28,10 @@ namespace GreenScreen
         private static float _nextScan;
         private static bool _started, _rescan = true;
         private static string _status;
+#if DEMEOBATTLEMARKED
+        private static float _sceneHandoffUntil = -1;
+        internal static Camera AdmittedCamera => _frame == Time.frameCount ? _head?.Camera : null;
+#endif
 #if DEMEO
         private static Camera[] _cameraBuffer = new Camera[16];
 #else
@@ -53,6 +57,9 @@ namespace GreenScreen
         {
             if (_started) return;
             _started = true;
+#if DEMEOBATTLEMARKED
+            _sceneHandoffUntil = -1;
+#endif
             ConfigurationStore.Refresh();
             DemeoAutomaticRecenter.Initialize();
             PassthroughFade.Initialize();
@@ -145,7 +152,21 @@ namespace GreenScreen
             }
             else if (!SteamLinkConnectionLifecycle.UsesOpenVr || GraphicsSettings.currentRenderPipeline == null)
                 OpenVrSubmission.Reset();
-            SteamLinkCoverageBridge.Tick(eligible, Time.unscaledTime, settings.SteamLinkAccountMaskBandwidth);
+            bool observe = eligible;
+#if DEMEOBATTLEMARKED
+            // Source negotiation authorizes this exact game process, not a
+            // camera or image. Keep only an already-live pipe through a short
+            // camera-less scene handoff; render/alpha admission stays revoked.
+            // The next camera must independently pass the full Update profile.
+            if (eligible) _sceneHandoffUntil = -1;
+            else if (count == 0 && SteamLinkConnectionLifecycle.UsesOpenXr && SteamLinkCoverageBridge.CanAcceptOrdinaryRgba)
+            {
+                if (_sceneHandoffUntil < 0) _sceneHandoffUntil = Time.unscaledTime + 1;
+                observe = Time.unscaledTime <= _sceneHandoffUntil;
+            }
+            else _sceneHandoffUntil = -1;
+#endif
+            SteamLinkCoverageBridge.Tick(observe, Time.unscaledTime, settings.SteamLinkAccountMaskBandwidth);
             var grant = SteamLinkCoverageBridge.Current;
             if (!eligible || !grant.CanAcceptOrdinaryRgba)
             {

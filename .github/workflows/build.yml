@@ -85,3 +85,22 @@ jobs:
             dist/build-info.json
           if-no-files-found: error
           retention-days: 30
+
+  windows-local-logging:
+    runs-on: windows-2025
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: 8.0.x
+      - name: Verify local dev checkout logging without CI branch variables
+        shell: pwsh
+        run: |
+          git switch -C dev
+          Remove-Item Env:GITHUB_REF_NAME -ErrorAction SilentlyContinue
+          dotnet build tests/LoggingChecks.csproj --nologo -v:q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet tests/bin/Debug/net8.0/LoggingChecks.dll Debug
+          exit $LASTEXITCODE

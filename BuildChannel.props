@@ -6,7 +6,7 @@
       <_LoggingBranch>$(GITHUB_REF_NAME)</_LoggingBranch>
     </PropertyGroup>
     <Exec Condition="'$(_LoggingBranch)' == '' And ('$(DefaultLogLevel)' == '' Or '$(DefaultLogLevel)' == 'Auto')"
-          Command="git -C &quot;$(MSBuildThisFileDirectory)&quot; symbolic-ref --short HEAD"
+          Command="git -C &quot;$(MSBuildThisFileDirectory).&quot; symbolic-ref --short HEAD"
           ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="Low" StandardErrorImportance="Low">
       <Output TaskParameter="ConsoleOutput" PropertyName="_LoggingBranch" />
     </Exec>

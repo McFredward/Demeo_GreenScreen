@@ -190,17 +190,35 @@ internal static class Il2CppRecenterChecks
         Check(avatar.Calls==1 && movement.Calls==1,"Movement observers preserve menu setup and its original avatar placement");
         Check(Utils.Messages.Exists(s=>s.Contains("avatar placement: source=SetAvatarPositionByCameraWaypoint")),
             "The actual nested camera-waypoint source is recorded for an avatar placement");
-        Check(Utils.Messages.Exists(s=>s.Contains("menu aligned once")),"Successful menu entry aligns the actual tracked head after the original waypoint placement");
-        var head=avatar.HeadTransform;var root=avatar.HeadRootTransform;
+        Check(Utils.Messages.Exists(s=>s.Contains("alignment queued")) && !Utils.Messages.Exists(s=>s.Contains("menu aligned once")),
+            "Menu callback schedules alignment instead of consuming the reset logical head pose");
+        var logical=avatar.HeadTransform;
+        logical.localPosition=default;logical.localRotation=UnityEngine.Quaternion.identity;
+        var head=new UnityEngine.Transform{parent=avatar.HeadRootTransform,localPosition=new(2,1.6f,3),localRotation=UnityEngine.Quaternion.Euler(new(0,75,0)),name="actual XR camera"};
+        var camera=new UnityEngine.Camera{transform=head};
+        BattlemarkedMenuAlignment.LateTick(camera);
+        Check(!Utils.Messages.Exists(s=>s.Contains("menu aligned once")),"The placement frame's reset pose cannot trigger alignment");
+        UnityEngine.Time.frameCount++;UnityEngine.Time.unscaledTime+=.02f;BattlemarkedMenuAlignment.LateTick(camera);
         Check(Math.Abs(head.position.x)<.001 && Math.Abs(head.position.z)<.001 && Math.Abs(head.position.y-1.6f)<.001
-            && Math.Abs(head.forward.x)<.001 && head.forward.z>.99,"Menu alignment compensates physical head offset and yaw, retaining tracked height");
+            && Math.Abs(head.forward.x)<.001 && head.forward.z>.99,"The real render camera's offset and yaw are corrected on the next frame, preserving tracked height");
         int aligned=Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count;
-        movement.OnLevelLoaded(null,null);avatar.SetAvatarPosition(default,default,1);
-        Check(Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,"Gameplay and direct/manual placements never trigger menu alignment");
+        Check(aligned==1 && Utils.Messages.Exists(s=>s.Contains("actual XR camera")),"The logged alignment identifies the actual rendered head");
+        UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.LateTick(camera);
+        Check(Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,"Later tracking frames never repeat an applied menu alignment");
+        movement.OnMenuSceneLoaded(null);movement.OnLevelLoaded(null,null);
+        UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.LateTick(camera);
+        Check(Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,"Gameplay cancels an outstanding menu alignment");
+        movement.OnMenuSceneLoaded(null);avatar.SetAvatarPosition(default,default,1);
+        UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.LateTick(camera);
+        Check(Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,"Direct/manual placement cancels an outstanding menu alignment");
         SteamLinkConnectionLifecycle.UsesOpenXr=false;movement.OnMenuSceneLoaded(null);SteamLinkConnectionLifecycle.UsesOpenXr=true;
+        UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.LateTick(camera);
         Check(Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,"Another game transport cannot authorize menu alignment");
         ConfigurationStore.Current.SteamLinkNativePassthrough=false;movement.OnMenuSceneLoaded(null);ConfigurationStore.Current.SteamLinkNativePassthrough=true;
+        UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.LateTick(camera);
         Check(Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,"Opt-out retains original menu placement");
+        movement.OnMenuSceneLoaded(null);UnityEngine.Time.frameCount++;UnityEngine.Time.unscaledTime+=3;BattlemarkedMenuAlignment.LateTick(camera);
+        Check(Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,"A missing or unready camera cannot cause a delayed recenter after the entry window expires");
         foreach(int layout in new[]{0,1,2,3})
         {
             var rig=new Jade.GameView.Avatar.AvatarVR();
@@ -209,7 +227,7 @@ internal static class Il2CppRecenterChecks
             if(layout==3)rig.HeadRootTransform.parent=rig.HandRootTransform;
             var hand=new UnityEngine.Transform{parent=rig.HandRootTransform,localPosition=new(4,0,2)};
             var relative=hand.position-rig.HeadTransform.position;float height=rig.HeadTransform.position.y;
-            BattlemarkedMenuAlignment.Align(rig,new(20,99,30),new(0,120,0));
+            BattlemarkedMenuAlignment.Align(rig,rig.HeadTransform,new(20,99,30),new(0,120,0));
             Check(Math.Abs(rig.HeadTransform.position.x-20)<.001&&Math.Abs(rig.HeadTransform.position.z-30)<.001
                 &&Math.Abs(rig.HeadTransform.position.y-height)<.001,"Each rig hierarchy aligns the head horizontally, preserving vertical pose");
             var expected=UnityEngine.Quaternion.AngleAxis(45,UnityEngine.Vector3.up)*relative;
@@ -263,7 +281,7 @@ namespace UnityEngine
     }
     public sealed class Transform
     {
-        public Transform parent; public Vector3 localPosition; public Quaternion localRotation=Quaternion.identity;
+        public string name; public Transform parent; public Vector3 localPosition; public Quaternion localRotation=Quaternion.identity;
         public Vector3 localScale=new(1,1,1); public int Writes;
         public Vector3 position {get=>parent==null?localPosition:parent.position+parent.rotation*localPosition;set=>localPosition=parent==null?value:new Quaternion{Native=System.Numerics.Quaternion.Inverse(parent.rotation.Native)}*(value-parent.position);}
         public Quaternion rotation {get=>parent==null?localRotation:parent.rotation*localRotation;set=>localRotation=parent==null?value:new Quaternion{Native=System.Numerics.Quaternion.Inverse(parent.rotation.Native)}*value;}
@@ -271,6 +289,8 @@ namespace UnityEngine
         public bool IsChildOf(Transform root) {for(var item=this;item!=null;item=item.parent)if(item==root)return true;return false;}
         public void SetPositionAndRotation(Vector3 p,Quaternion q){position=p;rotation=q;Writes++;}
     }
+    public static class Time { public static int frameCount; public static float unscaledTime; }
+    public sealed class Camera { public Transform transform; }
     public enum RuntimePlatform { WindowsPlayer, LinuxPlayer }
     public static class Application { public static RuntimePlatform platform = RuntimePlatform.WindowsPlayer; }
 }
