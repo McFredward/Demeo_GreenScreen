@@ -523,7 +523,11 @@ namespace UnityEngine.Rendering.Universal.Internal
 namespace Boardgame { public class GameStartup { } }
 namespace BepInEx
 {
-    public static class Paths { public static string PluginPath=System.IO.Path.GetFullPath("BepInEx/plugins"); }
+    public static class Paths
+    {
+        public static string PluginPath=System.IO.Path.GetFullPath("BepInEx/plugins");
+        public static string ConfigPath=System.IO.Path.GetFullPath("BepInEx/config");
+    }
     public class BepInPlugin : Attribute { public BepInPlugin(string id,string name,string version) { } }
     public class BaseUnityPlugin : UnityEngine.MonoBehaviour { public object Config=new(); public Logging.ManualLogSource Logger=new Logging.ManualLogSource(); }
 }

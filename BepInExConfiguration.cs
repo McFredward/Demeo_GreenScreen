@@ -9,6 +9,7 @@ namespace GreenScreen
 {
     internal sealed class BepInExConfiguration : IConfigurationBackend
     {
+        internal const string FileName = "DemeoMixedReality.cfg";
         private readonly ConfigFile _config;
         private readonly ConfigEntry<int> _r, _g, _b;
         private readonly ConfigEntry<bool> _disableTable, _native, _budget;
@@ -19,6 +20,23 @@ namespace GreenScreen
         public string Path => _config.ConfigFilePath;
 
         internal static void Attach(ConfigFile config) => ConfigurationStore.SetBackend(new BepInExConfiguration(config));
+
+        internal static void Attach(string configDirectory) => Attach(Open(configDirectory));
+
+        internal static ConfigFile Open(string configDirectory)
+        {
+            string path = System.IO.Path.Combine(configDirectory, FileName);
+            string previous = System.IO.Path.Combine(configDirectory, "566784.cfg");
+            // Rename before ConfigFile loads/binds so every existing setting,
+            // including entries unknown to this version, survives the update.
+            // An existing named config always wins and is never overwritten.
+            if (!File.Exists(path) && File.Exists(previous))
+            {
+                File.Move(previous, path);
+                Utils.LogInfo("Renamed configuration from " + previous + " to " + path + ".");
+            }
+            return new ConfigFile(path, false);
+        }
 
         internal BepInExConfiguration(ConfigFile config)
         {

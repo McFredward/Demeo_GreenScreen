@@ -88,7 +88,7 @@ try {
         if ($plan.Backend -eq 'BepInEx') {
             # The plugin creates/binds its normal config on first launch, after
             # reading any legacy INI. Precreating it would suppress migration.
-            $activeConfig = Join-Path $plan.Install.Path 'BepInEx/config/566784.cfg'
+            $activeConfig = Join-Path $plan.Install.Path 'BepInEx/config/DemeoMixedReality.cfg'
         } else {
             Copy-Item -LiteralPath (Join-Path $repo 'greenscreen.ini.example') -Destination (Join-Path $plan.Destination 'greenscreen.ini.example') -Force
             $activeConfig = $null

@@ -1680,8 +1680,13 @@ remain to be confirmed by the maintainer.
 
 ### Standard BepInEx configuration and migration (2026-10-22)
 
-BepInEx 5 and 6 now bind the plugin's actual `ConfigFile`, using its stable
-plugin identity `566784` and normal `BepInEx/config/566784.cfg` location.
+BepInEx 5 and 6 bind a normal `ConfigFile` at
+`BepInEx/config/DemeoMixedReality.cfg`. The plugin identity remains `566784`.
+On upgrade, an existing `566784.cfg` is moved to the readable filename before
+loading or binding, preserving all entries. An already existing named config
+wins and leaves any numeric file untouched. Neither the installer nor a fresh
+plugin launch creates the old numeric file. The plugin's unbound default
+`Config` is not used; both loader entry points open the named file explicitly.
 Fresh defaults are RGB 0/255/0, table hidden and automatic native passthrough
 on. Existing loader/DLL identities stay unchanged. The additional bandwidth
 and logging preferences remain adjustable in the same config.
@@ -1697,8 +1702,9 @@ migration. MelonLoader retains the INI backend, with the same fresh defaults.
 Cold maintenance polls the normal config's modification stamp and uses
 `ConfigFile.Reload`; BepInEx setting-change events also invalidate the cached
 settings. Neither reading nor saving occurs in an eye render callback. Real
-pinned BepInEx 5/6 ConfigFile tests cover serialization, first import, restart
-precedence, unsectioned legacy values, live entry edits and external reload.
+pinned BepInEx 5/6 ConfigFile tests cover serialization, numeric-file rename,
+preservation of unknown entries, named-config precedence, first INI import,
+restart precedence, unsectioned legacy values, live entry edits and external reload.
 Renderer lifecycle tests use an explicitly controlled configuration boundary.
 
 ### Tracked menu pose and camera-less handoff (2026-10-22)

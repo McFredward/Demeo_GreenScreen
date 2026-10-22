@@ -17,11 +17,13 @@ internal static class ConfigChecks
         Directory.CreateDirectory(temp);
         try
         {
-            string path = System.IO.Path.Combine(temp, "566784.cfg");
-            var config = new ConfigFile(path, false);
+            string path = System.IO.Path.Combine(temp, "DemeoMixedReality.cfg");
+            var config = BepInExConfiguration.Open(temp);
             var backend = new BepInExConfiguration(config);
             var defaults = backend.ReadIfChanged();
             Check(File.Exists(path) && config.Count == 7, "Real ConfigFile creates the seven normal entries.");
+            Check(backend.Path == path && !File.Exists(System.IO.Path.Combine(temp, "566784.cfg")),
+                "New installs use the readable filename without creating a numeric config.");
             Check(defaults.BackgroundColor.g == 1 && defaults.BackgroundColor.r == 0 && defaults.BackgroundColor.b == 0
                 && defaults.DisableTable && defaults.SteamLinkNativePassthrough, "Requested new-install defaults are persisted.");
             Check(backend.ReadIfChanged() == null, "Unchanged config is not reread/logged per tick.");
@@ -50,6 +52,27 @@ internal static class ConfigChecks
             Check(ConfigurationStore.Refresh() && ConfigurationStore.ActivePath == importedPath
                 && !ConfigurationStore.Current.SteamLinkNativePassthrough, "Shared store reads the real loader config backend.");
             Check(!ConfigurationStore.Refresh(), "Backend caches unchanged settings at the shared maintenance boundary.");
+
+            string upgradeDirectory = System.IO.Path.Combine(temp, "upgrade");
+            Directory.CreateDirectory(upgradeDirectory);
+            string numericPath = System.IO.Path.Combine(upgradeDirectory, "566784.cfg");
+            string namedPath = System.IO.Path.Combine(upgradeDirectory, "DemeoMixedReality.cfg");
+            File.WriteAllText(numericPath, "[COLOR]\nR=21\nG=43\nB=65\n[TABLE]\nDisable=false\n[STEAMLINK]\nNativePassthrough=false\nAccountMaskBandwidth=false\n[LOGGING]\nLevel=Important\n[OTHER]\nPreserved=custom\n");
+            var renamedFile = BepInExConfiguration.Open(upgradeDirectory);
+            var renamed = new BepInExConfiguration(renamedFile).ReadIfChanged();
+            Check(File.Exists(namedPath) && !File.Exists(numericPath), "Existing numeric config is renamed once.");
+            Check(renamed.BackgroundColor.r == 21 / 255f && renamed.BackgroundColor.g == 43 / 255f
+                && renamed.BackgroundColor.b == 65 / 255f && !renamed.DisableTable
+                && !renamed.SteamLinkNativePassthrough && !renamed.SteamLinkAccountMaskBandwidth
+                && renamed.LogLevel == ModLogLevel.Important, "Renaming preserves all settings and takes precedence over the legacy INI.");
+            Check(renamedFile.Bind("OTHER", "Preserved", "default").Value == "custom", "Unrecognized settings survive the rename too.");
+            File.WriteAllText(numericPath, "[STEAMLINK]\nNativePassthrough=true\n");
+            var namedWins = new BepInExConfiguration(BepInExConfiguration.Open(upgradeDirectory));
+            Check(!namedWins.ReadIfChanged().SteamLinkNativePassthrough && File.Exists(numericPath),
+                "An existing named config wins; subsequent numeric files are not imported or deleted.");
+            BepInExConfiguration.Attach(upgradeDirectory);
+            Check(ConfigurationStore.Refresh() && ConfigurationStore.ActivePath == namedPath
+                && !ConfigurationStore.Current.SteamLinkNativePassthrough, "Both loader entry points attach the readable config through the shared directory path.");
             File.Delete(legacy);
             string custom = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(legacy), "custom_color.ini");
             File.WriteAllText(custom, "R=1\nG=2\nB=3\nDisableTable=1\n");

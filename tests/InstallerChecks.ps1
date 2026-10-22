@@ -89,7 +89,7 @@ try {
     Check ([IO.File]::ReadAllText((Join-Path $paths.Demeo 'BepInEx/plugins/greenscreen.ini')) -eq '[COLOR] preserve-me') 'Preserve existing root config'
     Check (-not (Test-Path -LiteralPath (Join-Path $paths.Demeo 'BepInEx/plugins/Nested/greenscreen.ini'))) 'Do not shadow legacy root configuration'
     Check (-not (Test-Path -LiteralPath (Join-Path $paths.DemeoBattles 'BepInEx/plugins/greenscreen.ini'))) 'New BepInEx install does not create a plugin INI'
-    Check (-not (Test-Path -LiteralPath (Join-Path $paths.DemeoBattles 'BepInEx/config/566784.cfg'))) 'Plugin creates the normal config on first launch so legacy migration is possible'
+    Check (-not (Test-Path -LiteralPath (Join-Path $paths.DemeoBattles 'BepInEx/config/DemeoMixedReality.cfg'))) 'Plugin creates the normal config on first launch so legacy migration is possible'
     Check ([IO.File]::ReadAllText((Join-Path $paths.DemeoBattlemarked 'BepInEx/plugins/custom_color.ini')) -eq 'R=123') 'Preserve custom_color.ini'
     Check (-not (Test-Path -LiteralPath (Join-Path $paths.DemeoBattlemarked 'BepInEx/plugins/greenscreen.ini'))) 'Do not shadow legacy filename'
     Check (($global:DemeoInstallerBackends -join ',') -eq 'BepInEx,BepInEx,BepInEx') 'Battlemarked without MelonLoader builds for installed BepInEx'
