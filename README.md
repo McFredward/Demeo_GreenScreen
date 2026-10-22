@@ -2,10 +2,10 @@
 
 Formerly **Demeo Green Screen**.
 
-**Version 2.0.0** enables mixed reality in the PCVR versions of Demeo,
-Demeo Battles and Demeo Battlemarked.
-Steam Frame over Steam Link uses native passthrough automatically. Other headsets
-can use the coloured background with Virtual Desktop.
+Enables mixed reality in the PCVR versions of Demeo, Demeo Battles and Demeo
+Battlemarked. Steam Frame over Steam Link offers native passthrough like the
+standalone Quest versions, without green outlines or colour-key artefacts.
+Quest users on Virtual Desktop can use the original colour-key mode.
 
 <p align="center">
   <a href="#steam-frame-passthrough">
