@@ -7,8 +7,8 @@ using UnityEngine;
 namespace GreenScreen
 {
     // The shipped menu has two EnvFX/FogSprite renderers and separate smoke
-    // children under Static/LightProps. Hide their rendering, not their parent
-    // effects: the same torches also own flames, glow and actual lights.
+    // children under Static/LightProps. Also hide only the longest authored
+    // EnvFX godray. Parent effects, shorter rays, flames and lights stay live.
     internal static class BattlemarkedMenuAtmosphere
     {
         private static readonly List<Renderer> Hidden = new List<Renderer>();
@@ -32,7 +32,7 @@ namespace GreenScreen
                     if (Hidden[i] == null) Hidden.RemoveAt(i);
                     else Hidden[i].enabled = false;
 
-                int fog = 0, smoke = 0;
+                int fog = 0, smoke = 0, longBeam = 0;
                 var menuScene = menu.scene;
                 foreach (var renderer in UnityEngine.Object.FindObjectsOfType<Renderer>())
                 {
@@ -41,14 +41,18 @@ namespace GreenScreen
                     bool isFog = item.name == "FogSprite" && item.parent != null
                         && item.parent.name == "EnvFX" && item.parent.parent == null;
                     bool isSmoke = TorchSmoke(item);
-                    if ((!isFog && !isSmoke) || Hidden.Count >= 64 || renderer.gameObject.scene != menuScene) continue;
+                    bool isLongBeam = item.name == "Godray" && item.parent != null
+                        && item.parent.name == "Godray_Base (3)" && item.parent.parent != null
+                        && item.parent.parent.name == "EnvFX" && item.parent.parent.parent == null;
+                    if ((!isFog && !isSmoke && !isLongBeam) || Hidden.Count >= 64 || renderer.gameObject.scene != menuScene) continue;
                     renderer.enabled = false;
                     Hidden.Add(renderer);
-                    if (isFog) fog++; else smoke++;
+                    if (isFog) fog++; else if (isSmoke) smoke++; else longBeam++;
                 }
-                if (fog + smoke > 0 && _reports++ < 8)
+                if (fog + smoke + longBeam > 0 && _reports++ < 8)
                     Utils.LogDebug("Battlemarked menu atmosphere hidden: fog=" + fog + "; smoke=" + smoke
-                        + ". Only renderers in the MainMenuSceneView scene; flames, lights and scenario effects retained.");
+                        + "; long-beam=" + longBeam
+                        + ". Only renderers in the MainMenuSceneView scene; shorter beams, flames, lights and scenario effects retained.");
             }
             catch (Exception error)
             {

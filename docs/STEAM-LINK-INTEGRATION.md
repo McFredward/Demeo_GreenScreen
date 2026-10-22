@@ -19,12 +19,20 @@ and the separate `Smoke` / `Smoke (...)` children of `PFireTorch` and
 `PStatusFire01` below `Static/LightProps`. The supplied addressable menu scene
 contains these independently of its flames and lights. Only renderers in the
 same loaded scene as `MainMenuSceneView` are eligible; identically named
-scenario effects and spell particles are retained. Parent objects, lights,
-flames, glow, beam materials and shader settings are unchanged.
+scenario effects and spell particles are retained.
+
+The follow-up headset run confirms `fog=2` in the actual menu but reports no
+perceptible improvement. Its next comparison also hides the single line
+renderer `EnvFX/Godray_Base (3)/Godray`. In the supplied menu this ray's parent
+has a Y scale of approximately 6.89; the other three ray parents use 1.99 and
+their line geometry has the same local length. The three shorter rays stay
+visible. Parent objects, lights, flames, glow, beam materials and shader
+settings are unchanged. Debug output includes `long-beam` to verify that this
+specific additional change was applied; no bitrate reduction is claimed yet.
 
 The shared loader Update scans once per second, catches late-created effects,
 and restores only owned renderer changes on menu exit or unload. Debug logs
-report newly hidden fog/smoke counts for the next headset comparison. Both
+report newly hidden fog/smoke/long-beam counts for the next headset comparison. Both
 loader lifecycle fixtures cover scene isolation, retained effects, late
 creation and restoration. Bandwidth savings still require a headset A/B test.
 

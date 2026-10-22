@@ -50,22 +50,31 @@ internal static class IntegrationChecks
         var flame=Atmosphere("Static/LightProps/SM_Walltorch_01/PStatusFire01/Fire",1);
         var glow=Atmosphere("Static/LightProps/SM_Walltorch_01/PStatusFire01/Glow",1);
         var beam=Atmosphere("Lighting/Beam",1);
+        var longBeam=Atmosphere("EnvFX/Godray_Base (3)/Godray",1);
+        var shortBeam=Atmosphere("EnvFX/Godray_Base (1)/Godray",1);
+        var narrowBeam=Atmosphere("EnvFX/Godray_Base (2)/Godray",1);
+        var otherNarrowBeam=Atmosphere("EnvFX/Godray_Base (4)/Godray",1);
+        var scenarioBeam=Atmosphere("EnvFX/Godray_Base (3)/Godray",2);
         var scenarioFog=Atmosphere("EnvFX/FogSprite",2);
         var scenarioSmoke=Atmosphere("Static/LightProps/SM_Walltorch_01/PStatusFire01/Smoke (1)",2);
         var spellSmoke=Atmosphere("VFX_Prewarm_collection/PSpell/Smoke (1)",1);
-        GameObject.Renderers=new[]{fog,smoke,hiddenSmoke,flame,glow,beam,scenarioFog,scenarioSmoke,spellSmoke};
+        GameObject.Renderers=new[]{fog,smoke,hiddenSmoke,flame,glow,beam,longBeam,shortBeam,
+            narrowBeam,otherNarrowBeam,scenarioBeam,scenarioFog,scenarioSmoke,spellSmoke};
         ModLifecycle.InvalidateEnvironment(); Time.frameCount++; update();
         Check(!fog.enabled && !smoke.enabled && !hiddenSmoke.enabled,
             "menu atmosphere is hidden immediately on scene invalidation, including originally hidden smoke");
         Check(flame.enabled && glow.enabled && beam.enabled && spellSmoke.enabled,
             "menu flames, glow, beams and unrelated spell effects keep rendering");
+        Check(!longBeam.enabled && shortBeam.enabled && narrowBeam.enabled && otherNarrowBeam.enabled,
+            "only the long authored menu godray is hidden; all three shorter rays remain visible");
+        Check(scenarioBeam.enabled,"an identically named long beam in a scenario keeps rendering");
         Check(scenarioFog.enabled && scenarioSmoke.enabled,
             "identically named effects in an additive scenario cannot be hidden by the menu policy");
         var lateFog=Atmosphere("EnvFX/FogSprite",1);
         GameObject.Renderers=new[]{lateFog}; Time.unscaledTime+=1.1f; Time.frameCount++; update();
         Check(!lateFog.enabled,"late-created menu atmosphere is also hidden");
         menu.Destroyed=true; Time.unscaledTime+=1.1f; Time.frameCount++; update();
-        Check(fog.enabled && smoke.enabled && lateFog.enabled && !hiddenSmoke.enabled,
+        Check(fog.enabled && smoke.enabled && lateFog.enabled && longBeam.enabled && !hiddenSmoke.enabled,
             "menu exit restores only owned renderer changes even when the menu marker is destroyed");
         GameObject.Named["MainMenuSceneView"]=new GameObject { scene=new UnityEngine.SceneManagement.Scene { handle=1 } };
         ModLifecycle.InvalidateEnvironment(); Time.frameCount++; update();
