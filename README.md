@@ -84,7 +84,7 @@ The native mode waits for a verified, live sender connection before enabling tra
 
 Version 1.4.11 retains Demeo and Battles' original **single-pass stereo rendering** and copies each completed eye slice into a separate **2D texture immediately before OpenVR Submit**. It bypasses SteamVR's optional supersample filter **only while the current thread executes an admitted native eye Submit**, preserving coverage through the intermediate OpenVR copy. It leases the public settings interface without calling any setting writer; other queries, threads and games keep their original behavior. The maintainer confirmed correct opacity and matching eyes in Demeo. The maintainer confirmed that PC patch 0.2.14 removes the intermittent flashes and that both eyes show correctly opaque objects. The remaining short black intro/loading transitions are separate game fades and source switches. The [latest continuity review](docs/STEAM-LINK-INTEGRATION.md#october21-confirmed-pc-continuity-and-native-game-fades-1412) records the evidence and limits. Rendering resolution, cameras, FOV and tracking remain unchanged. The maintainer has also confirmed Battles1.4.18's Intro, both eyes and stability. Battlemarked still requires its own headset validation.
 
-The companion's **PC0.2.16 / Frame0.2.13** candidate on `dev` recognizes the
+The companion's **PC0.2.17 / Frame0.2.13** candidate on `dev` recognizes the
 required native interfaces after SteamVR updates. Successfully tested runtimes
 are **PC SteamVR2.17.10** and **Frame SteamVR2.18.2**; these are test observations,
 not version limits. The supplied PC2.18.4 driver passes software discovery, but
@@ -97,11 +97,13 @@ To update the companion, run its development installer on the gaming PC:
 irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/dev/get.ps1 | iex
 ```
 
-This candidate changes the Frame component as well, so this update requires its
-coordinated update. Future updates that change only the PC component leave Frame
-files, settings and services untouched and do not restart it. PC SteamVR stays
-closed after setup. The game mod remains1.4.21; no game DLL rebuild is needed for
-this companion update.
+PC0.2.17 additionally reserves metadata peaks and bounds the video encoder's
+single-frame buffer after two native transport resets in the latest Battles
+scenario test. With Frame0.2.13 already installed, this is a PC-only update:
+Frame files, settings and services remain untouched and are not restarted.
+PC SteamVR stays closed after setup. The game mod remains1.4.21; no game DLL
+rebuild is needed. The new burst correction still needs an extended headset test.
+[Transport evidence and test limits](https://github.com/McFredward/steam-link-native-passthrough/blob/dev/docs/development/BATTLES-BURST-BUDGET.md).
 
 Version **1.4.12** changes the identified game black fades into fades toward passthrough in **all three games**, while native mode is active. The game keeps its original fade timing, loading state and completion callbacks. Opting out, losing permission or unloading restores the game materials. This is a mod update; matching PC0.2.14/Frame0.2.12 companions need no update. Actual pauses where the game submits no supported eye image remain a separate limitation. Demeo's camera/Intro fades and Battles' Intro have since been confirmed; the additional loading-canvas correction below still needs a headset check. Battlemarked remains untested.
 
