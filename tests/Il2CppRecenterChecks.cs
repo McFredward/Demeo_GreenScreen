@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using GreenScreen;
 using HarmonyLib;
 using UnityEngine.XR;
@@ -33,8 +34,11 @@ internal static class Il2CppRecenterChecks
 #endif
     }
 
-    public static void Main()
+    public static void Main(string[] args)
     {
+#if DEMEOBATTLEMARKED
+        StereoNative.Open(args[0]);
+#endif
         var controller = new Controller();
         var input = new XRInputSubsystem();
 #if DEMEOBATTLES
@@ -208,6 +212,7 @@ internal static class Il2CppRecenterChecks
         camera.CollapsedEyes=false;BattlemarkedMenuAlignment.BeforeRender(camera);
         Check(Math.Abs(tracked.position.x)<.001 && Math.Abs(tracked.position.z)<.001 && Math.Abs(tracked.position.y-1.6f)<.001
             && Math.Abs(tracked.forward.x)<.001 && tracked.forward.z>.99,"Stereo view pose corrects the rendered head even while the logical camera remains reset");
+        Check(UnityEngine.Camera.GeneratedCalls==0 && StereoNative.Stat(0)>=6 && StereoNative.Stat(1)==0,"The actual C matrix ABI runs for both eyes and never executes invalid generated wrappers");
         int aligned=Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count;
         Check(aligned==1 && Utils.Messages.Exists(s=>s.Contains("actual XR camera")),"The logged alignment identifies the actual rendered head");
         UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.BeforeRender(camera);
@@ -307,7 +312,11 @@ namespace UnityEngine
     public static class Time { public static int frameCount; public static float unscaledTime; }
     public struct Matrix4x4
     {
-        public System.Numerics.Matrix4x4 Native;
+        public float m00,m10,m20,m30,m01,m11,m21,m31,m02,m12,m22,m32,m03,m13,m23,m33;
+        public System.Numerics.Matrix4x4 Native {
+            get=>new(m00,m10,m20,m30,m01,m11,m21,m31,m02,m12,m22,m32,m03,m13,m23,m33);
+            set {m00=value.M11;m10=value.M12;m20=value.M13;m30=value.M14;m01=value.M21;m11=value.M22;m21=value.M23;m31=value.M24;m02=value.M31;m12=value.M32;m22=value.M33;m32=value.M34;m03=value.M41;m13=value.M42;m23=value.M43;m33=value.M44;}
+        }
         public float determinant=>Native.GetDeterminant();
         public Matrix4x4 inverse {get {System.Numerics.Matrix4x4.Invert(Native,out var result);return new(){Native=result};}}
         public Vector3 MultiplyPoint3x4(Vector3 p)=>Vector3.From(System.Numerics.Vector3.Transform(p.Native,Native));
@@ -317,7 +326,19 @@ namespace UnityEngine
     {
         public Transform transform,TrackedHead; public bool MissingEyes,CollapsedEyes;
         public enum StereoscopicEye {Left,Right}
-        public Matrix4x4 GetStereoViewMatrix(StereoscopicEye eye)
+        public static int GeneratedCalls;
+        public Matrix4x4 GetStereoViewMatrix(StereoscopicEye eye) { GeneratedCalls++;throw new InvalidProgramException("Original failing generated wrapper"); }
+        public static void GetStereoViewMatrix_Injected(IntPtr self,StereoscopicEye eye,out Matrix4x4 value) => throw new InvalidProgramException("Generated injected wrapper must not run");
+        private IntPtr native;
+        public IntPtr m_CachedPtr { get {
+            if(native==IntPtr.Zero)native=Marshal.AllocHGlobal(128);
+            Marshal.StructureToPtr(View(StereoscopicEye.Left),native,false);
+            Marshal.StructureToPtr(View(StereoscopicEye.Right),IntPtr.Add(native,64),false);
+#if DEMEOBATTLEMARKED
+            StereoNative.Camera(native);
+#endif
+            return native; } }
+        private Matrix4x4 View(StereoscopicEye eye)
         {
             if(MissingEyes)return default;
             var head=TrackedHead??transform;
@@ -326,7 +347,7 @@ namespace UnityEngine
         }
     }
     public enum RuntimePlatform { WindowsPlayer, LinuxPlayer }
-    public static class Application { public static RuntimePlatform platform = RuntimePlatform.WindowsPlayer; }
+    public static class Application { public static RuntimePlatform platform = RuntimePlatform.WindowsPlayer; public static string unityVersion="6000.3.7f1"; }
 }
 
 #if DEMEOBATTLEMARKED
@@ -404,3 +425,22 @@ namespace Jade.XRRecentering
         [MethodImpl(MethodImplOptions.NoInlining)] public void OnTrackingOriginUpdated(XRInputSubsystem input) { Calls++; ListenerCalls++; }
     }
 }
+
+#if DEMEOBATTLEMARKED
+internal static class StereoNative {
+    private static IntPtr library;
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate void SetCamera(IntPtr self);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate uint GetStat(int which);
+    internal static SetCamera Camera;internal static GetStat Stat;
+    internal static void Open(string file){library=NativeLibrary.Load(file);Camera=Bind<SetCamera>("stereo_test_camera");Stat=Bind<GetStat>("stereo_test_stat");}
+    internal static T Bind<T>(string name)where T:Delegate=>Marshal.GetDelegateForFunctionPointer<T>(NativeLibrary.GetExport(library,name));
+}
+namespace Il2CppInterop.Runtime {
+    public static class IL2CPP {
+        public static T ResolveICall<T>(string name)where T:Delegate {
+            if(name!="UnityEngine.Camera::GetStereoViewMatrix_Injected")throw new EntryPointNotFoundException(name);
+            return StereoNative.Bind<T>("stereo_test_view");
+        }
+    }
+}
+#endif

@@ -1748,3 +1748,22 @@ usually leaves more video bandwidth. No foveation shader, encoder resolution,
 mask precision or Gloomhaven v1 rate policy is changed by this menu/config fix.
 Increasing video allocation beyond the total budget would reintroduce packet
 loss; improving lossless mask bandwidth is a separate codec/performance task.
+
+### Native Unity6 stereo pose and 17:15 transport failure (2026-10-22)
+
+The supplied 17:15:25 Battlemarked run at 1f9f61b cancelled its menu alignment
+with InvalidProgramException before any alignment was applied. The bridge now
+resolves the checked GetStereoViewMatrix_Injected native ABI, passes the native
+Unity camera pointer and an owned 64-byte matrix, and computes the affine
+inverse locally. Generated struct-return and matrix math wrappers are not run.
+The native C fixture models two real output-pointer calls, rejects a different
+pointer domain, and keeps the former public wrapper deliberately broken.
+Method-port geometry/manual-recenter checks and all six metadata builds pass;
+a fresh headset result is still required.
+
+The same session has a Frame FEC backtrack-window reset at 17:15:39.577, followed
+by late metadata and empty decoder submissions. Mask peaks exceed500 Mbit/s
+while the sender's video floor is1 Mbit/s. These are transport failures, separate
+from the cancelled menu placement. The native patch work addresses lossless
+metadata cost and general camera-only recovery for every active explicit-MR
+source. No additive material alpha, glow, lighting or occlusion was changed.
