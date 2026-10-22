@@ -131,6 +131,19 @@ internal static class ProtocolChecks
         await reconnect.Settled.WaitAsync(TimeSpan.FromSeconds(5));
         Check(!reconnect.Current.CanAcceptOrdinaryRgba, "EOF revokes previously positive grant");
         reconnect.Reset(); monitor.Reset();
+        int quickAttempts=0;
+        var quick=new SteamLinkCoverageBridge.Monitor((callback,token)=>
+        { Interlocked.Increment(ref quickAttempts);return Task.CompletedTask; });
+        quick.Tick(true,0);await quick.Settled.WaitAsync(TimeSpan.FromSeconds(5));
+        quick.Tick(true,.049);
+        Check(quickAttempts==1,"initial reconnect retry remains rate limited");
+        quick.Tick(true,.051);await quick.Settled.WaitAsync(TimeSpan.FromSeconds(5));
+        quick.Tick(true,.152);await quick.Settled.WaitAsync(TimeSpan.FromSeconds(5));
+        quick.Tick(true,.403);await quick.Settled.WaitAsync(TimeSpan.FromSeconds(5));
+        Check(quickAttempts==4 && !quick.Current.CanAcceptOrdinaryRgba,"brief pipe handoffs get a bounded subsecond retry burst without source authority");
+        quick.Tick(true,2.4);
+        Check(quickAttempts==4,"absent companion returns to long backoff after the short burst");
+        quick.Reset();
         Console.WriteLine($"Protocol and observer checks passed: {_checks}");
     }
 }

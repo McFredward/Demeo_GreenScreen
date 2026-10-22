@@ -117,7 +117,12 @@ internal static class SteamLinkCoverageBridge
                 if (_worker != null && _worker.IsFaulted) { _ = _worker.Exception; }
                 _worker = null; _cancel = null; _cancellation = null;
                 if (!wanted || now < _next) return;
-                _attempts = Math.Min(_attempts + 1, 5); _next = now + _attempts * 2;
+                _attempts = Math.Min(_attempts + 1, 8);
+                // A scene handoff can briefly close the old pipe while the new
+                // eye textures are being registered. Do not impose a two-second
+                // black dwell after that first short-lived refusal. A small
+                // cold retry burst then backs off when no companion is present.
+                _next = now + RetryDelay(_attempts);
                 ulong epoch = _epoch;
                 var cancel = new CancellationTokenSource();
                 _cancel = cancel; _closing = false;
@@ -150,6 +155,9 @@ internal static class SteamLinkCoverageBridge
                 });
             }
         }
+
+        internal static double RetryDelay(int attempt) => attempt == 1 ? .05 : attempt == 2 ? .1
+            : attempt == 3 ? .25 : Math.Min(10, (attempt - 3) * 2);
 
         // Mono pipe cancellation/disposal can race registered callbacks.
         // Neither cancellation nor

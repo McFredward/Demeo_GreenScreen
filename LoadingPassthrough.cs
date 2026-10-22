@@ -12,12 +12,15 @@ namespace GreenScreen
     // parent CanvasGroup animation, hints and completion callbacks.
     internal static class LoadingPassthrough
     {
-#if !DEMEOBATTLEMARKED
         private static HarmonyLib.Harmony _patch;
         private static readonly List<MethodInfo> Hooks = new List<MethodInfo>();
         private static readonly List<ImageLease> Images = new List<ImageLease>();
         private static readonly Dictionary<Type, Func<object, object>> Presenters = new Dictionary<Type, Func<object, object>>();
         private static MethodInfo _image;
+#if DEMEOBATTLEMARKED
+        private static PropertyInfo _fadeImage;
+        internal static void TrackFadeView(object view) => AfterView(view);
+#endif
         private static PropertyInfo _colour, _sprite;
         private static float _next;
         private static bool _active, _failed, _reported;
@@ -44,6 +47,15 @@ namespace GreenScreen
                     { _image = method.MakeGenericMethod(imageType); break; }
                 if (_image == null) throw new MissingMethodException("Loading Image GetComponent");
                 _patch = new HarmonyLib.Harmony("McFredward.DemeoGreenScreen.LoadingBackground");
+#if DEMEOBATTLEMARKED
+                Type battleView = PassthroughFade.FindType("GameView", "Jade.GameView.FadeToBlackView");
+                _fadeImage = battleView?.GetProperty("FadeImage", Members);
+                if (_fadeImage?.CanRead != true || _fadeImage.PropertyType != imageType)
+                    throw new MissingMemberException("Battlemarked FadeToBlackView.FadeImage");
+                Type battlePresenter = PassthroughFade.FindType("GameView", "Jade.GameView.FadeToBlackPresenter");
+                Presenters.Add(battlePresenter, ViewReader(battlePresenter));
+                Add(battlePresenter, "UpdateView", new[] { typeof(float) }, nameof(AfterShow));
+#else
                 foreach (string name in new[] { "PVPLoadingScreen", "VanillaLoadingScreen" })
                 {
                     Type view = PassthroughFade.FindType("Assembly-CSharp", name + "View");
@@ -55,8 +67,9 @@ namespace GreenScreen
                     Presenters.Add(presenter, ViewReader(presenter));
                     Add(presenter, "Show", new[] { typeof(bool) }, nameof(AfterShow));
                 }
+#endif
                 if (Hooks.Count == 0) { RemoveHooks(); return; }
-                Utils.LogDebug("Loading-screen passthrough observer ready: exact PVP/Vanilla Background UI images; original loading logic retained.");
+                Utils.LogDebug("Loading-screen passthrough observer ready: exact game loading/fade UI images; original loading logic retained.");
             }
             catch (Exception error)
             {
@@ -102,10 +115,14 @@ namespace GreenScreen
         {
             try
             {
+#if DEMEOBATTLEMARKED
+                var image = _fadeImage?.GetValue(__instance) as UnityEngine.Object;
+#else
                 var view = __instance as Component;
                 Transform background = view?.transform?.Find("Background");
                 if (background == null) return;
                 var image = _image.Invoke(background, null) as UnityEngine.Object;
+#endif
                 if (image == null) return;
                 for (int i = Images.Count - 1; i >= 0; i--)
                 {
@@ -171,7 +188,7 @@ namespace GreenScreen
         {
             if (_patch != null)
                 foreach (MethodInfo method in Hooks)
-                    _patch.Unpatch(method, Observer(method.Name == "Show" ? nameof(AfterShow) : nameof(AfterView)));
+                    _patch.Unpatch(method, Observer(method.Name == "Show" || method.Name == "UpdateView" ? nameof(AfterShow) : nameof(AfterView)));
             Hooks.Clear(); Presenters.Clear(); _patch = null;
         }
 
@@ -179,14 +196,9 @@ namespace GreenScreen
         {
             Refresh(false); RemoveHooks(); Images.Clear();
             _image = null; _colour = _sprite = null; _next = 0; _failed = _reported = _active = false;
-        }
-#else
-        // Battlemarked routes its level/menu/cutscene/bounds fades through the
-        // already observed FadeToBlackPresenter. No PVP/Vanilla UI assumption.
-        internal static void Initialize() { }
-        internal static void Tick(float now) { }
-        internal static void Refresh(bool active) { }
-        internal static void Shutdown() { }
+#if DEMEOBATTLEMARKED
+            _fadeImage = null;
 #endif
+        }
     }
 }

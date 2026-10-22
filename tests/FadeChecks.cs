@@ -94,9 +94,35 @@ internal static class FadeChecks
         TimelineChecks();
         LoadingChecks();
         ConstructorChecks();
+#else
+        EarlyBattlemarkedLoading();
 #endif
         Console.WriteLine("Production passthrough fade with real Harmony: "+checks+" checks PASS; "+typeof(Controller).FullName+"; controlled Unity ports, no headset.");
     }
+#if DEMEOBATTLEMARKED
+    private static void EarlyBattlemarkedLoading()
+    {
+        PassthroughFade.Initialize();
+        var source=Original();var view=View(source);
+        var image=new UnityEngine.UI.Image { color=Color.black,raycastTarget=true };
+        view.FadeImage=image;
+        var controller=new Controller(view,new Jade.GameView.FadeConfig(),true);
+        Check(image.color.a==1 && view.Renderer.sharedMaterial==source,"Constructing the loading view cannot enable transparency before source permission.");
+        PassthroughFade.SetActive(true);
+        Check(controller.Calls==0 && view.Renderer.sharedMaterial!=source
+            && view.Renderer.sharedMaterial.GetFloat("_PassthroughFade")==1,
+            "Serialized startup fade is captured before the first SetFadePlaneColor/tween callback.");
+        Check(image.color.a==0 && image.raycastTarget && image.enabled,
+            "Exact black FadeImage becomes transparent immediately without disabling the loading UI.");
+        controller.UpdateView(.5f);
+        Check(image.color.a==0,"The original UpdateView may animate the UI background without reintroducing a black frame.");
+        PassthroughFade.SetActive(false);
+        Check(image.color.a==.5f && view.Renderer.sharedMaterial==source,"Opt-out restores the latest original UI fade value.");
+        image.sprite=new UnityEngine.Object();image.color=Color.black;PassthroughFade.SetActive(true);controller.UpdateView(1);
+        Check(image.color.a==1,"Loading artwork is retained, even on the identified fade image.");
+        PassthroughFade.Shutdown();
+    }
+#endif
 #if !DEMEOBATTLEMARKED
     private static void ConstructorChecks()
     {
@@ -317,6 +343,7 @@ namespace Jade.GameView
 {
     public class FadeToBlackView
     {
+        public UnityEngine.UI.Image FadeImage {get;set;}
         public MeshRenderer Renderer; public Material Primary,Alternate;
         public MeshRenderer FadeCubeRenderer=>Renderer;
         public Material BlackFadeMaterial=>Primary;
@@ -326,12 +353,17 @@ namespace Jade.GameView
     {
         public FadeToBlackView view {get;}
         public int Calls;
-        public FadeToBlackPresenter(FadeToBlackView view){this.view=view;}
+        private float alpha=1;
+        public FadeToBlackPresenter(FadeToBlackView view):this(view,new FadeConfig(),true){}
+        [MethodImpl(MethodImplOptions.NoInlining)] public FadeToBlackPresenter(FadeToBlackView view,FadeConfig config,bool showTextOnStartup){this.view=view;}
+        public float GetFadePlaneAlpha()=>alpha;
+        [MethodImpl(MethodImplOptions.NoInlining)] public void UpdateView(float value) {if(view.FadeImage!=null)view.FadeImage.color=new Color(0,0,0,value);}
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public void SetFadePlaneColor(float r,float g,float b,float a){Calls++;}
+        public void SetFadePlaneColor(float r,float g,float b,float a){Calls++;alpha=a;}
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void Finish(Action completed){SetFadePlaneColor(0,0,0,1);completed();}
     }
+    public class FadeConfig { }
 }
 #else
 namespace Boardgame.Intro
@@ -380,7 +412,6 @@ namespace Boardgame.Rendering
 }
 #endif
 
-#if !DEMEOBATTLEMARKED
 namespace UnityEngine.UI
 {
     public class Image : UnityEngine.Object
@@ -390,6 +421,7 @@ namespace UnityEngine.UI
         public bool raycastTarget,enabled=true;
     }
 }
+#if !DEMEOBATTLEMARKED
 public class PVPLoadingScreenView : UnityEngine.Component
 {
     public int Calls;public bool Active=true;

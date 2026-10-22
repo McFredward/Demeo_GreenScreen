@@ -12,6 +12,47 @@ The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
 
+## Battlemarked first loading fade and menu waypoint (2.0 development candidate)
+
+The maintainer confirms the shader-lifetime candidate works. The next private
+PC/Frame capture is `frame-battlemarked-startup-20261022-094717`. The remaining
+black-to-passthrough transition is the "Loading..." screen after the intro and
+before the main menu, not the earliest runtime startup. Native source output
+starts at 11:40:02.883, camera discovery becomes empty at 11:40:13.890, and the
+new camera waits for the companion at 11:40:14.094 before admission at
+11:40:16.269. No repeated shader-cache failure is recorded in this run.
+
+The previous Battlemarked adapter only discovered a fade after
+`SetFadePlaneColor`; an already black serialized fade could therefore precede
+its first observed tween step. It also omitted the independent `FadeImage` UI
+surface exposed by the supplied `FadeToBlackView`. The adapter now captures the
+initial alpha through the actual three-argument presenter constructor and
+`GetFadePlaneAlpha`. Its exact untextured black `FadeImage` is tracked from that
+view and refreshed after `UpdateView`. The loading label, artwork, enabled
+state, raycasts and loading callbacks are retained. Sprite-backed or coloured
+replacements are preserved; opt-out restores the latest owned game colour.
+
+The coverage observer also makes a small bounded cold retry burst (50, 100,
+250 milliseconds) before its existing long absence backoff. This removes an
+imposed two-second retry dwell when an initial pipe connection fails during
+a scene handoff. The existing log does not establish which internal pipe call
+caused this particular delay. Live healthy sessions do not retry or expire;
+old callbacks, invalid replies and disconnected sessions cannot regrant source
+authority. There are still no masks before a valid current grant and source
+preparation. This does not establish zero black frames during an actual loss
+of frame/source proof. Headset confirmation of the remaining transition is
+pending.
+
+The placement observer records the original `OnMenuSceneLoaded` at
+11:40:18.405 and its camera-waypoint placement at 11:40:18.407:
+position `(1.615,19.706,-39.104)`, rotation `(346.827,0.216,358.128)`, scale20.
+The scenario later uses another waypoint with yaw54.148. Battlemarked is thus
+choosing authored scene viewpoints rather than sampling the maintainer's current
+gaze when placing the menu. The mod's Battlemarked origin/placement hooks only
+observe these calls; they preserve every original callback and placement.
+The actual HMD-relative transform at placement is not in this capture. No
+automatic tracking reset or speculative avatar transform correction was added.
+
 ## Battlemarked scene cleanup and placement diagnostics (2.0 development candidate)
 
 The follow-up headset run confirms that independent OpenXR eyes solve initial

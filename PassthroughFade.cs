@@ -34,6 +34,9 @@ namespace GreenScreen
         private static Func<object, object> _view, _material, _renderer;
 #if DEMEOBATTLEMARKED
         private static Func<object, object> _alternate;
+        private static ConstructorInfo _battleConstructor;
+        private static MethodInfo _battleAlpha;
+        private static MethodInfo BattleConstructorObserver => typeof(PassthroughFade).GetMethod(nameof(AfterBattleConstructor), BindingFlags.Static | BindingFlags.NonPublic);
 #endif
         private static AssetBundle _bundle;
         private static Shader _shader;
@@ -83,6 +86,22 @@ namespace GreenScreen
                         , prefix: new HarmonyMethod(BeforeNativeFade)
 #endif
                     );
+#if DEMEOBATTLEMARKED
+                // Capture the serialized black fade before the first tween
+                // calls SetFadePlaneColor. UpdateView also owns a separate UI
+                // Image; neither its label nor loading artwork is hidden.
+                _battleAlpha = controller.GetMethod("GetFadePlaneAlpha", Members, null, Type.EmptyTypes, null);
+                foreach (var constructor in controller.GetConstructors(Members))
+                {
+                    var arguments = constructor.GetParameters();
+                    if (arguments.Length == 3 && arguments[0].ParameterType == view
+                        && arguments[1].ParameterType.Name == "FadeConfig" && arguments[2].ParameterType == typeof(bool))
+                        _battleConstructor = constructor;
+                }
+                if (_battleConstructor == null || _battleAlpha?.ReturnType != typeof(float))
+                    throw new MissingMethodException("Battlemarked fade constructor/initial alpha");
+                _patch.Patch(_battleConstructor, postfix: new HarmonyMethod(BattleConstructorObserver));
+#endif
 #if DEMEO
                 _controllerConstructor = controller.GetConstructor(new[] { view });
                 if (_controllerConstructor == null) throw new MissingMethodException(controller.FullName, ".ctor(CameraFadeView)");
@@ -200,6 +219,11 @@ namespace GreenScreen
         private static MethodInfo Observer => typeof(PassthroughFade).GetMethod(nameof(AfterGameFade), BindingFlags.NonPublic | BindingFlags.Static);
 #if DEMEOBATTLEMARKED
         private static void AfterGameFade(object __instance, float __3) => Observe(__instance, __3);
+        private static void AfterBattleConstructor(object __instance)
+        {
+            try { Observe(__instance, (float)_battleAlpha.Invoke(__instance, null)); }
+            catch (Exception error) { Warn(error); }
+        }
 #else
         private static void AfterGameFade(object __instance) => Observe(__instance, 0);
 #endif
@@ -229,6 +253,9 @@ namespace GreenScreen
             try
             {
                 object view = _view(controller);
+#if DEMEOBATTLEMARKED
+                LoadingPassthrough.TrackFadeView(view);
+#endif
                 var renderer = _renderer(view) as MeshRenderer;
 #if DEMEOBATTLEMARKED
                 var material = _material(view) as Material;
@@ -339,6 +366,10 @@ namespace GreenScreen
         private static void RemoveHooks()
         {
             if (_patch != null) foreach (MethodInfo target in Targets) _patch.Unpatch(target, Observer);
+#if DEMEOBATTLEMARKED
+            if (_patch != null && _battleConstructor != null) _patch.Unpatch(_battleConstructor, BattleConstructorObserver);
+            _battleConstructor = null; _battleAlpha = null;
+#endif
 #if !DEMEOBATTLEMARKED
             if (_patch != null && _introAwake != null) _patch.Unpatch(_introAwake, IntroObserver);
 #if DEMEO
