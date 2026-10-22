@@ -110,6 +110,9 @@ namespace GreenScreen
                 // passive interface lease on opt-out or a confirmed other
                 // transport/headset; it never restarts XR or changes its mode.
                 if (!settings.SteamLinkNativePassthrough || LegacyBackgroundConfirmed) OpenVrSubmission.Reset();
+#if DEMEOBATTLEMARKED
+                if (!settings.SteamLinkNativePassthrough || LegacyBackgroundConfirmed) OpenXrSubmission.Reset();
+#endif
                 bool waiting = settings.SteamLinkNativePassthrough && !LegacyBackgroundConfirmed;
                 foreach (CameraState state in Cameras)
                 {
@@ -132,6 +135,10 @@ namespace GreenScreen
                 if (StereoCamera(state.Camera) && (!mainIsStereo || state.Camera == main)) { head = state; count++; }
             string reason = count == 1 ? Profile(head.Camera) : "Exactly one active stereo game camera is required.";
             bool eligible = count == 1 && reason == null;
+#if DEMEOBATTLEMARKED
+            if (eligible && GraphicsSettings.currentRenderPipeline != null && SteamLinkConnectionLifecycle.UsesOpenXr)
+                eligible = OpenXrSubmission.Ensure(out reason);
+#endif
             if (eligible && GraphicsSettings.currentRenderPipeline != null && SteamLinkConnectionLifecycle.UsesOpenVr)
             {
                 eligible = OpenVrSubmission.Ensure(out reason);
@@ -392,6 +399,9 @@ namespace GreenScreen
 #endif
             LeaveNative();
             OpenVrSubmission.Reset();
+#if DEMEOBATTLEMARKED
+            OpenXrSubmission.Reset();
+#endif
             RestoreCameras();
             PassthroughFade.Shutdown();
             SrpOpaqueCoverage.Shutdown();

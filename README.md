@@ -37,7 +37,7 @@ BepInEx for Battlemarked.
 Install [Steam Link Native Passthrough](https://github.com/McFredward/steam-link-native-passthrough)
 on the PC and Frame. The mod enables native passthrough only when it detects
 Steam Frame over Steam Link. Demeo and Demeo Battles are headset-tested;
-Battlemarked still awaits its headset test.
+Battlemarked is experimental.
 
 Steam Link can use **Auto or a fixed bitrate**. Close **OVR Advanced Settings**
 while playing Demeo; it can cause unwanted recentering.

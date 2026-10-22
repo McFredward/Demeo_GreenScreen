@@ -12,6 +12,45 @@ The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
 
+## Battlemarked OpenXR source admission (2.0 development candidate)
+
+The first Battlemarked headset run (October 22, 2026) stayed black in the
+passthrough regions. Private capture `frame-battlemarked-first-20261022-082416`
+contains the PC logs and read-only Frame logs, with per-file hashes. The game
+reports SteamVR/OpenXR and a confirmed Frame/Steam Link identity, but never
+receives ordinary-RGBA source permission. The PC sends zero masked frames and
+records 9,226 source checks without a declaration for native PID44732, the
+SteamVR compositor; Battlemarked's scene process is PID9948. The Frame's decoded
+mask counter stays at the preceding session's value. This is a source-admission
+failure, not evidence of a game-window decoder interruption. The separate
+OpenXR instance-creation errors are retained as observations; they are not
+established as caused by the mod.
+
+Battlemarked's OpenXR instanced eye array is a candidate for the
+compositor-owned intermediate, unlike Gloomhaven's independent MultiPass eyes.
+The supplied interop exposes the public `OpenXRSettings.Instance.renderMode`
+getter/setter and the `MultiPass` / `SinglePassInstanced` enum. Unity's published
+OpenXR package also implements that property as a runtime native configuration
+API when its loader is present.
+
+The Battlemarked-only adapter selects MultiPass through that public runtime
+property, from Update after both this game's SteamVR/OpenXR runtime and the
+Frame/Steam Link identity are confirmed. It declines source admission in the
+setting-change frame and waits for two actual one-view, one-slice 2D render
+passes. Setting readback alone is insufficient. It never stops/restarts XR,
+changes tracking, declares a compositor PID, changes the native source-proof
+contract, or changes another game's path. Opt-out, confirmed other hardware and
+unload restore only the still-owned original setting. Brief identity refreshes
+retain the layout while source permission is revoked; external mode changes
+are preserved and refused rather than repeatedly overridden.
+
+Both Battlemarked loader fixtures exercise admission, the setting-change gap,
+unchanged array refusal, rejected setters, restoration, identity refresh and
+external changes. Existing Demeo/Battles loader/render checks also run. Actual
+game/loader builds use metadata-only references. These software checks do not
+prove that SteamVR forwards Battlemarked's resulting eye textures under its
+game PID; the next headset run must confirm that and the visual result.
+
 ## Battles packet loss and producer wire budget (1.4.21)
 
 The maintainer confirms Battles1.4.20's loading fades are gone and no unsolicited

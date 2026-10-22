@@ -23,6 +23,11 @@ internal static class IntegrationChecks
     {
         WriteConfig(true); Tick(); // Reload invalidates a previous declaration.
         SteamLinkConnection.Frame(); SteamLinkCoverageBridge.Grant(); Tick();
+#if DEMEOBATTLEMARKED
+        // A changed OpenXR mode deliberately needs a fresh Update before any
+        // source grant can apply to the new independent eye textures.
+        SteamLinkCoverageBridge.Grant(); Tick();
+#endif
     }
     private static Action Callback(object instance,string name) => () => instance.GetType()
         .GetMethod(name,System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)
@@ -408,10 +413,18 @@ internal static class IntegrationChecks
             eye.graphicsFormat=UnityEngine.Experimental.Rendering.GraphicsFormat.R8G8B8A8_SRGB;
             eye.dimension=TextureDimension.Tex2DArray; eye.volumeDepth=2;
             XRSettings.eyeTextureDesc=eye;
+#if DEMEOBATTLEMARKED
+            UnityEngine.XR.OpenXR.OpenXRSettings.ApplyLayout=true;
+            UnityEngine.XR.OpenXR.OpenXRSettings.Instance.renderMode=UnityEngine.XR.OpenXR.OpenXRSettings.RenderMode.SinglePassInstanced;
+#endif
             XRSettings.stereoRenderingMode=XRSettings.StereoRenderingMode.SinglePassInstanced;
             camera.allowHDR=true; pipeline.supportsHDR=true;
             pipeline.m_AllowPostProcessAlphaOutput=false;
             NativePassthrough.Initialize(); EnableNative();
+#if DEMEOBATTLEMARKED
+            Check(XRSettings.eyeTextureDesc.dimension==TextureDimension.Tex2D && XRSettings.eyeTextureDesc.volumeDepth==1,
+                "Battlemarked's Linear sRGB source uses independent eyes after OpenXR layout preparation");
+#endif
             Check(camera.backgroundColor==Color.clear,"Linear URP keeps normal sRGB output instead of requiring a Gamma project");
             Check(UnityEngine.Experimental.Rendering.XRSystem.singlePassAllowed,"native single-pass array layout is retained for both eyes");
             Check(pipeline.m_HDRColorBufferPrecision==UniversalRenderPipelineAsset.HdrPrecision.Bits64,"HDR intermediate retains alpha");
@@ -458,6 +471,9 @@ internal static class IntegrationChecks
             OpenVrSubmissionChecks.Run(Check);
             OpenVrViewportChecks.Run(Check);
             OpenVrOriginChecks.Run(Check);
+#if DEMEOBATTLEMARKED
+            OpenXrSubmissionChecks.Run(Check);
+#endif
             Console.WriteLine($"Configuration and render lifecycle checks passed: {_checks}");
         }
         finally

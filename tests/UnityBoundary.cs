@@ -427,6 +427,29 @@ namespace UnityEngine.XR.OpenXR
 {
     public class OpenXRLoader : UnityEngine.Object { }
     public static class OpenXRRuntime { public static string name { get; set; }="SteamVR/OpenXR"; }
+    public sealed class OpenXRSettings
+    {
+        public enum RenderMode { MultiPass, SinglePassInstanced }
+        public static OpenXRSettings Instance { get; }=new OpenXRSettings();
+        private RenderMode _mode;
+        public static bool ApplyLayout, Reject;
+        public static int Writes;
+        public RenderMode renderMode
+        {
+            get => _mode;
+            set
+            {
+                Writes++;
+                if (Reject) return;
+                _mode=value;
+                if (!ApplyLayout) return;
+                var desc=UnityEngine.XR.XRSettings.eyeTextureDesc;
+                desc.dimension=value==RenderMode.MultiPass ? UnityEngine.Rendering.TextureDimension.Tex2D : UnityEngine.Rendering.TextureDimension.Tex2DArray;
+                desc.volumeDepth=value==RenderMode.MultiPass ? 1 : 2;
+                UnityEngine.XR.XRSettings.eyeTextureDesc=desc;
+            }
+        }
+    }
 }
 namespace HarmonyLib
 {

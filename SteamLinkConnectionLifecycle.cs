@@ -17,6 +17,7 @@ namespace GreenScreen
         private static bool _runtimeKnown;
         private static bool _openVrRuntime;
         internal static bool UsesOpenVr => _runtimeKnown && _openVrRuntime;
+        internal static bool UsesOpenXr => _runtimeKnown && _steamVrRuntime && !_openVrRuntime;
         internal static bool LegacyTransport => _runtimeKnown && !_steamVrRuntime;
         private static Type _generalSettings;
         private static string _runtimeStatus;
@@ -93,7 +94,7 @@ namespace GreenScreen
             return _steamVrRuntime = supported;
         }
 
-        private static Type FindType(string name)
+        internal static Type FindType(string name)
         {
             foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
