@@ -71,7 +71,15 @@ namespace UnityEngine
         public static void GetSubsystems(List<XR.XRInputSubsystem> output) { output.Clear(); output.AddRange(Inputs); }
     }
     public class Object : Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase
-    { public string name; public static void Destroy(Object value) { } }
+    {
+        public string name; public bool Destroyed; public HideFlags hideFlags;
+        public static void Destroy(Object value) { if (!ReferenceEquals(value,null)) value.Destroyed=true; }
+        public static bool operator ==(Object a,Object b) => (ReferenceEquals(a,null)||a.Destroyed)
+            ? ReferenceEquals(b,null)||b.Destroyed : ReferenceEquals(a,b);
+        public static bool operator !=(Object a,Object b) => !(a==b);
+        public override bool Equals(object value) => ReferenceEquals(this,value);
+        public override int GetHashCode() => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
+    }
     public class Component : Object
     {
         public Transform transform;
@@ -96,7 +104,7 @@ namespace UnityEngine
     public enum RenderingPath { Forward, DeferredShading }
     public enum RuntimePlatform { WindowsPlayer, LinuxPlayer }
     public enum ColorSpace { Gamma, Linear }
-    public enum HideFlags { HideAndDontSave }
+    [Flags] public enum HideFlags { None=0, DontUnloadUnusedAsset=32, HideAndDontSave=61 }
     public enum MeshTopology { Triangles }
     public enum TextureFormat { RGBA32 }
     public struct Color32 { public byte r,g,b,a; }
@@ -171,7 +179,6 @@ namespace UnityEngine
     public struct Matrix4x4 { public static Matrix4x4 identity => default; }
     public class Material : Object
     {
-        public HideFlags hideFlags;
         public bool enableInstancing;
         public int passCount=2;
         public Shader shader;
@@ -187,12 +194,27 @@ namespace UnityEngine
     public class Shader : Object { public bool isSupported=true; }
     public class AssetBundle : Object
     {
+        public static readonly List<AssetBundle> Loaded=new List<AssetBundle>();
+        public readonly List<Shader> Shaders=new List<Shader>();
         public static bool Reject;
         public static int LoadAttempts;
         public static AssetBundle LoadFromMemory(byte[] data) { LoadAttempts++; return Reject ? null : new AssetBundle(); }
         public T LoadAsset<T>(string name) where T : Object => (T)LoadAsset(name,typeof(T));
-        public Object LoadAsset(string name, Type type) => new Shader { name=name=="assets/nativefade.shader" ? "Hidden/Demeo/NativeFade" : "Hidden/Demeo/NativeCoverage" };
-        public void Unload(bool all) { }
+        public Object LoadAsset(string name, Type type)
+        {
+            var shader=new Shader { name=name=="assets/nativefade.shader" ? "Hidden/Demeo/NativeFade" : "Hidden/Demeo/NativeCoverage" };
+            Shaders.Add(shader);if(!Loaded.Contains(this))Loaded.Add(this);return shader;
+        }
+        public void Unload(bool all) { if(all)foreach(var shader in Shaders)Destroy(shader);Destroy(this); }
+        public static void UnloadUnused()
+        {
+            foreach(var bundle in Loaded)
+            {
+                foreach(var shader in bundle.Shaders)
+                    if((shader.hideFlags&HideFlags.DontUnloadUnusedAsset)==0)Destroy(shader);
+                if((bundle.hideFlags&HideFlags.DontUnloadUnusedAsset)==0)Destroy(bundle);
+            }
+        }
     }
     public static class Time { public static float unscaledTime; public static int frameCount; }
     public static class Application { public static RuntimePlatform platform=RuntimePlatform.WindowsPlayer; }

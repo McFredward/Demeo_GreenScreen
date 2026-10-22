@@ -161,6 +161,9 @@ internal static class Il2CppRecenterChecks
 #endif
         Check(Harmony.GetPatchInfo(typeof(XRInputSubsystem).GetMethod("TryRecenter")) == null,
             "Shared subsystem recenter API is unpatched");
+#if DEMEOBATTLEMARKED
+        CheckMovementObservers();
+#endif
         DemeoAutomaticRecenter.Shutdown();
         Check(Harmony.GetPatchInfo(typeof(InputTracking).GetMethod("Recenter"))?.Prefixes.Count is null or 0,
             "Unload removes the scoped legacy guard");
@@ -175,6 +178,34 @@ internal static class Il2CppRecenterChecks
         other.Unpatch(target, observer);
         Console.WriteLine("IL2CPP recenter method-port checks passed: " + checks + "; " + typeof(Controller).FullName);
     }
+
+#if DEMEOBATTLEMARKED
+    private static void CheckMovementObservers()
+    {
+        typeof(Il2CppAutomaticRecenter).GetMethod("TryMovementObservers",BindingFlags.Static|BindingFlags.NonPublic)
+            .Invoke(null,new object[]{typeof(Jade.GameView.CameraControlSystemVR),typeof(Jade.GameView.Avatar.AvatarVR)});
+        var avatar=new Jade.GameView.Avatar.AvatarVR();
+        var movement=new Jade.GameView.CameraControlSystemVR(avatar);
+        movement.OnMenuSceneLoaded(null);
+        Check(avatar.Calls==1 && movement.Calls==1,"Movement observers preserve menu setup and its original avatar placement");
+        Check(Utils.Messages.Exists(s=>s.Contains("avatar placement: source=SetAvatarPositionByCameraWaypoint")),
+            "The actual nested camera-waypoint source is recorded for an avatar placement");
+        movement.Throw=true;
+        try { movement.OnLevelLoaded(null,null); } catch(InvalidOperationException) { }
+        avatar.SetAvatarPosition(default,default,1);
+        Check(Utils.Messages[Utils.Messages.Count-1].Contains("source=direct/unknown"),
+            "Placement source scopes are restored by finalizers after an original game exception");
+        int messages=Utils.Messages.Count, calls=avatar.Calls;
+        ConfigurationStore.Current.SteamLinkNativePassthrough=false;
+        avatar.SetAvatarPosition(default,default,1);
+        Check(Utils.Messages.Count==messages && avatar.Calls==calls+1,"Opt-out preserves placement without diagnostic output");
+        ConfigurationStore.Current.SteamLinkNativePassthrough=true;
+        calls=avatar.Calls;
+        for(int i=0;i<100;i++)avatar.SetAvatarPosition(default,default,1);
+        Check(avatar.Calls==calls+100 && Utils.Messages.FindAll(s=>s.Contains("Battlemarked avatar placement:")||s.Contains("Battlemarked camera event:")).Count==64,
+            "Bounded important movement diagnostics never suppress original game or manual placements");
+    }
+#endif
 }
 
 namespace GreenScreen
@@ -186,9 +217,33 @@ namespace GreenScreen
 }
 namespace UnityEngine
 {
+    public struct Vector3 { public float x,y,z; }
     public enum RuntimePlatform { WindowsPlayer, LinuxPlayer }
     public static class Application { public static RuntimePlatform platform = RuntimePlatform.WindowsPlayer; }
 }
+
+#if DEMEOBATTLEMARKED
+namespace Jade.GameView.Avatar
+{
+    public sealed class AvatarVR
+    {
+        public int Calls;
+        [MethodImpl(MethodImplOptions.NoInlining)] public void SetAvatarPosition(UnityEngine.Vector3 position,UnityEngine.Vector3 rotation,float scale) { Calls++; }
+    }
+}
+namespace Jade.GameView
+{
+    public sealed class CameraControlSystemVR
+    {
+        public readonly Avatar.AvatarVR Avatar; public int Calls; public bool Throw;
+        public CameraControlSystemVR(Avatar.AvatarVR avatar) { Avatar=avatar; }
+        [MethodImpl(MethodImplOptions.NoInlining)] public void OnMenuSceneLoaded(object waypoint) {Calls++;SetAvatarPositionByCameraWaypoint(waypoint);}
+        [MethodImpl(MethodImplOptions.NoInlining)] public void OnLevelLoaded(object level,object step) {Calls++;SetAvatarPositionByCameraWaypoint(null);if(Throw)throw new InvalidOperationException();}
+        [MethodImpl(MethodImplOptions.NoInlining)] public void SetAvatarPositionByCameraWaypoint(object waypoint) {Avatar.SetAvatarPosition(default,default,1);}
+        [MethodImpl(MethodImplOptions.NoInlining)] public void SetAvatarPositionByCameraWaypointId(string id) {SetAvatarPositionByCameraWaypoint(id);}
+    }
+}
+#endif
 namespace UnityEngine.XR
 {
     public class XRInputSubsystem

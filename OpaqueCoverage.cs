@@ -14,6 +14,7 @@ namespace GreenScreen
         private static AssetBundle _bundle;
         private static Shader _shader;
         private static bool _attempted;
+        private static int _reloadReports;
         internal static string Failure { get; private set; }
         private readonly Camera _camera;
         private readonly Material _material;
@@ -52,7 +53,19 @@ namespace GreenScreen
             {
                 if (_shader == null)
                 {
-                    if (_attempted) return null;
+                    if (_attempted)
+                    {
+                        // A destroyed Unity asset compares equal to null while
+                        // its CLR/interop wrapper still exists. Scene cleanup
+                        // can retire a previously valid shader; that is not a
+                        // permanently broken embedded resource.
+                        if (ReferenceEquals(_shader, null))
+                            throw new InvalidDataException("The previous coverage shader attempt produced no live asset.");
+                        if (_reloadReports++ < 8)
+                            Utils.LogWarning("The owned coverage shader was unloaded during a scene transition; rebuilding it from the embedded bundle.");
+                        if (_bundle != null) _bundle.Unload(false);
+                        _bundle = null; _shader = null;
+                    }
                     _attempted = true;
                     using (Stream resource = typeof(OpaqueCoverage).Assembly.GetManifestResourceStream("GreenScreen.NativeCoverage"))
                     {
@@ -68,6 +81,10 @@ namespace GreenScreen
                     if (_shader == null) throw new InvalidDataException("The coverage bundle does not contain its Shader asset.");
                     if (_shader.name != "Hidden/Demeo/NativeCoverage") throw new InvalidDataException("The coverage Shader has an unexpected name: " + _shader.name);
                     if (!_shader.isSupported) throw new NotSupportedException("The coverage Shader is unsupported on " + SystemInfo.graphicsDeviceType + ".");
+                    // An IL2CPP game's asset scan cannot see this CLR static
+                    // root during the gap between its old and new cameras.
+                    _bundle.hideFlags |= HideFlags.DontUnloadUnusedAsset;
+                    _shader.hideFlags |= HideFlags.DontUnloadUnusedAsset;
                     Utils.LogDebug("Opaque coverage shader loaded from the embedded AssetBundle.");
                 }
                 return new OpaqueCoverage(camera, _shader, srp);
@@ -91,11 +108,13 @@ namespace GreenScreen
         }
 
         internal Material Material => _material;
+        internal bool Ready => _material != null && _material.shader != null;
 
         internal static void Unload()
         {
             _shader = null;
             _attempted = false;
+            _reloadReports = 0;
             Failure = null;
             if (_bundle != null) _bundle.Unload(true);
             _bundle = null;

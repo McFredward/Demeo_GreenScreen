@@ -302,7 +302,14 @@ namespace GreenScreen
         private static bool LoadShader()
         {
             if (_shader != null) return true;
-            if (_attempted) return false;
+            if (_attempted)
+            {
+                if (ReferenceEquals(_shader, null)) return false;
+                // Explicit game bundle unloads can destroy even a pinned
+                // shader. Recover only a previously valid, now retired asset.
+                if (_bundle != null) _bundle.Unload(false);
+                _bundle = null; _shader = null;
+            }
             _attempted = true;
             using (Stream resource = typeof(PassthroughFade).Assembly.GetManifestResourceStream("GreenScreen.NativeFade"))
             {
@@ -317,6 +324,8 @@ namespace GreenScreen
             _shader = UnityShaderLoader.LoadShader(_bundle, "assets/nativefade.shader");
             if (_shader == null || _shader.name != "Hidden/Demeo/NativeFade" || !_shader.isSupported)
                 throw new NotSupportedException("The passthrough fade shader is unavailable.");
+            _bundle.hideFlags |= HideFlags.DontUnloadUnusedAsset;
+            _shader.hideFlags |= HideFlags.DontUnloadUnusedAsset;
             return true;
         }
 
@@ -465,6 +474,7 @@ namespace GreenScreen
                     }
                     _owned = owned;
                 }
+                else if (_owned.shader != shader) _owned.shader = shader;
 #if DEMEOBATTLEMARKED
                 // The presenter writes a MaterialPropertyBlock, not material.color.
                 // Its exact SetFadePlaneColor alpha is the semantic fade value.

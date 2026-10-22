@@ -98,7 +98,8 @@ namespace GreenScreen
                 _loaded = true;
                 Utils.LogInfo("Demeo Mixed Reality configuration: "
                     + (ActivePath.Length == 0 ? "no INI found; expected " + Path.Combine(assemblyDirectory, "greenscreen.ini") : ActivePath)
-                    + "; LogLevel=" + ModLogging.Level + "; Steam Link NativePassthrough=" + next.SteamLinkNativePassthrough + "."
+                    + "; LogLevel=" + ModLogging.Level + " (configured=" + next.LogLevel + ", build default=" + ModLogging.BuildDefault
+                    + "); Steam Link NativePassthrough=" + next.SteamLinkNativePassthrough + "."
                     + (next.SteamLinkNativePassthrough ? " Enabled only after Frame/Steam Link identity is confirmed."
                         : " Virtual Desktop colour-key mode; Steam Link native passthrough is disabled. Set [STEAMLINK] NativePassthrough=true in this INI to enable it."));
                 return true;

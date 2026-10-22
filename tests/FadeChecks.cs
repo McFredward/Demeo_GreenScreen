@@ -53,6 +53,15 @@ internal static class FadeChecks
         Check(view.Renderer.sharedMaterial==source && owned.Destroyed,"Permission loss restores the game's material and retires only our copy.");
         Fade(game,.4f);Check(view.Renderer.sharedMaterial==source,"Disabled updates preserve original game rendering.");
         PassthroughFade.SetActive(true);Check(view.Renderer.sharedMaterial.GetFloat("_PassthroughFade")==.4f,"Reactivation uses the current game fade, never an old opacity.");
+        var fadeBundle=AssetBundle.Last;
+        Check((fadeBundle.hideFlags&HideFlags.DontUnloadUnusedAsset)!=0
+            && (fadeBundle.Asset.hideFlags&HideFlags.DontUnloadUnusedAsset)!=0,"Owned fade assets are retained across native scene cleanup.");
+        int fadeLoads=AssetBundle.LoadAttempts;
+        UnityEngine.Object.Destroy(fadeBundle.Asset);
+        PassthroughFade.Refresh();
+        Check(AssetBundle.LoadAttempts==fadeLoads+1 && view.Renderer.sharedMaterial.shader!=null
+            && view.Renderer.sharedMaterial.shader==AssetBundle.Last.Asset,
+            "Explicitly retired fade shader is reloaded and rebound on the existing owned renderer.");
         Fade(game,float.NaN);Check(view.Renderer.sharedMaterial==source,"Invalid semantic alpha refuses the override.");
         Fade(game,.6f);Check(view.Renderer.sharedMaterial!=source,"A later valid fade resumes normally.");
 #if DEMEOBATTLEMARKED
@@ -254,7 +263,7 @@ namespace UnityEngine
 {
     public class Object : Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase
     {
-        public string name; public bool Destroyed;
+        public string name; public bool Destroyed; public HideFlags hideFlags;
         public static void Destroy(Object value) { if(!ReferenceEquals(value,null)) value.Destroyed=true; }
         public static bool operator ==(Object a,Object b) => (ReferenceEquals(a,null)||a.Destroyed) ? ReferenceEquals(b,null)||b.Destroyed : ReferenceEquals(a,b);
         public static bool operator !=(Object a,Object b) => !(a==b);
@@ -262,7 +271,7 @@ namespace UnityEngine
         public override int GetHashCode() => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
     }
     public struct Color { public float r,g,b,a;public Color(float r,float g,float b,float a){this.r=r;this.g=g;this.b=b;this.a=a;}public static Color black=>new Color(0,0,0,1); }
-    public enum HideFlags {HideAndDontSave}
+    [Flags] public enum HideFlags {None=0,DontUnloadUnusedAsset=32,HideAndDontSave=61}
     public class Component : Object
     {
         public Transform transform; public object Extra;
@@ -280,7 +289,7 @@ namespace UnityEngine
     public class Shader : Object {public bool isSupported=true;}
     public class Material : Object
     {
-        public Shader shader;public Color color;public HideFlags hideFlags;public bool enableInstancing;public int renderQueue;
+        public Shader shader;public Color color;public bool enableInstancing;public int renderQueue;
         private readonly Dictionary<string,float> floats=new Dictionary<string,float>();
         public Material(Shader shader){this.shader=shader;}
         public Material(Material source){shader=source.shader;color=source.color;renderQueue=source.renderQueue;enableInstancing=source.enableInstancing;foreach(var entry in source.floats)floats[entry.Key]=entry.Value;}
@@ -293,11 +302,12 @@ namespace UnityEngine
     public class MeshRenderer : Object {public Material sharedMaterial;public bool Multiple;public readonly Dictionary<string,Color> Animated=new Dictionary<string,Color>();public Material[] sharedMaterials=>Multiple?new[]{sharedMaterial,sharedMaterial}:new[]{sharedMaterial};}
     public class AssetBundle : Object
     {
+        public static AssetBundle Last; public Shader Asset;
         public static bool Reject;public static int LoadAttempts;
-        public static AssetBundle LoadFromMemory(byte[] raw){LoadAttempts++;return Reject?null:new AssetBundle();}
+        public static AssetBundle LoadFromMemory(byte[] raw){LoadAttempts++;return Reject?null:Last=new AssetBundle();}
         public T LoadAsset<T>(string name) where T:Object =>(T)LoadAsset(name,typeof(T));
-        public Object LoadAsset(string name,Type type)=>new Shader{name="Hidden/Demeo/NativeFade"};
-        public void Unload(bool all){}
+        public Object LoadAsset(string name,Type type)=>Asset=new Shader{name="Hidden/Demeo/NativeFade"};
+        public void Unload(bool all){if(all)Destroy(Asset);Destroy(this);}
     }
 }
 namespace Il2CppInterop.Runtime.InteropTypes {public class Il2CppObjectBase {public T Cast<T>() where T:Il2CppObjectBase =>(T)this;} }

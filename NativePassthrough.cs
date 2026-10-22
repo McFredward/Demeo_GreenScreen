@@ -159,7 +159,8 @@ namespace GreenScreen
             // Only Update admits a source, before either eye of this Unity frame.
             // A mid-frame callback can revoke this grant, but cannot acquire one.
             if (_head != head || !ReferenceEquals(_grant, grant) || _target != head.Camera.targetTexture
-                || _pipeline != GraphicsSettings.currentRenderPipeline || _preparedCameraVersion != _cameraVersion)
+                || _pipeline != GraphicsSettings.currentRenderPipeline || _preparedCameraVersion != _cameraVersion
+                || _coverage == null || !_coverage.Ready)
             {
                 LeaveNative();
                 if (!Prepare(head, out reason))
@@ -342,6 +343,7 @@ namespace GreenScreen
             try { valid = _frame == Time.frameCount && SteamLinkConnection.Available && StereoCamera(camera) && Profile(camera) == null
                 && ReferenceEquals(_grant, SteamLinkCoverageBridge.Current)
                 && _grant != null && _grant.CanAcceptOrdinaryRgba
+                && _coverage != null && _coverage.Ready
                 && _target == camera.targetTexture && _pipeline == GraphicsSettings.currentRenderPipeline
                 && camera.allowHDR == _allowHdr && camera.actualRenderingPath == _renderingPath
                 && camera.clearFlags == CameraClearFlags.SolidColor && camera.backgroundColor == Color.clear

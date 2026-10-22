@@ -326,6 +326,27 @@ internal static class IntegrationChecks
             GameObject.Scene=new[]{replacement}; Camera.main=replacement; Tick();
             Check(replacement.backgroundColor==Color.clear && SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
                 "the intro-to-menu camera replacement is discovered this Update without a manual invalidation or a one-second wait");
+            var bundle=AssetBundle.Loaded.FindLast(item=>item!=null && item.Shaders.Exists(shader=>shader.name=="Hidden/Demeo/NativeCoverage"));
+            var cachedShader=bundle.Shaders.Find(shader=>shader.name=="Hidden/Demeo/NativeCoverage");
+            int shaderLoads=AssetBundle.LoadAttempts;
+            replacement.isActiveAndEnabled=false; Tick();
+            AssetBundle.UnloadUnused();
+            Check(bundle!=null && cachedShader!=null,"native unused-asset cleanup retains owned shaders and bundles during the camera gap");
+            replacement.isActiveAndEnabled=true; SteamLinkCoverageBridge.Grant(); Tick();
+            Check(replacement.backgroundColor==Color.clear && AssetBundle.LoadAttempts==shaderLoads,
+                "the menu resumes with the retained shader without a duplicate load");
+            UnityEngine.Object.Destroy(cachedShader);
+            Check(cachedShader==null && !ReferenceEquals(cachedShader,null),"fixture reproduces Unity's destroyed-asset wrapper rather than a CLR null");
+            RenderPipelineManager.Render(replacement);
+            Check(replacement.backgroundColor==Color.black && !SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
+                "mid-frame shader destruction revokes the source before rendering invalid coverage");
+            SteamLinkCoverageBridge.Grant(); Tick();
+            Check(replacement.backgroundColor==Color.clear && OpaqueCoverage.Failure==null && AssetBundle.LoadAttempts==shaderLoads+1,
+                "a previously valid shader destroyed by explicit game cleanup is rebuilt on the next Update");
+            AssetBundle.Loaded.FindLast(item=>item!=null && item.Shaders.Exists(shader=>shader.name=="Hidden/Demeo/NativeCoverage")).Unload(true);
+            SteamLinkCoverageBridge.Grant(); Tick();
+            Check(replacement.backgroundColor==Color.clear && OpaqueCoverage.Failure==null && AssetBundle.LoadAttempts==shaderLoads+2,
+                "explicit whole-bundle unload also recovers instead of latching the earlier attempted flag");
             replacement.isActiveAndEnabled=false; camera.isActiveAndEnabled=true;
             GameObject.Scene=new[]{camera}; Camera.main=camera; Tick();
             opaqueData.isOpaque=false; DrawObjectsPass.ExecutePass(raster,opaqueData,0,0,false);

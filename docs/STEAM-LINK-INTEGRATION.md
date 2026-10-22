@@ -12,6 +12,62 @@ The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
 
+## Battlemarked scene cleanup and placement diagnostics (2.0 development candidate)
+
+The follow-up headset run confirms that independent OpenXR eyes solve initial
+source admission: native passthrough is enabled at 11:17:21.898 on October 22,
+2026. The PC captures game-PID34964 textures at 4040x4040/f29 and sends 632 masked
+frames in total. The private, hashed PC/Frame capture is
+`frame-battlemarked-menu-20261022-092208`.
+
+At 11:17:33.046 the active camera disappears during the intro/menu transition.
+Starting at 11:17:35.550, preparation repeatedly returns the generic
+"bundled stereo opaque-coverage shader could not be prepared" without setting
+`OpaqueCoverage.Failure`. In the previously successful cache this uniquely
+identifies `_shader == null` together with `_attempted == true`: the cached
+Unity shader asset was retired, although its CLR/interop wrapper remains.
+The old attempted flag then prevented every later reload. It is not an invalid
+embedded bundle or evidence of another decoder failure. The Frame's last decoder
+reset was at 11:16:42.946, before this game began; no reset is recorded during
+the game window.
+
+Owned coverage and fade shaders, and their bundles, now carry
+`HideFlags.DontUnloadUnusedAsset` for the native scene-cleanup gap. Explicit
+game unloads are handled by rebuilding previously valid retired assets from the
+embedded bytes. Invalid initial bundles/shaders retain their permanent failure
+latch. Existing owned fade materials follow the rebuilt shader. A missing live
+coverage shader/material revokes the source before drawing; reconstruction and
+readmission happen in Update, never through an old mask or an unchecked shader.
+Shutdown still explicitly unloads the owned bundles.
+
+Regression fixtures model Unity's native destroyed-object equality, unused-asset
+cleanup with no active camera, explicit shader destruction, complete bundle
+unload, and a permanently rejected embedded bundle. Both loader paths for all
+three games run through scene replacement and resource retirement. The fade
+fixtures also verify shader retention and rebinding on the existing renderer.
+This is software validation; the next headset run must confirm menu/game output.
+
+The same capture does not identify an unsolicited system recenter. At 11:18:13.049
+PC SteamVR explicitly reports unchanged Seated and Standing origins after a
+chaperone update; there is no new Frame recenter-action entry in this game
+window. That does not rule out a game-side camera/rig movement. This run used
+`Important`, so the old Debug-only origin observer is absent. Configuration
+logging now includes configured and embedded defaults to distinguish an override
+from a build-channel default.
+
+Battlemarked retains at most 32 origin-event messages and 64 combined camera
+placement events at Important level. The actual supplied GameView bindings are
+`CameraControlSystemVR.OnLevelLoaded`, `OnMenuSceneLoaded`,
+`SetAvatarPositionByCameraWaypoint`, `SetAvatarPositionByCameraWaypointId`, and
+`Avatar.AvatarVR.SetAvatarPosition(Vector3, Vector3, float)`. Nested same-thread
+prefix/finalizer scopes identify synchronous placement sources and restore them
+on exceptions. Position, rotation, scale and local timestamps are recorded.
+These are observations of method entry, not proof of native inlining coverage,
+user intent, or a completed visible move. No game placement, listener, manual
+recenter or shared tracking API is blocked. Confirming the unwanted caller
+remains outstanding; broadly suppressing scene placement would risk breaking
+initial menu/scenario setup. Native companions and Gloomhaven were not changed.
+
 ## Battlemarked OpenXR source admission (2.0 development candidate)
 
 The first Battlemarked headset run (October 22, 2026) stayed black in the

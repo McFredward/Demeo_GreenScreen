@@ -20,6 +20,10 @@ namespace GreenScreen
         private static bool _failed;
         private static float _next;
         private static int _suppressed, _observed;
+#if DEMEOBATTLEMARKED
+        [ThreadStatic] private static string _placementSource;
+        private static int _movementObserved;
+#endif
 #if DEMEOBATTLES
         [ThreadStatic] private static int _avatarResetDepth, _manualDepth;
         private static bool _legacyReady;
@@ -54,6 +58,9 @@ namespace GreenScreen
                     finalizer: hook.Finalizer == null ? null : new HarmonyMethod(hook.Finalizer));
 #if DEMEOBATTLES
                 TryLegacyGuard(avatar);
+#else
+                TryMovementObservers(FindType("GameView", "Jade.GameView.CameraControlSystemVR"),
+                    FindType("GameView", "Jade.GameView.Avatar.AvatarVR"));
 #endif
                 Utils.LogDebug(Game + " IL2CPP recenter " +
 #if DEMEOBATTLES
@@ -180,10 +187,67 @@ namespace GreenScreen
                     + "; at=" + DateTime.Now.ToString("HH:mm:ss.fff") + ".");
         }
 #else
+        // Observe real game placements even when a coverage fault has temporarily
+        // revoked the source. These bounded events matter at Important level;
+        // no placement, origin listener or user input is skipped or rewritten.
+        private static void TryMovementObservers(Type movement, Type avatar)
+        {
+            if (movement == null || avatar == null) return;
+            int first = Hooks.Count;
+            try
+            {
+                Add(avatar, "SetAvatarPosition", new[] { typeof(Vector3), typeof(Vector3), typeof(float) }, nameof(ObserveAvatar));
+                foreach (var entry in new[] { ("OnLevelLoaded", 2), ("OnMenuSceneLoaded", 1),
+                    ("SetAvatarPositionByCameraWaypoint", 1), ("SetAvatarPositionByCameraWaypointId", 1) })
+                {
+                    MethodInfo target = movement.GetMethod(entry.Item1, Members);
+                    if (target == null || target.IsStatic || target.ReturnType != typeof(void)
+                        || target.GetParameters().Length != entry.Item2)
+                        throw new MissingMethodException(movement.FullName, entry.Item1);
+                    Hooks.Add((target, typeof(Il2CppAutomaticRecenter).GetMethod(nameof(BeforePlacementSource), BindingFlags.Static | BindingFlags.NonPublic),
+                        typeof(Il2CppAutomaticRecenter).GetMethod(nameof(AfterPlacementSource), BindingFlags.Static | BindingFlags.NonPublic)));
+                }
+                for (int i = first; i < Hooks.Count; i++)
+                    _patch.Patch(Hooks[i].Target, prefix: new HarmonyMethod(Hooks[i].Prefix),
+                        finalizer: Hooks[i].Finalizer == null ? null : new HarmonyMethod(Hooks[i].Finalizer));
+                Utils.LogInfo("Battlemarked camera placement observers ready. Bounded placement and tracking-origin events are retained at Important level; game behavior is unchanged.");
+            }
+            catch (Exception error)
+            {
+                for (int i = first; i < Hooks.Count; i++)
+                {
+                    _patch.Unpatch(Hooks[i].Target, Hooks[i].Prefix);
+                    if (Hooks[i].Finalizer != null) _patch.Unpatch(Hooks[i].Target, Hooks[i].Finalizer);
+                }
+                Hooks.RemoveRange(first, Hooks.Count - first);
+                Utils.LogWarning("Battlemarked camera placement observers unavailable; retaining game behavior: " + error.GetType().Name + ": " + error.Message);
+            }
+        }
+
+        private static void BeforePlacementSource(MethodBase __originalMethod, out string __state)
+        {
+            __state = _placementSource;
+            _placementSource = __originalMethod.Name;
+            if (Verified && _movementObserved++ < 64)
+                Utils.LogInfo("Battlemarked camera event: " + _placementSource + "; at=" + DateTime.Now.ToString("HH:mm:ss.fff") + ". Original game call retained.");
+        }
+        private static void AfterPlacementSource(string __state) => _placementSource = __state;
+
+        private static void ObserveAvatar(Vector3 __0, Vector3 __1, float __2)
+        {
+            if (Verified && _movementObserved++ < 64)
+                Utils.LogInfo("Battlemarked avatar placement: source=" + (_placementSource ?? "direct/unknown")
+                    + "; position=" + Coordinates(__0) + "; rotation=" + Coordinates(__1) + "; scale=" + __2.ToString("R", System.Globalization.CultureInfo.InvariantCulture)
+                    + "; at=" + DateTime.Now.ToString("HH:mm:ss.fff") + ". Original game call retained.");
+        }
+
+        private static string Coordinates(Vector3 value) => string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            "({0:F3},{1:F3},{2:F3})", value.x, value.y, value.z);
+
         private static void ObserveOrigin(XRInputSubsystem __0)
         {
             if (Verified && _observed++ < 32)
-                Utils.LogDebug(Game + " tracking-origin notification retained; input=" + (__0 == null ? "none" : "present")
+                Utils.LogInfo(Game + " tracking-origin notification retained; input=" + (__0 == null ? "none" : "present")
                     + "; at=" + DateTime.Now.ToString("HH:mm:ss.fff") + ". User recenter/listener callbacks remain available.");
         }
 #endif
@@ -204,6 +268,8 @@ namespace GreenScreen
             }
 #if DEMEOBATTLES
             _avatarResetDepth = _manualDepth = 0; _legacyReady = false;
+#else
+            _placementSource = null; _movementObserved = 0;
 #endif
             Hooks.Clear(); _patch = null; _failed = false; _next = 0; _suppressed = _observed = 0;
         }
