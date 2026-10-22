@@ -1713,3 +1713,8 @@ closing quote in Git's command line. Append `.` before the closing quote so
 local branch detection works there. A Windows CI job builds a real local dev
 checkout with the CI branch variable removed and executes the embedded-default
 check; main and explicit runtime overrides retain their existing behavior.
+
+An early new camera render explicitly withdraws the warm process pipe before
+its next Update admission; it cannot inherit the previous camera's alpha
+permission. The fast path applies to an Update-first handoff, not to an unknown
+camera rendering with unprepared opaque-coverage state.

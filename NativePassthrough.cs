@@ -359,6 +359,19 @@ namespace GreenScreen
                 && camera.targetTexture == null && camera.stereoTargetEye == StereoTargetEyeMask.Both
                 && ConfigurationStore.Current.SteamLinkNativePassthrough && (_head == null || !SteamLinkConnection.Available)
                 && !LegacyBackgroundConfirmed) TrackCamera(camera).SetBackground(Color.black, true);
+#if DEMEOBATTLEMARKED
+            // A warmed process pipe must never carry an unprepared camera.
+            // If one renders before the next Update can validate/prepare it,
+            // withdraw the pipe rather than treating the previous camera as
+            // authority for its alpha. Normal Update-first handoffs stay warm.
+            if (_head == null && _sceneHandoffUntil >= 0 && camera != null
+                && camera.cameraType == CameraType.Game && camera.targetTexture == null
+                && camera.stereoTargetEye == StereoTargetEyeMask.Both)
+            {
+                SteamLinkCoverageBridge.Reset(); _sceneHandoffUntil = -1;
+                Utils.LogDebug("Battlemarked scene handoff: camera rendered before Update admission; source pipe withdrawn.");
+            }
+#endif
             if (_head == null || camera != _head.Camera) return;
             bool valid;
             try { valid = _frame == Time.frameCount && SteamLinkConnection.Available && StereoCamera(camera) && Profile(camera) == null

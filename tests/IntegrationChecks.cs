@@ -218,12 +218,14 @@ internal static class IntegrationChecks
             intro.isActiveAndEnabled=false;Tick();
             Check(SteamLinkCoverageBridge.Current==oldGrant && intro.backgroundColor==Color.black,
                 "Short Battlemarked camera gap retains only the live game-process pipe, with old render source revoked");
-            var firstNewCamera=new Camera();Camera.Render(firstNewCamera);
-            Check(firstNewCamera.backgroundColor==Color.black,"A handoff camera rendering before admission remains opaque");
-            firstNewCamera.isActiveAndEnabled=false;
             intro.isActiveAndEnabled=true;Tick();
             Check(SteamLinkCoverageBridge.Current==oldGrant && intro.backgroundColor==Color.clear,
                 "First valid Update readmits independent eyes without another companion negotiation dwell");
+            intro.isActiveAndEnabled=false;Tick();
+            var firstNewCamera=new Camera();Camera.Render(firstNewCamera);
+            Check(firstNewCamera.backgroundColor==Color.black && !SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,
+                "A handoff camera rendering before Update cannot inherit the previous camera's alpha permission");
+            firstNewCamera.isActiveAndEnabled=false;intro.isActiveAndEnabled=true;EnableNative();
             intro.isActiveAndEnabled=false;Tick();Time.unscaledTime+=1.1f;Tick();
             Check(!SteamLinkCoverageBridge.Current.CanAcceptOrdinaryRgba,"An extended missing-camera interval withdraws the process declaration");
             intro.isActiveAndEnabled=true;EnableNative();
