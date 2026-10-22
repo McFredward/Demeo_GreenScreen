@@ -54,7 +54,7 @@
     <EmbeddedResource Include="assets/nativefade.bundle" LogicalName="GreenScreen.NativeFade" />
     <EmbeddedResource Include="assets/steamlink/connection-reader.exe" LogicalName="GreenScreen.SteamLink.connection-reader.exe" />
     <EmbeddedResource Include="assets/steamlink/openvr_api.bin" LogicalName="GreenScreen.SteamLink.openvr_api.dll" />
-    <None Update="greenscreen.ini.example" TargetPath="greenscreen.ini" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="greenscreen.ini.example" TargetPath="greenscreen.ini" CopyToOutputDirectory="PreserveNewest" Condition="'$(LoaderBackend)' == 'MelonLoader'" />
     <Reference Include="0Harmony" HintPath="$(LoaderDirectory)/0Harmony.dll" Private="false" />
     <Reference Include="UnityEngine" HintPath="$(UnityAssemblyDirectory)/UnityEngine.dll" Private="false" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(UnityAssemblyDirectory)/UnityEngine.CoreModule.dll" Private="false" />

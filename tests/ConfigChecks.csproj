@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <Game Condition="'$(Game)' == ''">DEMEO</Game>
+    <DefineConstants>$(DefineConstants);$(Game)</DefineConstants>
+    <OutputPath>bin/Config/$(Game)/</OutputPath>
+    <IntermediateOutputPath>obj/Config/$(Game)/</IntermediateOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../ModConfiguration.cs;../BepInExConfiguration.cs;ConfigChecks.cs" />
+    <Reference Include="BepInEx" HintPath="../.build/loaders/BepInEx/DEMEO/BepInEx.dll" Condition="'$(Game)' == 'DEMEO'" />
+    <Reference Include="BepInEx.Core" HintPath="../.build/loaders/BepInEx/DEMEOBATTLEMARKED/BepInEx.Core.dll" Condition="'$(Game)' != 'DEMEO'" />
+  </ItemGroup>
+</Project>

@@ -36,9 +36,11 @@ def main():
                         "-p:UseReferenceAssemblies=true", "-p:Optimize=true",
                         "-p:ContinuousIntegrationBuild=true", f"-p:DefaultLogLevel={default_log_level}", "--nologo"], cwd=ROOT, check=True)
         binary = ROOT / "bin" / backend / configuration / framework / assembly
-        files = {assembly: binary, "greenscreen.ini": ROOT / "greenscreen.ini.example",
+        files = {assembly: binary,
                  "README.md": ROOT / "README.md", "LICENSE": ROOT / "LICENSE",
                  "licenses/OpenVR-LICENSE.txt": ROOT / "licenses/OpenVR-LICENSE.txt"}
+        if backend == "MelonLoader":
+            files["greenscreen.ini"] = ROOT / "greenscreen.ini.example"
         archive_path = destination / f"{name}.zip"
         with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for relative, source in files.items():
@@ -48,7 +50,7 @@ def main():
                 raise RuntimeError("Unexpected archive contents")
             if [n for n in archive.namelist() if n.endswith(".dll")] != [assembly]:
                 raise RuntimeError("Only the mod DLL may be distributed")
-            if "NativePassthrough=true" not in archive.read("greenscreen.ini").decode():
+            if backend == "MelonLoader" and "NativePassthrough=true" not in archive.read("greenscreen.ini").decode():
                 raise RuntimeError("The shipped config must enable automatic Frame/Steam Link passthrough")
         archives.append(archive_path)
         print(f"Packaged {archive_path.name}: mod DLL, active config, README, licences")

@@ -1653,3 +1653,26 @@ Controlled Harmony/transform ports validate dispatch, menu-only scope, separate,
 shared and nested rig roots and constructor-free fade observation. All six
 loader builds compile against metadata-only references; actual headset results
 remain to be confirmed by the maintainer.
+
+### Standard BepInEx configuration and migration (2026-10-22)
+
+BepInEx 5 and 6 now bind the plugin's actual `ConfigFile`, using its stable
+plugin identity `566784` and normal `BepInEx/config/566784.cfg` location.
+Fresh defaults are RGB 0/255/0, table visible and automatic native passthrough
+on. Existing loader/DLL identities stay unchanged. The additional bandwidth
+and logging preferences remain adjustable in the same config.
+
+Before the new config's first binding/save, inspect `greenscreen.ini`, then
+`custom_color.ini`, beside the actual DLL and in the loader plugin root. Read
+and migrate all recognized preferences once, including native opt-out. Keep
+the legacy file. An existing normal config always wins; legacy file changes
+are ignored thereafter. The installer must not precreate a BepInEx config or
+ship a new active plugin INI because that would interfere with first-run
+migration. MelonLoader retains the INI backend, with the same fresh defaults.
+
+Cold maintenance polls the normal config's modification stamp and uses
+`ConfigFile.Reload`; BepInEx setting-change events also invalidate the cached
+settings. Neither reading nor saving occurs in an eye render callback. Real
+pinned BepInEx 5/6 ConfigFile tests cover serialization, first import, restart
+precedence, unsectioned legacy values, live entry edits and external reload.
+Renderer lifecycle tests use an explicitly controlled configuration boundary.

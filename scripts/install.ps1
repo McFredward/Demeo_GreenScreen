@@ -85,17 +85,23 @@ try {
                 [IO.File]::Move($stage, $target)
             }
         } finally { if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Force } }
-        Copy-Item -LiteralPath (Join-Path $repo 'greenscreen.ini.example') -Destination (Join-Path $plan.Destination 'greenscreen.ini.example') -Force
-        $activeConfig = $null
-        foreach ($name in @('greenscreen.ini','custom_color.ini')) {
-            foreach ($directory in @($plan.Destination,$plan.PluginRoot)) {
-                $candidate = Join-Path $directory $name
-                if (-not $activeConfig -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { $activeConfig = $candidate }
+        if ($plan.Backend -eq 'BepInEx') {
+            # The plugin creates/binds its normal config on first launch, after
+            # reading any legacy INI. Precreating it would suppress migration.
+            $activeConfig = Join-Path $plan.Install.Path 'BepInEx/config/566784.cfg'
+        } else {
+            Copy-Item -LiteralPath (Join-Path $repo 'greenscreen.ini.example') -Destination (Join-Path $plan.Destination 'greenscreen.ini.example') -Force
+            $activeConfig = $null
+            foreach ($name in @('greenscreen.ini','custom_color.ini')) {
+                foreach ($directory in @($plan.Destination,$plan.PluginRoot)) {
+                    $candidate = Join-Path $directory $name
+                    if (-not $activeConfig -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { $activeConfig = $candidate }
+                }
             }
-        }
-        if (-not $activeConfig) {
-            $activeConfig = Join-Path $plan.Destination 'greenscreen.ini'
-            Copy-Item -LiteralPath (Join-Path $repo 'greenscreen.ini.example') -Destination $activeConfig
+            if (-not $activeConfig) {
+                $activeConfig = Join-Path $plan.Destination 'greenscreen.ini'
+                Copy-Item -LiteralPath (Join-Path $repo 'greenscreen.ini.example') -Destination $activeConfig
+            }
         }
         Write-Host "Installed $target (SHA-256 $((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash))"
         Write-Host "Configuration: $activeConfig"

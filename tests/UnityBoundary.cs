@@ -520,13 +520,14 @@ namespace BepInEx
 {
     public static class Paths { public static string PluginPath=System.IO.Path.GetFullPath("BepInEx/plugins"); }
     public class BepInPlugin : Attribute { public BepInPlugin(string id,string name,string version) { } }
-    public class BaseUnityPlugin : UnityEngine.MonoBehaviour { public Logging.ManualLogSource Logger=new Logging.ManualLogSource(); }
+    public class BaseUnityPlugin : UnityEngine.MonoBehaviour { public object Config=new(); public Logging.ManualLogSource Logger=new Logging.ManualLogSource(); }
 }
 namespace BepInEx.Logging { public class ManualLogSource { public void LogInfo(string message) => GreenScreen.TestLog.Messages.Add(message); public void LogWarning(string message) => GreenScreen.TestLog.Messages.Add(message); public void LogError(string message) => GreenScreen.TestLog.Messages.Add(message); } }
 namespace BepInEx.Unity.IL2CPP
 {
     public class BasePlugin
     {
+        public object Config=new();
         public BepInEx.Logging.ManualLogSource Log=new BepInEx.Logging.ManualLogSource();
         public virtual void Load() { }
         public virtual bool Unload() => false;
@@ -585,3 +586,5 @@ namespace GreenScreen
         internal static void Grant() => Current=new Snapshot { CanAcceptOrdinaryRgba=true };
     }
 }
+
+namespace GreenScreen { internal static class BepInExConfiguration { internal static void Attach(object controlledLoaderPort) { } } }

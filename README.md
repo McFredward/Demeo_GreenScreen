@@ -44,9 +44,20 @@ while playing Demeo; it can cause unwanted recentering.
 
 ## Settings
 
-Edit `greenscreen.ini` beside the mod DLL. Changes apply while the game runs.
+BepInEx creates `BepInEx/config/566784.cfg` on first launch. Existing
+`greenscreen.ini` / `custom_color.ini` settings are imported once; your old files
+are kept. MelonLoader continues to use `greenscreen.ini` beside the mod DLL.
+Changes apply while the game runs.
 
 ```ini
+[COLOR]
+R=0
+G=255
+B=0
+
+[TABLE]
+Disable=false
+
 [STEAMLINK]
 NativePassthrough=true
 

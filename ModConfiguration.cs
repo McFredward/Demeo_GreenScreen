@@ -7,7 +7,7 @@ namespace GreenScreen
     internal sealed class ModConfiguration
     {
         internal Color BackgroundColor = new Color(0f, 1f, 0f, 1f);
-        internal bool DisableTable = true;
+        internal bool DisableTable = false;
         internal bool SteamLinkNativePassthrough = true;
         internal bool SteamLinkAccountMaskBandwidth = true;
         internal ModLogLevel LogLevel = ModLogLevel.Auto;
@@ -63,10 +63,18 @@ namespace GreenScreen
         }
     }
 
+    internal interface IConfigurationBackend
+    {
+        string Path { get; }
+        ModConfiguration ReadIfChanged();
+    }
+
     internal static class ConfigurationStore
     {
         internal static ModConfiguration Current { get; private set; } = new ModConfiguration();
         internal static string ActivePath { get; private set; } = "";
+        private static IConfigurationBackend _backend;
+        internal static void SetBackend(IConfigurationBackend backend) { _backend = backend; _loaded = false; }
         private static bool _loaded;
         private static string _path = "";
         private static DateTime _modified;
@@ -77,39 +85,53 @@ namespace GreenScreen
         {
             try
             {
-                string assemblyDirectory = Path.GetDirectoryName(typeof(ConfigurationStore).Assembly.Location);
+                ModConfiguration next;
+                string path;
+                DateTime modified;
+                long length;
+                if (_backend != null)
+                {
+                    next = _backend.ReadIfChanged();
+                    if (next == null && _loaded) return false;
+                    next ??= Current;
+                    path = _backend.Path; modified = DateTime.MinValue; length = 0;
+                }
+                else
+                {
+                    string assemblyDirectory = Path.GetDirectoryName(typeof(ConfigurationStore).Assembly.Location);
 #if MELONLOADER
-                string legacyDirectory = MelonLoader.Utils.MelonEnvironment.ModsDirectory;
+                    string legacyDirectory = MelonLoader.Utils.MelonEnvironment.ModsDirectory;
 #else
-                string legacyDirectory = BepInEx.Paths.PluginPath;
+                    string legacyDirectory = BepInEx.Paths.PluginPath;
 #endif
-                if (string.IsNullOrEmpty(assemblyDirectory)) assemblyDirectory = legacyDirectory;
-                string path = Resolve(assemblyDirectory, legacyDirectory);
-                var file = path.Length == 0 ? null : new FileInfo(path);
-                DateTime modified = file == null ? DateTime.MinValue : file.LastWriteTimeUtc;
-                long length = file == null ? 0 : file.Length;
-                if (_loaded && path == _path && modified == _modified && length == _length) return false;
-                ModConfiguration next = file == null ? new ModConfiguration()
-                    : ModConfiguration.Parse(File.ReadAllLines(path));
+                    if (string.IsNullOrEmpty(assemblyDirectory)) assemblyDirectory = legacyDirectory;
+                    path = Resolve(assemblyDirectory, legacyDirectory);
+                    var file = path.Length == 0 ? null : new FileInfo(path);
+                    modified = file == null ? DateTime.MinValue : file.LastWriteTimeUtc;
+                    length = file == null ? 0 : file.Length;
+                    if (_loaded && path == _path && modified == _modified && length == _length) return false;
+                    next = file == null ? new ModConfiguration()
+                        : ModConfiguration.Parse(File.ReadAllLines(path));
+                }
                 Current = next;
                 ModLogging.Configure(next.LogLevel);
                 ActivePath = path.Length == 0 ? "" : Path.GetFullPath(path);
                 _path = path; _modified = modified; _length = length;
                 _loaded = true;
                 Utils.LogInfo("Demeo Mixed Reality configuration: "
-                    + (ActivePath.Length == 0 ? "no INI found; expected " + Path.Combine(assemblyDirectory, "greenscreen.ini") : ActivePath)
+                    + (ActivePath.Length == 0 ? "no INI found; using defaults" : ActivePath)
                     + "; LogLevel=" + ModLogging.Level + " (configured=" + next.LogLevel + ", build default=" + ModLogging.BuildDefault
                     + "); Steam Link NativePassthrough=" + next.SteamLinkNativePassthrough + "."
                     + (next.SteamLinkNativePassthrough ? " Enabled only after Frame/Steam Link identity is confirmed."
-                        : " Virtual Desktop colour-key mode; Steam Link native passthrough is disabled. Set [STEAMLINK] NativePassthrough=true in this INI to enable it."));
+                        : " Virtual Desktop colour-key mode; Steam Link native passthrough is disabled. Set [STEAMLINK] NativePassthrough=true in the config to enable it."));
                 return true;
             }
             catch (Exception error)
             {
-                // A partially saved or unreadable INI must revoke opt-in.
+                // An unreadable configuration cannot grant native source permission.
                 Current = new ModConfiguration { SteamLinkNativePassthrough = false };
                 ActivePath = "";
-                if (_length != -2) Utils.LogError("Could not read greenscreen.ini: " + error.Message);
+                if (_length != -2) Utils.LogError("Could not read mod configuration: " + error.Message);
                 _length = -2;
                 return true;
             }

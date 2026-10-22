@@ -58,6 +58,8 @@ jobs:
         run: ./tests/InstallerChecks.ps1
       - name: Download pinned public build dependencies
         run: python3 scripts/fetch-build-deps.py
+      - name: Check normal BepInEx config and one-time INI migration
+        run: python3 scripts/check-config.py
       - name: Check fade timing and native material ownership for all three games
         run: python3 scripts/check-fade-lifecycle.py
       - name: Build and package all three games

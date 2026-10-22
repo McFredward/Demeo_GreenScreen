@@ -43,6 +43,7 @@ namespace GreenScreen
         private void Awake()
         {
             Log = base.Logger;
+            BepInExConfiguration.Attach(base.Config);
             ModLifecycle.Initialize();
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly());
         }
@@ -57,6 +58,7 @@ namespace GreenScreen
         public override void Load()
         {
             Log = base.Log;
+            BepInExConfiguration.Attach(base.Config);
             AddComponent<PassthroughDriver>();
             ModLifecycle.Initialize();
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly());

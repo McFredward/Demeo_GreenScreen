@@ -15,7 +15,7 @@ internal static class IntegrationChecks
     private static void Tick() { Time.frameCount++; Time.unscaledTime+=.1f; NativePassthrough.Tick(); }
     private static void WriteConfig(bool native)
     {
-        File.WriteAllText(ConfigPath,"[STEAMLINK]\nNativePassthrough="+native+"\n");
+        File.WriteAllText(ConfigPath,"[TABLE]\nDisable=true\n[STEAMLINK]\nNativePassthrough="+native+"\n");
         File.SetLastWriteTimeUtc(ConfigPath,DateTime.UtcNow.AddSeconds(Time.frameCount));
         NativePassthrough.InvalidateCameras();
     }
@@ -54,7 +54,7 @@ internal static class IntegrationChecks
         GameObject.Named["BakeScale40x1/MainEnvironment/Table/SM_GameTableModern"]=table;
         Check(room.activeSelf && table.activeSelf,"environment scan waits until after initialization");
         Time.unscaledTime+=.6f; Time.frameCount++; update();
-        Check(!room.activeSelf && !table.activeSelf,"both loaders remove Battlemarked environment and configured table");
+        Check(!room.activeSelf && table.activeSelf,"both loaders remove the Battlemarked environment and retain the table by default");
         var lateFog=new GameObject(); GameObject.Named["BakeScale40x1/MainEnvironment/DistanceFogCatcher"]=lateFog;
         Time.unscaledTime+=1.1f; Time.frameCount++; update();
         Check(!lateFog.activeSelf,"late-created environment is removed on a later maintenance tick");
@@ -89,6 +89,7 @@ internal static class IntegrationChecks
             Check(ModConfiguration.Parse(Array.Empty<string>()).SteamLinkAccountMaskBandwidth,"mask bandwidth accounting defaults on for Demeo producers");
             Check(!ModConfiguration.Parse(new[]{"[STEAMLINK]","AccountMaskBandwidth=false"}).SteamLinkAccountMaskBandwidth,"bandwidth accounting can be opted out independently of passthrough");
             Check(!ModConfiguration.Parse(new[]{"[STEAMLINK]","AccountMaskBandwidth=invalid"}).SteamLinkAccountMaskBandwidth,"malformed bandwidth policy cannot opt into rate changes");
+            Check(!ModConfiguration.Parse(Array.Empty<string>()).DisableTable,"new installations retain the table by default");
             Check(ModConfiguration.Parse(Array.Empty<string>()).SteamLinkNativePassthrough,"native preference defaults on, with hardware admission required");
             Check(ModConfiguration.Parse(new[] { "[steamlink]", "nativepassthrough=TrUe" }).SteamLinkNativePassthrough,"case insensitive option");
             Check(ModConfiguration.Parse(new[] { "[STEAMLINK]", "NativePassthrough=1" }).SteamLinkNativePassthrough,"numeric true");
