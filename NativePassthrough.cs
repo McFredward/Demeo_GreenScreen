@@ -387,6 +387,9 @@ namespace GreenScreen
             foreach (RenderSettingLease lease in PostProcessing) valid &= lease.Current;
             if (valid)
             {
+#if DEMEOBATTLEMARKED
+                BattlemarkedMenuAlignment.BeforeRender(camera);
+#endif
                 PassthroughFade.Refresh();
                 return;
             }

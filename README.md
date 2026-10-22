@@ -56,7 +56,7 @@ G=255
 B=0
 
 [TABLE]
-Disable=false
+Disable=true
 
 [STEAMLINK]
 NativePassthrough=true

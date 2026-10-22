@@ -23,8 +23,9 @@ internal static class ConfigChecks
             var defaults = backend.ReadIfChanged();
             Check(File.Exists(path) && config.Count == 7, "Real ConfigFile creates the seven normal entries.");
             Check(defaults.BackgroundColor.g == 1 && defaults.BackgroundColor.r == 0 && defaults.BackgroundColor.b == 0
-                && !defaults.DisableTable && defaults.SteamLinkNativePassthrough, "Requested new-install defaults are persisted.");
+                && defaults.DisableTable && defaults.SteamLinkNativePassthrough, "Requested new-install defaults are persisted.");
             Check(backend.ReadIfChanged() == null, "Unchanged config is not reread/logged per tick.");
+            config.Bind("TABLE", "Disable", true).Value = false; // Explicit existing choice must survive the new default.
             File.WriteAllText(legacy, "[COLOR]\nR=12\nG=34\nB=56\n[TABLE]\nDisable=true\n[STEAMLINK]\nNativePassthrough=false\nAccountMaskBandwidth=false\n[LOGGING]\nLevel=Debug\n");
             var existing = new BepInExConfiguration(new ConfigFile(path, false));
             Check(!existing.ReadIfChanged().DisableTable, "Existing normal config wins over legacy values.");

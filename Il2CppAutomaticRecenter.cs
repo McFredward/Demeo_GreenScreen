@@ -200,6 +200,9 @@ namespace GreenScreen
             try
             {
                 Add(avatar, "SetAvatarPosition", new[] { typeof(Vector3), typeof(Vector3), typeof(float) }, nameof(ObserveAvatar));
+                Type locomotion = avatar.Assembly.GetType("Jade.GameView.Prototyping.SimpleLocomotion")
+                    ?? avatar.Assembly.GetType("Il2CppJade.GameView.Prototyping.SimpleLocomotion");
+                if (locomotion != null) Add(locomotion, "OnRecenter", Type.EmptyTypes, nameof(CancelMenuAlignment));
                 foreach (var entry in new[] { ("OnLevelLoaded", 2), ("OnMenuSceneLoaded", 1),
                     ("SetAvatarPositionByCameraWaypoint", 1), ("SetAvatarPositionByCameraWaypointId", 1) })
                 {
@@ -249,6 +252,8 @@ namespace GreenScreen
             }
             finally { _placementSource = __state; }
         }
+
+        private static void CancelMenuAlignment() => BattlemarkedMenuAlignment.Cancel();
 
         private static void ObserveAvatar(object __instance, Vector3 __0, Vector3 __1, float __2)
         {

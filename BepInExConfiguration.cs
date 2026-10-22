@@ -36,7 +36,7 @@ namespace GreenScreen
                 _r = config.Bind("COLOR", "R", 0, colour);
                 _g = config.Bind("COLOR", "G", 255, colour);
                 _b = config.Bind("COLOR", "B", 0, colour);
-                _disableTable = config.Bind("TABLE", "Disable", false, "Hide the game table.");
+                _disableTable = config.Bind("TABLE", "Disable", true, "Hide the game table.");
                 _native = config.Bind("STEAMLINK", "NativePassthrough", true, "Enable native passthrough when Steam Frame over Steam Link is detected.");
                 _budget = config.Bind("STEAMLINK", "AccountMaskBandwidth", true, "Include lossless mask traffic in the video bandwidth budget.");
                 _logging = config.Bind("LOGGING", "Level", "Auto", new ConfigDescription("Auto: dev diagnostics; main important messages and errors.",

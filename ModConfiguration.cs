@@ -7,7 +7,7 @@ namespace GreenScreen
     internal sealed class ModConfiguration
     {
         internal Color BackgroundColor = new Color(0f, 1f, 0f, 1f);
-        internal bool DisableTable = false;
+        internal bool DisableTable = true;
         internal bool SteamLinkNativePassthrough = true;
         internal bool SteamLinkAccountMaskBandwidth = true;
         internal ModLogLevel LogLevel = ModLogLevel.Auto;

@@ -7,7 +7,7 @@ using UnityEngine;
 namespace GreenScreen
 {
     // The game resets its logical head during waypoint placement. Wait for the
-    // next camera update and use the actual XR render camera, then stop.
+    // current stereo view matrices after XR pose update, then stop.
     // Never reset the runtime origin or realign gameplay/manual placements.
     internal static class BattlemarkedMenuAlignment
     {
@@ -20,10 +20,10 @@ namespace GreenScreen
         {
             _pending = avatar; _position = position; _rotation = rotation;
             _frame = Time.frameCount; _deadline = Time.unscaledTime + 2;
-            Utils.LogInfo("Battlemarked menu alignment queued for the next tracked camera LateUpdate.");
+            Utils.LogInfo("Battlemarked menu alignment queued for the next admitted stereo render pose.");
         }
         internal static void Cancel() => _pending = null;
-        internal static void LateTick(Camera camera)
+        internal static void Tick()
         {
             if (_pending == null) return;
             if (!ConfigurationStore.Current.SteamLinkNativePassthrough || !SteamLinkConnection.Available
@@ -34,17 +34,42 @@ namespace GreenScreen
                 if (!_warned) Utils.LogWarning("Battlemarked menu alignment expired without an admitted render camera under the avatar head root; no delayed recenter will be applied.");
                 _warned = true; Cancel(); return;
             }
-            if (Time.frameCount <= _frame || camera == null || camera.transform == null) return;
-            object avatar = _pending;
-            if (Align(avatar, camera.transform, _position, _rotation)) Cancel();
+        }
+        internal static void BeforeRender(Camera camera)
+        {
+            Tick();
+            if (_pending == null || Time.frameCount <= _frame || camera == null || camera.transform == null) return;
+            try
+            {
+                // Battlemarked can reset the logical Camera transform while XR
+                // already supplies a different late tracked pose to rendering.
+                // Use both current eye views; never guess a tracking-space parent
+                // or consume the reset transform as a successfully aligned head.
+                Matrix4x4 left = camera.GetStereoViewMatrix(Camera.StereoscopicEye.Left);
+                Matrix4x4 right = camera.GetStereoViewMatrix(Camera.StereoscopicEye.Right);
+                if (Math.Abs(left.determinant) < .000001f || Math.Abs(right.determinant) < .000001f) return;
+                left = left.inverse; right = right.inverse;
+                Vector3 a = left.MultiplyPoint3x4(Vector3.zero), b = right.MultiplyPoint3x4(Vector3.zero);
+                Vector3 forwardA = left.MultiplyVector(Vector3.back), forwardB = right.MultiplyVector(Vector3.back);
+                if (!Finite(a) || !Finite(b) || (a - b).sqrMagnitude < .00000001f
+                    || !Finite(forwardA) || !Finite(forwardB)
+                    || Vector3.Dot(forwardA.normalized, forwardB.normalized) < .95f) return;
+                if (Align(_pending, camera.transform, _position, _rotation, (a + b) * .5f, forwardA + forwardB)) Cancel();
+            }
+            catch (Exception error)
+            {
+                if (!_warned) Utils.LogWarning("Battlemarked stereo menu pose unavailable; retaining game placement: " + error.GetType().Name + ": " + error.Message);
+                _warned = true; Cancel();
+            }
         }
         internal static bool Align(object avatar, Transform head, Vector3 position, Vector3 rotation)
+            => head != null && Align(avatar, head, position, rotation, head.position, head.forward);
+        private static bool Align(object avatar, Transform head, Vector3 position, Vector3 rotation, Vector3 pivot, Vector3 forward)
         {
             try
             {
                 Transform root = Read(avatar, "HeadRootTransform"), hands = Read(avatar, "HandRootTransform");
                 if (head == null || root == null || hands == null || head == root || !head.IsChildOf(root)) return false;
-                Vector3 pivot = head.position, forward = head.forward;
                 Vector3 target = Quaternion.Euler(rotation) * Vector3.forward;
                 if (!Finite(position) || !Finite(rotation) || !Finite(pivot) || !Finite(forward)
                     || forward.x * forward.x + forward.z * forward.z < .0001f
@@ -64,7 +89,7 @@ namespace GreenScreen
                 first.SetPositionAndRotation(firstPosition, firstRotation);
                 if (second != null) second.SetPositionAndRotation(secondPosition, secondRotation);
                 Utils.LogInfo(string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                    "Battlemarked menu aligned once to current head pose: render camera={4}; yaw correction={0:F2}; horizontal offset=({1:F3},{2:F3}); at={3}. Tracking origin, height and avatar scale retained.",
+                    "Battlemarked menu aligned once to current stereo head pose: render camera={4}; yaw correction={0:F2}; horizontal offset=({1:F3},{2:F3}); at={3}. Tracking origin, height and avatar scale retained.",
                     yaw, offset.x, offset.z, DateTime.Now.ToString("HH:mm:ss.fff"), head.name));
                 return true;
             }

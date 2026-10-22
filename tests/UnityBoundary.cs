@@ -592,5 +592,5 @@ namespace GreenScreen
 namespace GreenScreen { internal static class BepInExConfiguration { internal static void Attach(object controlledLoaderPort) { } } }
 
 #if DEMEOBATTLEMARKED
-namespace GreenScreen { internal static class BattlemarkedMenuAlignment { internal static void LateTick(UnityEngine.Camera camera) { } } }
+namespace GreenScreen { internal static class BattlemarkedMenuAlignment { internal static void Tick() { } internal static void BeforeRender(UnityEngine.Camera camera) { } } }
 #endif

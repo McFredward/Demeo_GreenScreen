@@ -195,29 +195,41 @@ internal static class Il2CppRecenterChecks
         var logical=avatar.HeadTransform;
         logical.localPosition=default;logical.localRotation=UnityEngine.Quaternion.identity;
         var head=new UnityEngine.Transform{parent=avatar.HeadRootTransform,localPosition=new(2,1.6f,3),localRotation=UnityEngine.Quaternion.Euler(new(0,75,0)),name="actual XR camera"};
-        var camera=new UnityEngine.Camera{transform=head};
-        BattlemarkedMenuAlignment.LateTick(camera);
+        var tracked=new UnityEngine.Transform{parent=avatar.HeadRootTransform,localPosition=head.localPosition,localRotation=head.localRotation};
+        head.localPosition=default;head.localRotation=UnityEngine.Quaternion.identity;
+        var camera=new UnityEngine.Camera{transform=head,TrackedHead=tracked};
+        BattlemarkedMenuAlignment.BeforeRender(camera);
         Check(!Utils.Messages.Exists(s=>s.Contains("menu aligned once")),"The placement frame's reset pose cannot trigger alignment");
-        UnityEngine.Time.frameCount++;UnityEngine.Time.unscaledTime+=.02f;BattlemarkedMenuAlignment.LateTick(camera);
-        Check(Math.Abs(head.position.x)<.001 && Math.Abs(head.position.z)<.001 && Math.Abs(head.position.y-1.6f)<.001
-            && Math.Abs(head.forward.x)<.001 && head.forward.z>.99,"The real render camera's offset and yaw are corrected on the next frame, preserving tracked height");
+        UnityEngine.Time.frameCount++;UnityEngine.Time.unscaledTime+=.02f;
+        camera.MissingEyes=true;BattlemarkedMenuAlignment.BeforeRender(camera);
+        Check(!Utils.Messages.Exists(s=>s.Contains("menu aligned once")),"Uninitialized stereo matrices cannot consume the menu request");
+        camera.MissingEyes=false;camera.CollapsedEyes=true;BattlemarkedMenuAlignment.BeforeRender(camera);
+        Check(!Utils.Messages.Exists(s=>s.Contains("menu aligned once")),"Identical eye views cannot stand in for a tracked stereo pose");
+        camera.CollapsedEyes=false;BattlemarkedMenuAlignment.BeforeRender(camera);
+        Check(Math.Abs(tracked.position.x)<.001 && Math.Abs(tracked.position.z)<.001 && Math.Abs(tracked.position.y-1.6f)<.001
+            && Math.Abs(tracked.forward.x)<.001 && tracked.forward.z>.99,"Stereo view pose corrects the rendered head even while the logical camera remains reset");
         int aligned=Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count;
         Check(aligned==1 && Utils.Messages.Exists(s=>s.Contains("actual XR camera")),"The logged alignment identifies the actual rendered head");
-        UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.LateTick(camera);
+        UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.BeforeRender(camera);
         Check(Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,"Later tracking frames never repeat an applied menu alignment");
+        movement.OnMenuSceneLoaded(null);
+        var locomotion=new Jade.GameView.Prototyping.SimpleLocomotion();locomotion.OnRecenter();
+        UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.BeforeRender(camera);
+        Check(locomotion.Calls==1 && Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,
+            "The real locomotion recenter entry cancels pending alignment and still executes user recenter");
         movement.OnMenuSceneLoaded(null);movement.OnLevelLoaded(null,null);
-        UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.LateTick(camera);
+        UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.BeforeRender(camera);
         Check(Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,"Gameplay cancels an outstanding menu alignment");
         movement.OnMenuSceneLoaded(null);avatar.SetAvatarPosition(default,default,1);
-        UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.LateTick(camera);
+        UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.BeforeRender(camera);
         Check(Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,"Direct/manual placement cancels an outstanding menu alignment");
         SteamLinkConnectionLifecycle.UsesOpenXr=false;movement.OnMenuSceneLoaded(null);SteamLinkConnectionLifecycle.UsesOpenXr=true;
-        UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.LateTick(camera);
+        UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.BeforeRender(camera);
         Check(Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,"Another game transport cannot authorize menu alignment");
         ConfigurationStore.Current.SteamLinkNativePassthrough=false;movement.OnMenuSceneLoaded(null);ConfigurationStore.Current.SteamLinkNativePassthrough=true;
-        UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.LateTick(camera);
+        UnityEngine.Time.frameCount++;BattlemarkedMenuAlignment.BeforeRender(camera);
         Check(Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,"Opt-out retains original menu placement");
-        movement.OnMenuSceneLoaded(null);UnityEngine.Time.frameCount++;UnityEngine.Time.unscaledTime+=3;BattlemarkedMenuAlignment.LateTick(camera);
+        movement.OnMenuSceneLoaded(null);UnityEngine.Time.frameCount++;UnityEngine.Time.unscaledTime+=3;BattlemarkedMenuAlignment.BeforeRender(camera);
         Check(Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,"A missing or unready camera cannot cause a delayed recenter after the entry window expires");
         foreach(int layout in new[]{0,1,2,3})
         {
@@ -264,9 +276,12 @@ namespace UnityEngine
     {
         public float x,y,z;
         public Vector3(float x,float y,float z) {this.x=x;this.y=y;this.z=z;}
-        public static Vector3 forward=>new(0,0,1); public static Vector3 up=>new(0,1,0);
+        public static Vector3 zero=>default; public static Vector3 back=>new(0,0,-1); public static Vector3 forward=>new(0,0,1); public static Vector3 up=>new(0,1,0);
         public static Vector3 operator +(Vector3 a,Vector3 b)=>new(a.x+b.x,a.y+b.y,a.z+b.z);
         public static Vector3 operator -(Vector3 a,Vector3 b)=>new(a.x-b.x,a.y-b.y,a.z-b.z);
+        public static Vector3 operator *(Vector3 a,float n)=>new(a.x*n,a.y*n,a.z*n);
+        public float sqrMagnitude=>x*x+y*y+z*z; public Vector3 normalized=>sqrMagnitude>0?this*(1/(float)Math.Sqrt(sqrMagnitude)):default;
+        public static float Dot(Vector3 a,Vector3 b)=>a.x*b.x+a.y*b.y+a.z*b.z;
         public System.Numerics.Vector3 Native=>new(x,y,z);
         public static Vector3 From(System.Numerics.Vector3 v)=>new(v.X,v.Y,v.Z);
     }
@@ -290,12 +305,39 @@ namespace UnityEngine
         public void SetPositionAndRotation(Vector3 p,Quaternion q){position=p;rotation=q;Writes++;}
     }
     public static class Time { public static int frameCount; public static float unscaledTime; }
-    public sealed class Camera { public Transform transform; }
+    public struct Matrix4x4
+    {
+        public System.Numerics.Matrix4x4 Native;
+        public float determinant=>Native.GetDeterminant();
+        public Matrix4x4 inverse {get {System.Numerics.Matrix4x4.Invert(Native,out var result);return new(){Native=result};}}
+        public Vector3 MultiplyPoint3x4(Vector3 p)=>Vector3.From(System.Numerics.Vector3.Transform(p.Native,Native));
+        public Vector3 MultiplyVector(Vector3 p)=>Vector3.From(System.Numerics.Vector3.TransformNormal(p.Native,Native));
+    }
+    public sealed class Camera
+    {
+        public Transform transform,TrackedHead; public bool MissingEyes,CollapsedEyes;
+        public enum StereoscopicEye {Left,Right}
+        public Matrix4x4 GetStereoViewMatrix(StereoscopicEye eye)
+        {
+            if(MissingEyes)return default;
+            var head=TrackedHead??transform;
+            var position=head.position+head.rotation*new Vector3(CollapsedEyes?0:eye==StereoscopicEye.Left?-.032f:.032f,0,0);
+            return new(){Native=System.Numerics.Matrix4x4.CreateLookAt(position.Native,(position+head.forward).Native,Vector3.up.Native)};
+        }
+    }
     public enum RuntimePlatform { WindowsPlayer, LinuxPlayer }
     public static class Application { public static RuntimePlatform platform = RuntimePlatform.WindowsPlayer; }
 }
 
 #if DEMEOBATTLEMARKED
+namespace Jade.GameView.Prototyping
+{
+    public sealed class SimpleLocomotion
+    {
+        public int Calls;
+        [MethodImpl(MethodImplOptions.NoInlining)] public void OnRecenter() => Calls++;
+    }
+}
 namespace Jade.GameView.Avatar
 {
     public sealed class AvatarVR

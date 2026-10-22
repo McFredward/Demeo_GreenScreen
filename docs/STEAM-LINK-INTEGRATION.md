@@ -1658,7 +1658,7 @@ remain to be confirmed by the maintainer.
 
 BepInEx 5 and 6 now bind the plugin's actual `ConfigFile`, using its stable
 plugin identity `566784` and normal `BepInEx/config/566784.cfg` location.
-Fresh defaults are RGB 0/255/0, table visible and automatic native passthrough
+Fresh defaults are RGB 0/255/0, table hidden and automatic native passthrough
 on. Existing loader/DLL identities stay unchanged. The additional bandwidth
 and logging preferences remain adjustable in the same config.
 
@@ -1718,3 +1718,33 @@ An early new camera render explicitly withdraws the warm process pipe before
 its next Update admission; it cannot inherit the previous camera's alpha
 permission. The fast path applies to an Update-first handoff, not to an unknown
 camera rendering with unprepared opaque-coverage state.
+
+### Rendered menu pose, table default and observed picture quality (2026-10-22)
+
+The 15:12 Battlemarked run contains build d08ae15 and still reports a zero
+correction in LateUpdate. Waiting one managed update did not resolve the game's
+reset logical camera pose. Menu alignment now runs inside the existing admitted
+camera callback, after source/profile checks, and reads both current stereo view
+matrices. Their inverse views provide the actual world-space head centre and
+forward direction, independent of the reset Camera transform. Uninitialized,
+collapsed or divergent eye views cannot consume the pending request. The same
+single horizontal rigid delta moves head/hand roots once; height, tilt, scale,
+manual recenter and subsequent gameplay remain game-owned. A locomotion
+OnRecenter call cancels pending work. The bounded two-second request still expires.
+
+Controlled matrix/rig tests reproduce a zero logical camera pose while both
+rendered eyes have a nonzero tracked offset/yaw. These checks and real-loader
+compilation are software evidence; the next headset run must confirm placement.
+
+Fresh configurations now use TABLE/Disable=true on both loader backends. Existing
+normal configs and one-time imported INIs retain explicit user choices, including
+Disable=false. The public example follows the new default.
+
+The same PC capture shows exact mask metadata peaks of 209–309 Mbit/s in the
+menu. With automatic total video budgets around 92–308 Mbit/s, the producer-v2
+wire accountant sometimes leaves only 1 Mbit/s for colour video. This explains
+severe compression despite unchanged native foveation mapping. The scenario
+usually leaves more video bandwidth. No foveation shader, encoder resolution,
+mask precision or Gloomhaven v1 rate policy is changed by this menu/config fix.
+Increasing video allocation beyond the total budget would reintroduce packet
+loss; improving lossless mask bandwidth is a separate codec/performance task.

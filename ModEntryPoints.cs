@@ -101,7 +101,7 @@ namespace GreenScreen
         {
             if (!_running) return;
 #if DEMEOBATTLEMARKED
-            BattlemarkedMenuAlignment.LateTick(NativePassthrough.AdmittedCamera);
+            BattlemarkedMenuAlignment.Tick();
 #endif
         }
         internal static void InvalidateEnvironment()
