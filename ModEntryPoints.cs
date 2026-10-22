@@ -108,6 +108,7 @@ namespace GreenScreen
         {
 #if DEMEOBATTLEMARKED
             _nextEnvironmentScan = Time.unscaledTime + .5f;
+            BattlemarkedMenuAtmosphere.Invalidate();
 #endif
         }
         internal static void Update()
@@ -120,6 +121,7 @@ namespace GreenScreen
             }
             NativePassthrough.Tick();
 #if DEMEOBATTLEMARKED
+            BattlemarkedMenuAtmosphere.Tick();
             if (Time.unscaledTime < _nextEnvironmentScan) return;
             _nextEnvironmentScan = Time.unscaledTime + 1f;
             // Polling also catches additive/late-created environments on either loader.
@@ -142,6 +144,9 @@ namespace GreenScreen
         internal static void Shutdown()
         {
             _running = false;
+#if DEMEOBATTLEMARKED
+            BattlemarkedMenuAtmosphere.Shutdown();
+#endif
             NativePassthrough.Shutdown();
         }
     }

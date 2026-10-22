@@ -79,21 +79,25 @@ namespace UnityEngine
         public static bool operator !=(Object a,Object b) => !(a==b);
         public override bool Equals(object value) => ReferenceEquals(this,value);
         public override int GetHashCode() => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
+        public static T[] FindObjectsOfType<T>() => (T[])(object)(typeof(T)==typeof(Renderer) ? (Array)GameObject.Renderers : GameObject.Scene);
     }
     public class Component : Object
     {
         public Transform transform;
+        public GameObject gameObject;
         public object Extra;
         public T GetComponent<T>() where T : class => Extra as T;
     }
-    public class Transform : Component { public Transform Find(string path) => null; }
+    public class Transform : Component { public Transform parent; public Transform Find(string path) => null; }
+    public class Renderer : Component { public bool enabled=true; }
     public class MonoBehaviour : Component { public MonoBehaviour() { } public MonoBehaviour(IntPtr pointer) { } }
     public class GameObject : Object
     {
         public static Camera[] Scene = Array.Empty<Camera>();
+        public static Renderer[] Renderers = Array.Empty<Renderer>();
         public static readonly Dictionary<string,GameObject> Named=new Dictionary<string,GameObject>();
         public bool activeSelf=true;
-        public static T[] FindObjectsOfType<T>() => (T[])(object)Scene;
+        public UnityEngine.SceneManagement.Scene scene;
         public static GameObject Find(string path) => Named.TryGetValue(path,out var item) && item.activeSelf ? item : null;
         public void SetActive(bool enabled) { activeSelf=enabled; }
     }
@@ -130,6 +134,7 @@ namespace UnityEngine
 #else
         public static int GetAllCameras(Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Camera> buffer)
 #endif
+
         { int n=0; foreach(var c in GameObject.Scene) if(c.isActiveAndEnabled) buffer[n++]=c; return n; }
         public Camera() { Extra=new Rendering.Universal.UniversalAdditionalCameraData(); }
         public static Camera main;
@@ -594,3 +599,15 @@ namespace GreenScreen { internal static class BepInExConfiguration { internal st
 #if DEMEOBATTLEMARKED
 namespace GreenScreen { internal static class BattlemarkedMenuAlignment { internal static void Tick() { } internal static void BeforeRender(UnityEngine.Camera camera) { } } }
 #endif
+
+namespace UnityEngine.SceneManagement
+{
+    public struct Scene
+    {
+        public int handle;
+        public static bool operator ==(Scene a,Scene b) => a.handle==b.handle;
+        public static bool operator !=(Scene a,Scene b) => a.handle!=b.handle;
+        public override bool Equals(object value) => value is Scene other && this==other;
+        public override int GetHashCode() => handle;
+    }
+}

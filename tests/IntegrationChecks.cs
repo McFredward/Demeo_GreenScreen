@@ -32,6 +32,48 @@ internal static class IntegrationChecks
     private static Action Callback(object instance,string name) => () => instance.GetType()
         .GetMethod(name,System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)
         .Invoke(instance,null);
+#if DEMEOBATTLEMARKED
+    private static Renderer Atmosphere(string path,int scene,bool enabled=true)
+    {
+        Transform parent=null;
+        foreach (string name in path.Split('/')) parent=new Transform { name=name,parent=parent };
+        return new Renderer { transform=parent,gameObject=new GameObject {
+            scene=new UnityEngine.SceneManagement.Scene { handle=scene } },enabled=enabled };
+    }
+    private static void CheckMenuAtmosphere(Action update)
+    {
+        var menu=new GameObject { scene=new UnityEngine.SceneManagement.Scene { handle=1 } };
+        GameObject.Named["MainMenuSceneView"]=menu;
+        var fog=Atmosphere("EnvFX/FogSprite",1);
+        var smoke=Atmosphere("Static/LightProps/SM_Walltorch_01/PStatusFire01/Smoke (1)",1);
+        var hiddenSmoke=Atmosphere("Static/LightProps/SM_GoblinBrazier_01/PFireTorch/Smoke (1)",1,false);
+        var flame=Atmosphere("Static/LightProps/SM_Walltorch_01/PStatusFire01/Fire",1);
+        var glow=Atmosphere("Static/LightProps/SM_Walltorch_01/PStatusFire01/Glow",1);
+        var beam=Atmosphere("Lighting/Beam",1);
+        var scenarioFog=Atmosphere("EnvFX/FogSprite",2);
+        var scenarioSmoke=Atmosphere("Static/LightProps/SM_Walltorch_01/PStatusFire01/Smoke (1)",2);
+        var spellSmoke=Atmosphere("VFX_Prewarm_collection/PSpell/Smoke (1)",1);
+        GameObject.Renderers=new[]{fog,smoke,hiddenSmoke,flame,glow,beam,scenarioFog,scenarioSmoke,spellSmoke};
+        ModLifecycle.InvalidateEnvironment(); Time.frameCount++; update();
+        Check(!fog.enabled && !smoke.enabled && !hiddenSmoke.enabled,
+            "menu atmosphere is hidden immediately on scene invalidation, including originally hidden smoke");
+        Check(flame.enabled && glow.enabled && beam.enabled && spellSmoke.enabled,
+            "menu flames, glow, beams and unrelated spell effects keep rendering");
+        Check(scenarioFog.enabled && scenarioSmoke.enabled,
+            "identically named effects in an additive scenario cannot be hidden by the menu policy");
+        var lateFog=Atmosphere("EnvFX/FogSprite",1);
+        GameObject.Renderers=new[]{lateFog}; Time.unscaledTime+=1.1f; Time.frameCount++; update();
+        Check(!lateFog.enabled,"late-created menu atmosphere is also hidden");
+        menu.Destroyed=true; Time.unscaledTime+=1.1f; Time.frameCount++; update();
+        Check(fog.enabled && smoke.enabled && lateFog.enabled && !hiddenSmoke.enabled,
+            "menu exit restores only owned renderer changes even when the menu marker is destroyed");
+        GameObject.Named["MainMenuSceneView"]=new GameObject { scene=new UnityEngine.SceneManagement.Scene { handle=1 } };
+        ModLifecycle.InvalidateEnvironment(); Time.frameCount++; update();
+        Check(!lateFog.enabled,"returning to the menu reapplies its atmosphere policy");
+        GameObject.Named.Remove("MainMenuSceneView");
+        GameObject.Renderers=Array.Empty<Renderer>();
+    }
+#endif
     private static void CheckLoaderLifecycle(Camera camera)
     {
         Action initialize,update,shutdown;
@@ -58,9 +100,14 @@ internal static class IntegrationChecks
         var lateFog=new GameObject(); GameObject.Named["BakeScale40x1/MainEnvironment/DistanceFogCatcher"]=lateFog;
         Time.unscaledTime+=1.1f; Time.frameCount++; update();
         Check(!lateFog.activeSelf,"late-created environment is removed on a later maintenance tick");
+        CheckMenuAtmosphere(update);
         GameObject.Named.Clear();
 #endif
         shutdown();
+#if DEMEOBATTLEMARKED
+        Check(TestLog.Messages.Exists(message=>message.Contains("menu atmosphere hidden: fog=")),
+            "dev diagnostics identify the isolated menu atmosphere change for the next headset comparison");
+#endif
         Check(camera.backgroundColor==original,"loader unload restores the game camera");
         Time.unscaledTime+=1.1f; Time.frameCount++; update();
         Check(camera.backgroundColor==original,"remaining driver callbacks stay inactive after unload");

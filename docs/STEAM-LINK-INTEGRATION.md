@@ -12,6 +12,22 @@ The Unity main stereo camera is preferred; without one, a unique active stereo
 game camera is required. Scene/camera replacement and target changes retire
 the previous camera state.
 
+## Battlemarked menu atmosphere comparison
+
+The October22 menu-only candidate hides the two `EnvFX/FogSprite` renderers
+and the separate `Smoke` / `Smoke (...)` children of `PFireTorch` and
+`PStatusFire01` below `Static/LightProps`. The supplied addressable menu scene
+contains these independently of its flames and lights. Only renderers in the
+same loaded scene as `MainMenuSceneView` are eligible; identically named
+scenario effects and spell particles are retained. Parent objects, lights,
+flames, glow, beam materials and shader settings are unchanged.
+
+The shared loader Update scans once per second, catches late-created effects,
+and restores only owned renderer changes on menu exit or unload. Debug logs
+report newly hidden fog/smoke counts for the next headset comparison. Both
+loader lifecycle fixtures cover scene isolation, retained effects, late
+creation and restoration. Bandwidth savings still require a headset A/B test.
+
 ## Battlemarked first loading fade and menu waypoint (2.0 development candidate)
 
 The maintainer confirms the shader-lifetime candidate works. The next private
