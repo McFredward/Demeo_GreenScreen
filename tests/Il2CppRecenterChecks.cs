@@ -190,6 +190,31 @@ internal static class Il2CppRecenterChecks
         Check(avatar.Calls==1 && movement.Calls==1,"Movement observers preserve menu setup and its original avatar placement");
         Check(Utils.Messages.Exists(s=>s.Contains("avatar placement: source=SetAvatarPositionByCameraWaypoint")),
             "The actual nested camera-waypoint source is recorded for an avatar placement");
+        Check(Utils.Messages.Exists(s=>s.Contains("menu aligned once")),"Successful menu entry aligns the actual tracked head after the original waypoint placement");
+        var head=avatar.HeadTransform;var root=avatar.HeadRootTransform;
+        Check(Math.Abs(head.position.x)<.001 && Math.Abs(head.position.z)<.001 && Math.Abs(head.position.y-1.6f)<.001
+            && Math.Abs(head.forward.x)<.001 && head.forward.z>.99,"Menu alignment compensates physical head offset and yaw, retaining tracked height");
+        int aligned=Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count;
+        movement.OnLevelLoaded(null,null);avatar.SetAvatarPosition(default,default,1);
+        Check(Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,"Gameplay and direct/manual placements never trigger menu alignment");
+        SteamLinkConnectionLifecycle.UsesOpenXr=false;movement.OnMenuSceneLoaded(null);SteamLinkConnectionLifecycle.UsesOpenXr=true;
+        Check(Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,"Another game transport cannot authorize menu alignment");
+        ConfigurationStore.Current.SteamLinkNativePassthrough=false;movement.OnMenuSceneLoaded(null);ConfigurationStore.Current.SteamLinkNativePassthrough=true;
+        Check(Utils.Messages.FindAll(s=>s.Contains("menu aligned once")).Count==aligned,"Opt-out retains original menu placement");
+        foreach(int layout in new[]{0,1,2,3})
+        {
+            var rig=new Jade.GameView.Avatar.AvatarVR();
+            if(layout==1)rig.HandRootTransform=rig.HeadRootTransform;
+            if(layout==2)rig.HandRootTransform.parent=rig.HeadRootTransform;
+            if(layout==3)rig.HeadRootTransform.parent=rig.HandRootTransform;
+            var hand=new UnityEngine.Transform{parent=rig.HandRootTransform,localPosition=new(4,0,2)};
+            var relative=hand.position-rig.HeadTransform.position;float height=rig.HeadTransform.position.y;
+            BattlemarkedMenuAlignment.Align(rig,new(20,99,30),new(0,120,0));
+            Check(Math.Abs(rig.HeadTransform.position.x-20)<.001&&Math.Abs(rig.HeadTransform.position.z-30)<.001
+                &&Math.Abs(rig.HeadTransform.position.y-height)<.001,"Each rig hierarchy aligns the head horizontally, preserving vertical pose");
+            var expected=UnityEngine.Quaternion.AngleAxis(45,UnityEngine.Vector3.up)*relative;
+            Check((hand.position-rig.HeadTransform.position-expected).Native.Length()<.001,"Head and hands receive one identical rigid world delta, including nested roots");
+        }
         movement.Throw=true;
         try { movement.OnLevelLoaded(null,null); } catch(InvalidOperationException) { }
         avatar.SetAvatarPosition(default,default,1);
@@ -213,11 +238,39 @@ namespace GreenScreen
     internal static class Utils { internal static readonly List<string> Messages = new();  internal static void LogDebug(string m) => LogInfo(m); internal static void LogWarning(string m) => LogInfo(m); internal static void LogError(string m) => LogInfo(m); internal static void LogInfo(string message) => Messages.Add(message); }
     internal static class ConfigurationStore { internal static readonly Settings Current = new(); }
     internal sealed class Settings { internal bool SteamLinkNativePassthrough = true; }
-    internal static class SteamLinkConnectionLifecycle { internal static bool UsesOpenVr = true; }
+    internal static class SteamLinkConnectionLifecycle { internal static bool UsesOpenVr = true; internal static bool UsesOpenXr = true; }
 }
 namespace UnityEngine
 {
-    public struct Vector3 { public float x,y,z; }
+    public struct Vector3
+    {
+        public float x,y,z;
+        public Vector3(float x,float y,float z) {this.x=x;this.y=y;this.z=z;}
+        public static Vector3 forward=>new(0,0,1); public static Vector3 up=>new(0,1,0);
+        public static Vector3 operator +(Vector3 a,Vector3 b)=>new(a.x+b.x,a.y+b.y,a.z+b.z);
+        public static Vector3 operator -(Vector3 a,Vector3 b)=>new(a.x-b.x,a.y-b.y,a.z-b.z);
+        public System.Numerics.Vector3 Native=>new(x,y,z);
+        public static Vector3 From(System.Numerics.Vector3 v)=>new(v.X,v.Y,v.Z);
+    }
+    public struct Quaternion
+    {
+        public System.Numerics.Quaternion Native;
+        public static Quaternion identity=>new(){Native=System.Numerics.Quaternion.Identity};
+        public static Quaternion Euler(Vector3 v)=>AngleAxis(v.y,Vector3.up)*AngleAxis(v.x,new(1,0,0))*AngleAxis(v.z,new(0,0,1));
+        public static Quaternion AngleAxis(float degrees,Vector3 axis)=>new(){Native=System.Numerics.Quaternion.CreateFromAxisAngle(axis.Native,degrees*(float)Math.PI/180)};
+        public static Quaternion operator *(Quaternion a,Quaternion b)=>new(){Native=a.Native*b.Native};
+        public static Vector3 operator *(Quaternion a,Vector3 b)=>Vector3.From(System.Numerics.Vector3.Transform(b.Native,a.Native));
+    }
+    public sealed class Transform
+    {
+        public Transform parent; public Vector3 localPosition; public Quaternion localRotation=Quaternion.identity;
+        public Vector3 localScale=new(1,1,1); public int Writes;
+        public Vector3 position {get=>parent==null?localPosition:parent.position+parent.rotation*localPosition;set=>localPosition=parent==null?value:new Quaternion{Native=System.Numerics.Quaternion.Inverse(parent.rotation.Native)}*(value-parent.position);}
+        public Quaternion rotation {get=>parent==null?localRotation:parent.rotation*localRotation;set=>localRotation=parent==null?value:new Quaternion{Native=System.Numerics.Quaternion.Inverse(parent.rotation.Native)}*value;}
+        public Vector3 forward=>rotation*Vector3.forward;
+        public bool IsChildOf(Transform root) {for(var item=this;item!=null;item=item.parent)if(item==root)return true;return false;}
+        public void SetPositionAndRotation(Vector3 p,Quaternion q){position=p;rotation=q;Writes++;}
+    }
     public enum RuntimePlatform { WindowsPlayer, LinuxPlayer }
     public static class Application { public static RuntimePlatform platform = RuntimePlatform.WindowsPlayer; }
 }
@@ -228,7 +281,13 @@ namespace Jade.GameView.Avatar
     public sealed class AvatarVR
     {
         public int Calls;
-        [MethodImpl(MethodImplOptions.NoInlining)] public void SetAvatarPosition(UnityEngine.Vector3 position,UnityEngine.Vector3 rotation,float scale) { Calls++; }
+        public UnityEngine.Transform HeadRootTransform {get;set;}=new();
+        public UnityEngine.Transform HandRootTransform {get;set;}=new();
+        public UnityEngine.Transform HeadTransform {get;set;}
+        public AvatarVR(){HeadTransform=new(){parent=HeadRootTransform,localPosition=new(2,1.6f,3),localRotation=UnityEngine.Quaternion.Euler(new(0,75,0))};}
+        [MethodImpl(MethodImplOptions.NoInlining)] public void SetAvatarPosition(UnityEngine.Vector3 position,UnityEngine.Vector3 rotation,float scale)
+        { Calls++; HeadRootTransform.SetPositionAndRotation(position,UnityEngine.Quaternion.Euler(rotation));
+          if(HandRootTransform!=HeadRootTransform&&!HandRootTransform.IsChildOf(HeadRootTransform))HandRootTransform.SetPositionAndRotation(position,UnityEngine.Quaternion.Euler(rotation)); }
     }
 }
 namespace Jade.GameView

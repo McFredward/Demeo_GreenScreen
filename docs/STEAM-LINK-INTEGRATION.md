@@ -1625,3 +1625,31 @@ is software boundary evidence, not an executed Gloomhaven or headset test.
 Demeo1.4.11, Frame0.2.12, game alpha/shaders and the authenticated wire format
 remain unchanged. Updating/testing the PC candidate is a separate user-run
 installer step; no Frame write or restart is performed during log collection.
+
+### Battlemarked menu placement and native startup fade (2026-10-22)
+
+The latest supplied PC run places the menu avatar at the authored waypoint,
+without compensating the current tracked head offset/yaw. After a successful
+`OnMenuSceneLoaded` placement, the mod now applies one horizontal rigid transform
+to the exact avatar's head/hand roots. Nested/shared roots are transformed once;
+height, scale, controller relationships and the original placement callbacks are
+retained. This is gated by confirmed Frame/Steam Link and the game's OpenXR
+transport. Gameplay, manual placements and global recenter APIs are untouched.
+There is no deferred per-frame alignment or later forced recenter.
+
+The PC log also proves that the loader cannot detour the IL2CPP presenter
+constructor: it falls back to managed wrapper patching, which does not observe
+native construction. Replace that hook with the presenter's real native `Tick`
+postfix, reading its native fade alpha even when no tween runs. The same exact
+fade cube and background Image leases retain loading text/artwork and restore
+the original game materials/UI when native passthrough is withdrawn.
+
+Fresh read-only Frame captures show a separate in-menu interruption at
+12:21:16: the camera helper loses its IPC connection, XRService pauses the
+passthrough cameras, and a fresh helper resumes them at 12:21:17. The decoder
+logs do not show a decoder reset there. This requires the native companion's
+camera session continuity change; a mod-only fade change cannot repair it.
+Controlled Harmony/transform ports validate dispatch, menu-only scope, separate,
+shared and nested rig roots and constructor-free fade observation. All six
+loader builds compile against metadata-only references; actual headset results
+remain to be confirmed by the maintainer.

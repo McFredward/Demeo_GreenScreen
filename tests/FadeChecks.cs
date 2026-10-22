@@ -107,11 +107,14 @@ internal static class FadeChecks
         var image=new UnityEngine.UI.Image { color=Color.black,raycastTarget=true };
         view.FadeImage=image;
         var controller=new Controller(view,new Jade.GameView.FadeConfig(),true);
+        Check(HarmonyLib.Harmony.GetPatchInfo(typeof(Controller).GetConstructor(new[]{typeof(Jade.GameView.FadeToBlackView),typeof(Jade.GameView.FadeConfig),typeof(bool)}))==null,
+            "No managed constructor fallback is mistaken for a native IL2CPP detour.");
         Check(image.color.a==1 && view.Renderer.sharedMaterial==source,"Constructing the loading view cannot enable transparency before source permission.");
+        controller.Tick();
         PassthroughFade.SetActive(true);
         Check(controller.Calls==0 && view.Renderer.sharedMaterial!=source
             && view.Renderer.sharedMaterial.GetFloat("_PassthroughFade")==1,
-            "Serialized startup fade is captured before the first SetFadePlaneColor/tween callback.");
+            "Native Tick captures the serialized startup fade without a tween callback.");
         Check(image.color.a==0 && image.raycastTarget && image.enabled,
             "Exact black FadeImage becomes transparent immediately without disabling the loading UI.");
         controller.UpdateView(.5f);
@@ -356,6 +359,7 @@ namespace Jade.GameView
         private float alpha=1;
         public FadeToBlackPresenter(FadeToBlackView view):this(view,new FadeConfig(),true){}
         [MethodImpl(MethodImplOptions.NoInlining)] public FadeToBlackPresenter(FadeToBlackView view,FadeConfig config,bool showTextOnStartup){this.view=view;}
+        [MethodImpl(MethodImplOptions.NoInlining)] public void Tick() { }
         public float GetFadePlaneAlpha()=>alpha;
         [MethodImpl(MethodImplOptions.NoInlining)] public void UpdateView(float value) {if(view.FadeImage!=null)view.FadeImage.color=new Color(0,0,0,value);}
         [MethodImpl(MethodImplOptions.NoInlining)]

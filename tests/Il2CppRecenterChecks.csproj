@@ -13,7 +13,7 @@
     <OutputPath>bin/Il2CppRecenter/$(Game)/</OutputPath>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../DemeoAutomaticRecenter.cs;../Il2CppAutomaticRecenter.cs;../SteamLinkConnection.cs;Il2CppRecenterChecks.cs" />
+    <Compile Include="../DemeoAutomaticRecenter.cs;../Il2CppAutomaticRecenter.cs;../BattlemarkedMenuAlignment.cs;../SteamLinkConnection.cs;Il2CppRecenterChecks.cs" />
     <PackageReference Include="Lib.Harmony" Version="[2.4.2]" />
   </ItemGroup>
 </Project>

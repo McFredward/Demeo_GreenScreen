@@ -22,6 +22,9 @@ namespace GreenScreen
         private static int _suppressed, _observed;
 #if DEMEOBATTLEMARKED
         [ThreadStatic] private static string _placementSource;
+        [ThreadStatic] private static int _menuDepth;
+        [ThreadStatic] private static object _menuAvatar;
+        [ThreadStatic] private static Vector3 _menuPosition, _menuRotation;
         private static int _movementObserved;
 #endif
 #if DEMEOBATTLES
@@ -210,7 +213,7 @@ namespace GreenScreen
                 for (int i = first; i < Hooks.Count; i++)
                     _patch.Patch(Hooks[i].Target, prefix: new HarmonyMethod(Hooks[i].Prefix),
                         finalizer: Hooks[i].Finalizer == null ? null : new HarmonyMethod(Hooks[i].Finalizer));
-                Utils.LogInfo("Battlemarked camera placement observers ready. Bounded placement and tracking-origin events are retained at Important level; game behavior is unchanged.");
+                Utils.LogInfo("Battlemarked camera placement observers ready. Menu entry aligns the local avatar once; tracking-origin and manual recenter callbacks remain available.");
             }
             catch (Exception error)
             {
@@ -228,13 +231,28 @@ namespace GreenScreen
         {
             __state = _placementSource;
             _placementSource = __originalMethod.Name;
+            if (_placementSource == "OnMenuSceneLoaded" && _menuDepth++ == 0) _menuAvatar = null;
             if (Verified && _movementObserved++ < 64)
                 Utils.LogInfo("Battlemarked camera event: " + _placementSource + "; at=" + DateTime.Now.ToString("HH:mm:ss.fff") + ". Original game call retained.");
         }
-        private static void AfterPlacementSource(string __state) => _placementSource = __state;
-
-        private static void ObserveAvatar(Vector3 __0, Vector3 __1, float __2)
+        private static void AfterPlacementSource(MethodBase __originalMethod, Exception __exception, string __state)
         {
+            try
+            {
+                if (__originalMethod.Name == "OnMenuSceneLoaded" && --_menuDepth == 0)
+                {
+                    object avatar = _menuAvatar; _menuAvatar = null;
+                    if (__exception == null && Verified && SteamLinkConnectionLifecycle.UsesOpenXr && avatar != null)
+                        BattlemarkedMenuAlignment.Align(avatar, _menuPosition, _menuRotation);
+                }
+            }
+            finally { _placementSource = __state; }
+        }
+
+        private static void ObserveAvatar(object __instance, Vector3 __0, Vector3 __1, float __2)
+        {
+            if (_menuDepth > 0)
+            { _menuAvatar = __instance; _menuPosition = __0; _menuRotation = __1; }
             if (Verified && _movementObserved++ < 64)
                 Utils.LogInfo("Battlemarked avatar placement: source=" + (_placementSource ?? "direct/unknown")
                     + "; position=" + Coordinates(__0) + "; rotation=" + Coordinates(__1) + "; scale=" + __2.ToString("R", System.Globalization.CultureInfo.InvariantCulture)
