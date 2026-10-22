@@ -90,17 +90,27 @@ namespace GreenScreen
                 // Capture the serialized black fade before the first tween
                 // calls SetFadePlaneColor. UpdateView also owns a separate UI
                 // Image; neither its label nor loading artwork is hidden.
-                _battleAlpha = controller.GetMethod("GetFadePlaneAlpha", Members, null, Type.EmptyTypes, null);
-                foreach (var constructor in controller.GetConstructors(Members))
+                try
                 {
-                    var arguments = constructor.GetParameters();
-                    if (arguments.Length == 3 && arguments[0].ParameterType == view
-                        && arguments[1].ParameterType.Name == "FadeConfig" && arguments[2].ParameterType == typeof(bool))
-                        _battleConstructor = constructor;
+                    _battleAlpha = controller.GetMethod("GetFadePlaneAlpha", Members, null, Type.EmptyTypes, null);
+                    foreach (var constructor in controller.GetConstructors(Members))
+                    {
+                        var arguments = constructor.GetParameters();
+                        if (arguments.Length == 3 && arguments[0].ParameterType == view
+                            && arguments[1].ParameterType.Name == "FadeConfig" && arguments[2].ParameterType == typeof(bool))
+                            _battleConstructor = constructor;
+                    }
+                    if (_battleConstructor == null || _battleAlpha?.ReturnType != typeof(float))
+                        throw new MissingMethodException("Battlemarked fade constructor/initial alpha");
+                    _patch.Patch(_battleConstructor, postfix: new HarmonyMethod(BattleConstructorObserver));
                 }
-                if (_battleConstructor == null || _battleAlpha?.ReturnType != typeof(float))
-                    throw new MissingMethodException("Battlemarked fade constructor/initial alpha");
-                _patch.Patch(_battleConstructor, postfix: new HarmonyMethod(BattleConstructorObserver));
+                catch (Exception error)
+                {
+                    if (_battleConstructor != null)
+                        try { _patch.Unpatch(_battleConstructor, BattleConstructorObserver); } catch { }
+                    _battleConstructor = null; _battleAlpha = null;
+                    Utils.LogWarning("Early Battlemarked fade capture unavailable; existing animated-fade handling remains active: " + error.GetType().Name + ": " + error.Message);
+                }
 #endif
 #if DEMEO
                 _controllerConstructor = controller.GetConstructor(new[] { view });
